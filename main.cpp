@@ -10,10 +10,9 @@ void computeEdgeWeights(const Eigen::VectorXd &scalar_F,
     int nfaces = scalar_F.rows();
     int nedges = E.rows();
     
-//    scalar_E.resize(nedges);
-//    scalar_E = Eigen::VectorXd::Constant(nedges, 0);
+    scalar_E.resize(nedges);
+    scalar_E = Eigen::VectorXd::Constant(nedges, 0);
 
-    return ;
     for (int i = 0; i < nedges; i++)
     {
 	for (int j = 0; j < 2; j++)
@@ -29,9 +28,41 @@ void computeEdgeWeights(const Eigen::VectorXd &scalar_F,
 		scalar_E(i) += factor * scalar_F(faceId);
 	    }	
 	}
-    }  
+    }      
+}
 
+void computeLocalCoordinatesForDistanceField(const Eigen::MatrixXd W, 
+					     const Eigen::MatrixXi &F, 
+					     const Eigen::MatrixXd &V, 
+					     Eigen::MatrixXd W_local)
+{
+    int nfaces = F.rows();
     
+    W_local.resize(nfaces, 2);
+    for (int i = 0; i < nfaces; i++) 
+    {
+    	Eigen::Vector3d u = V.row(F(i,1)) - V.row(F(i,0));
+    	Eigen::Vector3d v = V.row(F(i,2)) - V.row(F(i,0));
+	double uu = u.dot(u);
+	double uv = u.dot(v);
+	double vv = v.dot(v);
+        
+	Eigen::MatrixXd uvTrans(2,3);
+	uvTrans << u.transpose(), v.transpose(); 
+//	uvTrans = uvTrans.transpose();
+
+        Eigen::MatrixXd uvInv(2,2);
+        uvInv << vv, -uv, 
+                -uv,  uu;
+        uvInv *= 1. / (vv * uu - uv * uv);
+        
+//	std::cout << uvInv << "\n" << vv * uu <<  uv * uv << "\n" << uvTrans << "\n\n";
+        Eigen::Vector2d alpha_beta = uvInv * uvTrans * W.row(i).transpose();
+        W_local.row(i) = alpha_beta;
+	std::cout << alpha_beta << "\n\n";
+    }	
+
+
 }
 
 
@@ -41,23 +72,25 @@ int main(int argc, char *argv[])
   Eigen::MatrixXd V;
   Eigen::MatrixXi F, E, F_edges;
 
-  Eigen::MatrixXd viz, colorField;
-  Eigen::MatrixXd centroids_F, W;
+  Eigen::MatrixXd colorField;
   //   assignFaceVal(F,viz);;
 
   igl::readOBJ("../circ.obj", V, F);
   buildEdges(F, E);
   buildEdgesPerFace(F, E, F_edges);
 
-
+  Eigen::MatrixXd centroids_F;
   computeCentroids(F,V,centroids_F);
   
   Eigen::Vector3d p(.1,.8,0);
+  Eigen::MatrixXd W;
   computeDistanceField(p, centroids_F, W);
 
   Eigen::VectorXd scalar_E;
   computeEdgeWeights(W.col(0), E, scalar_E); 
 
+  Eigen::MatrixXd W_local;
+  computeLocalCoordinatesForDistanceField(W, F, V, W_local);
 //  std::cout << centroids_F;
 
   // Average edge length for sizing
@@ -65,22 +98,13 @@ int main(int argc, char *argv[])
 
   
   int nVerts = F.rows();
-  viz.resize(nVerts, 3);
-  
-  for (int i = 0; i < nVerts; i++)
-  {
-//     Eigen::Vector3d v(0,1,0);
-      for (int j = 0; j < 3; j++)
-      { 
-          viz(i,j) = j; 
-      }
-  }
 
   int nFaces = F.rows();
   colorField.resize(nFaces, 3);
-  Eigen::VectorXd Z = W.col(1);
+  Eigen::VectorXd Z = W.col(1) + W.col(0);
   
-  igl::jet(Z,true,colorField);
+//  igl::jet(Z,true,colorField);
+  igl::colormap(igl::COLOR_MAP_TYPE_PARULA,Z, true, colorField);
 
 
   // Plot the mesh
