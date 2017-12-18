@@ -3,68 +3,43 @@
 
 #include "DataLoad.h"
 
-void assignFaceVal(const Eigen::MatrixXi &F, Eigen::MatrixXd val) 
+void computeEdgeWeights(const Eigen::VectorXd &scalar_F, 
+		   const Eigen::MatrixXi &E, 
+		   Eigen::VectorXd scalar_E) 
 {
-    int nfaces = F.rows();
- 
-    for (int i = 0; i < nfaces; i++)
+    int nfaces = scalar_F.rows();
+    int nedges = E.rows();
+    
+//    scalar_E.resize(nedges);
+//    scalar_E = Eigen::VectorXd::Constant(nedges, 0);
+
+    return ;
+    for (int i = 0; i < nedges; i++)
     {
-	for (int j = 0; j < 3; j++)
+	for (int j = 0; j < 2; j++)
 	{
-
+	    double factor = 0.5;
+	    int faceId = E(i, j + 2);
+            if (faceId > -1)
+	    {
+		if ( E(i, ( (j + 1) % 2) + 2) == -1) 
+		{
+		    factor = 1.;
+		}
+		scalar_E(i) += factor * scalar_F(faceId);
+	    }	
 	}
-    }
-}
+    }  
 
-void buildEdgesPerFace(const Eigen::MatrixXi &F, const Eigen::MatrixXi &E, Eigen::MatrixXi &F_edge)
-{
-    int nfaces = F.rows();
-//    F_edge.resize(nfaces, 3);
     
-       
 }
 
-/*
-
-void computeCentroids(const Eigen::MatrixXi &F,const Eigen::MatrixXd &V, Eigen::MatrixXd &centroids)
-{
- //   Eigen::MatrixXd interp; 
-    int nfaces = F.rows();
-    int nverts = V.rows();
-    
-    centroids.resize(nfaces, 3);
-    for (int i = 0; i < nfaces; i++) 
-    { 
-	Eigen::Vector3d pos(0,0,0);
-	for (int j = 0; j < 3; j++) 
-	{
-//	    std::cout << V.row(F(i,j)) << "\n" << F(i,j) << "\n\n";
-	    pos += V.row(F(i,j));
-	}
-	centroids.row(i) = pos/3;
-    }
-}
-
-void computeDistanceField(const Eigen::Vector3d p, const Eigen::MatrixXd &centroids, Eigen::MatrixXd &W)
-{
-    int nfaces = centroids.rows();
-    
-    W.resize(nfaces, 3);
-    for (int i = 0; i < nfaces; i++) 
-    { 
-        Eigen::Vector3d blah = -centroids.row(i);
-	blah += p;
-	W.row(i) = blah.normalized();
-    }
-}
-
-*/
 
 int main(int argc, char *argv[])
 {
 
   Eigen::MatrixXd V;
-  Eigen::MatrixXi F, E;
+  Eigen::MatrixXi F, E, F_edges;
 
   Eigen::MatrixXd viz, colorField;
   Eigen::MatrixXd centroids_F, W;
@@ -72,10 +47,16 @@ int main(int argc, char *argv[])
 
   igl::readOBJ("../circ.obj", V, F);
   buildEdges(F, E);
-  computeCentroids(F,V,centroids_F);
+  buildEdgesPerFace(F, E, F_edges);
 
-  Eigen::Vector3d p(0,1,0);
+
+  computeCentroids(F,V,centroids_F);
+  
+  Eigen::Vector3d p(.1,.8,0);
   computeDistanceField(p, centroids_F, W);
+
+  Eigen::VectorXd scalar_E;
+  computeEdgeWeights(W.col(0), E, scalar_E); 
 
 //  std::cout << centroids_F;
 
@@ -97,17 +78,23 @@ int main(int argc, char *argv[])
 
   int nFaces = F.rows();
   colorField.resize(nFaces, 3);
-
+  Eigen::VectorXd Z = W.col(1);
+  
+  igl::jet(Z,true,colorField);
 
 
   // Plot the mesh
   igl::viewer::Viewer viewer;
   viewer.data.set_mesh(V, F);
   viewer.data.set_face_based(true);
+ 
+  viewer.data.set_colors(colorField);
 
+  Eigen::MatrixXd eps = Eigen::MatrixXd::Constant(nFaces,3,.001);
 
   const Eigen::RowVector3d red(0.8,0.2,0.2),blue(0.2,0.2,0.8);
   viewer.data.add_edges(centroids_F + W*avg/2, centroids_F, blue);
+  viewer.data.add_edges(centroids_F + W*avg/2, centroids_F + eps, blue);
 //  viewer.data.add_edges(centroids_F, centroids_F *2 * avg, blue);
 
   viewer.launch();

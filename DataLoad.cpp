@@ -64,7 +64,7 @@ void buildEdges(const Eigen::MatrixXi &F, Eigen::MatrixXi &E)
 	    map<pair<int, int>, Vector4i, std::less<pair<int, int> >,
 		Eigen::aligned_allocator<std::pair<const int, Eigen::Vector4i> >>::iterator it = edgemap.find(pair<int, int>(idx1, idx2));
 	    if (it == edgemap.end())
-	    {
+	{
 		Vector4i newedge;
 		newedge[0] = idx1;
 		newedge[1] = idx2;
@@ -87,4 +87,41 @@ void buildEdges(const Eigen::MatrixXi &F, Eigen::MatrixXi &E)
         E.row(idx) = it->second.transpose();
         idx++;
     }
+}
+
+
+void buildEdgesPerFace(const Eigen::MatrixXi &F, const Eigen::MatrixXi &E, Eigen::MatrixXi &F_edges)
+{
+    int nfaces = F.rows();
+    int nedges = E.rows();
+
+    F_edges.resize(nfaces, 3);
+    F_edges = Eigen::MatrixXi::Constant(nfaces,3,-1);
+    for (int i = 0; i < nedges; i++)
+    {
+        int f1 = E(i, 2);
+        int f2 = E(i, 3);
+        if (f1 > -1) 
+	{
+	    for (int j = 0; j < 3; j++)
+	    {  
+		if (F_edges(f1,j) == -1) 
+		{
+		    F_edges(f1,j) = i;   
+		    break;
+		}
+	    }
+	}
+        if (f2 > -1)
+	{	    
+	    for (int j = 0; j < 3; j++)
+	    {  
+		if (F_edges(f2,j) == -1) 
+		{
+		    F_edges(f2,j) = i;   
+		    break;	
+		}
+	    }
+	}
+    }	
 }
