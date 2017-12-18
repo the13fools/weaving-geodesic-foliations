@@ -89,7 +89,9 @@ void buildEdges(const Eigen::MatrixXi &F, Eigen::MatrixXi &E)
     }
 }
 
-
+// We assume that the UV coordinates are such that the edge u := 10, v := 20 per face
+// From this, we have that the 0 edge is the one not associated with u or v
+// with u as the 1 edge and v as the 2 edge
 void buildEdgesPerFace(const Eigen::MatrixXi &F, const Eigen::MatrixXi &E, Eigen::MatrixXi &F_edges)
 {
     int nfaces = F.rows();
@@ -101,27 +103,31 @@ void buildEdgesPerFace(const Eigen::MatrixXi &F, const Eigen::MatrixXi &E, Eigen
     {
         int f1 = E(i, 2);
         int f2 = E(i, 3);
+
         if (f1 > -1) 
 	{
+	    int insIdx = 0;
 	    for (int j = 0; j < 3; j++)
-	    {  
-		if (F_edges(f1,j) == -1) 
+	    { 
+                if(F(f1, j) == E(i,0) || F(f1, j) == E(i,1))
 		{
-		    F_edges(f1,j) = i;   
-		    break;
+		    insIdx += j;
 		}
 	    }
+            F_edges(f1,insIdx % 3) = i;   
 	}
-        if (f2 > -1)
-	{	    
+
+	if (f2 > -1) 
+	{
+	    int insIdx = 0;
 	    for (int j = 0; j < 3; j++)
-	    {  
-		if (F_edges(f2,j) == -1) 
+	    { 
+                if(F(f2, j) == E(i,0) || F(f2, j) == E(i,1))
 		{
-		    F_edges(f2,j) = i;   
-		    break;	
+		    insIdx += j;
 		}
 	    }
+            F_edges(f2,insIdx % 3) = i;   
 	}
     }	
 }
