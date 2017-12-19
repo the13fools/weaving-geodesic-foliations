@@ -36,8 +36,8 @@ void computeTestField(const Eigen::Vector3d p, const Eigen::MatrixXd &centroids,
     for (int i = 0; i < nfaces; i++) 
     { 
         Eigen::Vector3d blah = centroids.row(i);
-        W(i, 0) = 0.;
-        W(i, 1) = 1.;//blah(0);
+        W(i, 0) = 1.;
+        W(i, 1) = 0.;//blah(0);
         W(i, 2) = 0.;
 
     }
@@ -147,6 +147,7 @@ bool consistencyCheckEdges(const Eigen::MatrixXi &F, const Eigen::MatrixXi &E, c
             }
         }
     }
+    return true;
 }
 
 
