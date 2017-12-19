@@ -109,8 +109,8 @@ void computeCovariantDerivative(const Eigen::MatrixXd &W_local,
 	Eigen::Vector3d u = V.row(F(i,1)) - V.row(F(i,0));
     	Eigen::Vector3d v = V.row(F(i,2)) - V.row(F(i,0));
         
-	double u_weight = 2 * ( scalar_E(F_edges(i, 0)) - scalar_E(F_edges(i, 1)) );
-	double v_weight = 2 * ( scalar_E(F_edges(i, 0)) - scalar_E(F_edges(i, 2)) );
+	double u_weight = 2 * ( scalar_E(F_edges(i, 0)) - scalar_E(F_edges(i, 2)) );
+	double v_weight = 2 * ( scalar_E(F_edges(i, 0)) - scalar_E(F_edges(i, 1)) );
 	
 	double comp_weight =  u_weight * W_local(i, 0) + v_weight * W_local(i, 1);	    
         del_W_F.row(i) += component * comp_weight;
