@@ -85,30 +85,32 @@ void computeLocalCoordinatesForDistanceField(const Eigen::MatrixXd &W,
         
 }
 
-void computeCovariantDerivative(const Eigen::MatrixXd &W_local, 
-			        const Eigen::MatrixXi &F, 
-			        const Eigen::MatrixXi &F_edges, 
-                                const Eigen::MatrixXd &V,
-				const Eigen::VectorXd &scalar_E, 
-			              Eigen::MatrixXd &del_W_F, int idx)
+void computeCovariantDerivative(const Eigen::MatrixXd &W_local,
+    const Eigen::MatrixXi &F,
+    const Eigen::MatrixXi &F_edges,
+    const Eigen::MatrixXd &V,
+    const Eigen::VectorXd &scalar_E,
+    Eigen::MatrixXd &del_W_F, int idx)
 {
     int nfaces = F.rows();
 
-    std::cout << scalar_E.size() << "\n";    
-    
-    Eigen::Vector3d component(0,0,0);
+    std::cout << scalar_E.size() << "\n";
+
+    Eigen::Vector3d component(0, 0, 0);
     component(idx) = 1;
 
-    del_W_F.resize(nfaces, 3);
-    for (int i = 0; i < nfaces; i++) 
+
+    for (int i = 0; i < nfaces; i++)
     {
-    	Eigen::Vector3d u = V.row(F(i,1)) - V.row(F(i,0));
-    	Eigen::Vector3d v = V.row(F(i,2)) - V.row(F(i,0));
-        
-	double u_weight = 2 * ( scalar_E(F_edges(i, 0)) - scalar_E(F_edges(i, 1)) );
-	double v_weight = 2 * ( scalar_E(F_edges(i, 0)) - scalar_E(F_edges(i, 2)) );
-	
-	double comp_weight =  u_weight * W_local(i, 0) + v_weight * W_local(i, 1);	    
+        Eigen::Vector3d u = V.row(F(i, 1)) - V.row(F(i, 0));
+        Eigen::Vector3d v = V.row(F(i, 2)) - V.row(F(i, 0));
+
+        double u_weight = 2 * (scalar_E(F_edges(i, 0)) - scalar_E(F_edges(i, 1)));
+        double v_weight = 2 * (scalar_E(F_edges(i, 0)) - scalar_E(F_edges(i, 2)));
+
+
+        double comp_weight = u_weight * W_local(i, 0) + v_weight * W_local(i, 1);
+
         del_W_F.row(i) += component * comp_weight;
     }
 }
@@ -164,6 +166,8 @@ int main(int argc, char *argv[])
   computeLocalCoordinatesForDistanceField(W_test, F, V, W_local);
 
   Eigen::MatrixXd del_W_F;
+  del_W_F.resize(F.rows(), 3);
+  del_W_F.setZero();
   Eigen::VectorXd scalar_E;
 /*
   for (int i = 0; i < 3; i++) 
@@ -218,7 +222,7 @@ int main(int argc, char *argv[])
 
   const Eigen::RowVector3d red(0.8,0.2,0.2),blue(0.2,0.2,0.8);
   viewer.data.add_edges(centroids_F  + del_W_F*avg/2, centroids_F, blue);
-  viewer.data.add_edges(centroids_F + W*avg/2 + eps, centroids_F + eps, red);
+  //viewer.data.add_edges(centroids_F + W*avg/2 + eps, centroids_F + eps, red);
 //  viewer.data.add_edges(centroids_F + W*avg/2, centroids_F + eps, blue);
 //  viewer.data.add_edges(centroids_F, centroids_F *2 * avg, blue);
 

@@ -120,6 +120,36 @@ void buildEdges(const Eigen::MatrixXi &F, Eigen::MatrixXi &E)
     }
 }
 
+bool consistencyCheckEdges(const Eigen::MatrixXi &F, const Eigen::MatrixXi &E, const Eigen::MatrixXi &F_edges)
+{
+    int nfaces = F.rows();
+    for (int i = 0; i < nfaces; i++)
+    {
+        for (int e = 0; e < 3; e++)
+        {
+            //each edge had better point back to the face
+            int edgeidx = F_edges(i, e);
+            if (E(edgeidx, 2) != i && E(edgeidx, 3) != i)
+            {
+                std::cerr << "Edge assigned to triangle " << i << " side " << e << " does not have triangle " << i << " as an adjacent face!" << std::endl;
+                return false;
+            }
+            //the edge endpoints need to be opposite vertex e of triangle i
+            for (int vtex = 0; vtex < 2; vtex++)
+            {
+                int facevertidx = (e + 1 + vtex) % 3;
+                int vertidx = F(i, facevertidx);
+                if (E(edgeidx, 0) != vertidx && E(edgeidx, 1) != vertidx)
+                {
+                    std::cerr << "Vertex " << vertidx << " is opposite vertex " << e << " on triangle " << i << " but is not part of the edge assigned opposite vertex " << e << std::endl;
+                    return false;
+                }
+            }
+        }
+    }
+}
+
+
 // We assume that the UV coordinates are such that the edge u := 10, v := 20 per face
 // From this, we have that the 0 edge is the one not associated with u or v
 // with u as the 1 edge and v as the 2 edge
@@ -135,30 +165,83 @@ void buildEdgesPerFace(const Eigen::MatrixXi &F, const Eigen::MatrixXi &E, Eigen
         int f1 = E(i, 2);
         int f2 = E(i, 3);
 
-        if (f1 > -1) 
-	{
-	    int insIdx = 0;
-	    for (int j = 0; j < 3; j++)
-	    { 
-                if(F(f1, j) == E(i,0) || F(f1, j) == E(i,1))
-		{
-		    insIdx += j;
-		}
-	    }
-            F_edges(f1,insIdx % 3) = i;   
-	}
+        if (f1 > -1)
+        {
+            int insIdx = -1;
+            for (int j = 0; j < 3; j++)
+            {
+                if (F(f1, j) == E(i, 1))
+                {
+                    insIdx = (j+1)%3;
+                }
+            }
+            F_edges(f1, insIdx) = i;
+        }
 
-	if (f2 > -1) 
-	{
-	    int insIdx = 0;
-	    for (int j = 0; j < 3; j++)
-	    { 
-                if(F(f2, j) == E(i,0) || F(f2, j) == E(i,1))
-		{
-		    insIdx += j;
-		}
-	    }
-            F_edges(f2,insIdx % 3) = i;   
-	}
-    }	
+        if (f2 > -1)
+        {
+            int insIdx = -1;
+            for (int j = 0; j < 3; j++)
+            {
+                if (F(f2, j) == E(i, 0))
+                {
+                    insIdx = (j+1)%3;
+                }
+            }
+            F_edges(f2, insIdx) = i;
+        }
+    }
+    if (!consistencyCheckEdges(F, E, F_edges))
+    {
+        assert(false);
+        exit(-1);
+    }
 }
+
+/*
+void buildEdgesPerFace(const Eigen::MatrixXi &F, const Eigen::MatrixXi &E, Eigen::MatrixXi &F_edges)
+{
+int nfaces = F.rows();
+int nedges = E.rows();
+
+F_edges.resize(nfaces, 3);
+F_edges = Eigen::MatrixXi::Constant(nfaces,3,-1);
+for (int i = 0; i < nedges; i++)
+{
+int f1 = E(i, 2);
+int f2 = E(i, 3);
+
+if (f1 > -1) 
+{
+int insIdx = 0;
+for (int j = 0; j < 3; j++)
+{ 
+if(F(f1, j) == E(i,0) || F(f1, j) == E(i,1))
+{
+insIdx += j;
+}
+}
+F_edges(f1,insIdx % 3) = i;   
+}
+
+if (f2 > -1) 
+{
+int insIdx = 0;
+for (int j = 0; j < 3; j++)
+{ 
+if(F(f2, j) == E(i,0) || F(f2, j) == E(i,1))
+{
+insIdx += j;
+}
+}
+F_edges(f2,insIdx % 3) = i;   
+}
+}	
+if (!consistencyCheckEdges(F, E, F_edges))
+{
+assert(false);
+exit(-1);
+}
+}
+
+*/
