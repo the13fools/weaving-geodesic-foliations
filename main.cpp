@@ -48,7 +48,7 @@ void computeEdgeWeights(const Eigen::VectorXd &scalar_F,
 		scalar_E(i) += factor * scalar_F(faceId);
 	    }	
 	}
-	scalar_E(i) = .5 * (V(E(i,0),0) + V(E(i,1),0));
+//	scalar_E(i) = .5 * (V(E(i,0),0) + V(E(i,1),0));
     }    
 }
 
@@ -102,7 +102,11 @@ void computeCovariantDerivative(const Eigen::MatrixXd &W_local,
     del_W_F.resize(nfaces, 3);
     for (int i = 0; i < nfaces; i++) 
     {
-    	Eigen::Vector3d u = V.row(F(i,1)) - V.row(F(i,0));
+	if (idx == 0)
+	{
+	    del_W_F.row(i) = Eigen::Vector3d(0,0,0);
+	}    
+	Eigen::Vector3d u = V.row(F(i,1)) - V.row(F(i,0));
     	Eigen::Vector3d v = V.row(F(i,2)) - V.row(F(i,0));
         
 	double u_weight = 2 * ( scalar_E(F_edges(i, 0)) - scalar_E(F_edges(i, 1)) );
@@ -165,20 +169,19 @@ int main(int argc, char *argv[])
 
   Eigen::MatrixXd del_W_F;
   Eigen::VectorXd scalar_E;
-/*
   for (int i = 0; i < 3; i++) 
   {
       computeEdgeWeights(W.col(i), V, E, scalar_E); 
       computeCovariantDerivative(W_local, F, F_edges, V, scalar_E, del_W_F, i);
   }
-*/
+/*
   computeEdgeWeights(W.col(0), V, E, scalar_E);
   computeCovariantDerivative(W_local, F, F_edges, V, scalar_E, del_W_F, 0);
   computeEdgeWeights_noop(W.col(1), E, scalar_E);
   computeCovariantDerivative(W_local, F, F_edges, V, scalar_E, del_W_F, 1);
   computeEdgeWeights_noop(W.col(2), E, scalar_E);
   computeCovariantDerivative(W_local, F, F_edges, V, scalar_E, del_W_F, 2);
-
+*/
 //  std::cout << del_W_F;
 //  Eigen::MatrixXd W_recovered;
 //  computeRecoveredDistanceField_test(W_local, F, V, W_recovered);
