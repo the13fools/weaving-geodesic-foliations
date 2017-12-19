@@ -27,6 +27,37 @@ void computeCentroids(const Eigen::MatrixXi &F,const Eigen::MatrixXd &V, Eigen::
     }
 }
 
+
+void computeTestField(const Eigen::Vector3d p, const Eigen::MatrixXd &centroids, Eigen::MatrixXd &W)
+{
+    int nfaces = centroids.rows();
+    
+    W.resize(nfaces, 3);
+    for (int i = 0; i < nfaces; i++) 
+    { 
+        Eigen::Vector3d blah = centroids.row(i);
+        W(i, 0) = 0.;
+        W(i, 1) = 1.;//blah(0);
+        W(i, 2) = 0.;
+
+    }
+}
+
+void computeWhirlpool(const Eigen::Vector3d p, const Eigen::MatrixXd &centroids, Eigen::MatrixXd &W)
+{
+    int nfaces = centroids.rows();
+    
+    W.resize(nfaces, 3);
+    for (int i = 0; i < nfaces; i++) 
+    { 
+        Eigen::Vector3d blah = centroids.row(i);
+        W(i, 0) = blah(0);
+        W(i, 1) = 0.;//blah(0);
+        W(i, 2) = 0.;
+
+    }
+}
+
 void computeDistanceField(const Eigen::Vector3d p, const Eigen::MatrixXd &centroids, Eigen::MatrixXd &W)
 {
     int nfaces = centroids.rows();

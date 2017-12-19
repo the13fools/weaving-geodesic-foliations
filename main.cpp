@@ -5,8 +5,26 @@
 
 #include "DataLoad.h"
 
+void computeEdgeWeights_noop(const Eigen::VectorXd &scalar_F, 
+                   const Eigen::MatrixXi &E, 
+		   Eigen::VectorXd &scalar_E) 
+{
+    int nfaces = scalar_F.rows();
+    int nedges = E.rows();
+    
+    scalar_E.resize(nedges);
+    scalar_E = Eigen::VectorXd::Constant(nedges, 0);
+
+    for (int i = 0; i < nedges; i++)
+    {
+	scalar_E(i) = 0.;
+    }    
+}
+
+
 void computeEdgeWeights(const Eigen::VectorXd &scalar_F, 
-		   const Eigen::MatrixXi &E, 
+                   const Eigen::MatrixXd &V,
+                   const Eigen::MatrixXi &E, 
 		   Eigen::VectorXd &scalar_E) 
 {
     int nfaces = scalar_F.rows();
@@ -30,7 +48,8 @@ void computeEdgeWeights(const Eigen::VectorXd &scalar_F,
 		scalar_E(i) += factor * scalar_F(faceId);
 	    }	
 	}
-    }      
+	scalar_E(i) = .5 * (V(E(i,0),0) + V(E(i,1),0));
+    }    
 }
 
 void computeLocalCoordinatesForDistanceField(const Eigen::MatrixXd &W, 
@@ -71,26 +90,26 @@ void computeCovariantDerivative(const Eigen::MatrixXd &W_local,
 			        const Eigen::MatrixXi &F_edges, 
                                 const Eigen::MatrixXd &V,
 				const Eigen::VectorXd &scalar_E, 
-			              Eigen::MatrixXd &del_W_F)
+			              Eigen::MatrixXd &del_W_F, int idx)
 {
     int nfaces = F.rows();
 
     std::cout << scalar_E.size() << "\n";    
     
+    Eigen::Vector3d component(0,0,0);
+    component(idx) = 1;
+
     del_W_F.resize(nfaces, 3);
     for (int i = 0; i < nfaces; i++) 
     {
     	Eigen::Vector3d u = V.row(F(i,1)) - V.row(F(i,0));
     	Eigen::Vector3d v = V.row(F(i,2)) - V.row(F(i,0));
         
-//	std::cout << F_edges(i, 0) << " " << F_edges(i, 1) << " " << F_edges(i, 2) << "\n"; 
-//	std::cout << scalar_E(F_edges(i, 0)) << " " << scalar_E(F_edges(i, 1)) << " " << scalar_E(F_edges(i, 2)) << "\n"; 
-
 	double u_weight = 2 * ( scalar_E(F_edges(i, 0)) - scalar_E(F_edges(i, 1)) );
 	double v_weight = 2 * ( scalar_E(F_edges(i, 0)) - scalar_E(F_edges(i, 2)) );
 	
-	Eigen::Vector3d rec = u * u_weight * W_local(i, 0) + v * v_weight * W_local(i, 1);	    
-        del_W_F.row(i) = rec;
+	double comp_weight =  u_weight * W_local(i, 0) + v_weight * W_local(i, 1);	    
+        del_W_F.row(i) += component * comp_weight;
     }
 }
 
@@ -131,19 +150,35 @@ int main(int argc, char *argv[])
   Eigen::MatrixXd centroids_F;
   computeCentroids(F,V,centroids_F);
   
-  Eigen::Vector3d p(.1,.8,0);
+  Eigen::Vector3d p(.5,.5,0);
   Eigen::MatrixXd W;
-  computeDistanceField(p, centroids_F, W);
+//  computeDistanceField(p, centroids_F, W);
+  computeWhirlpool(p, centroids_F, W);
 
-  Eigen::VectorXd scalar_E;
-  computeEdgeWeights(W.col(0), E, scalar_E); 
+
+  Eigen::MatrixXd W_test;
+//  computeDistanceField(p, centroids_F, W);
+  computeTestField(p, centroids_F, W_test);
 
   Eigen::MatrixXd W_local;
-  computeLocalCoordinatesForDistanceField(W, F, V, W_local);
+  computeLocalCoordinatesForDistanceField(W_test, F, V, W_local);
 
   Eigen::MatrixXd del_W_F;
-  computeCovariantDerivative(W_local, F, F_edges, V, scalar_E, del_W_F);
-  
+  Eigen::VectorXd scalar_E;
+/*
+  for (int i = 0; i < 3; i++) 
+  {
+      computeEdgeWeights(W.col(i), V, E, scalar_E); 
+      computeCovariantDerivative(W_local, F, F_edges, V, scalar_E, del_W_F, i);
+  }
+*/
+  computeEdgeWeights(W.col(0), V, E, scalar_E);
+  computeCovariantDerivative(W_local, F, F_edges, V, scalar_E, del_W_F, 0);
+  computeEdgeWeights_noop(W.col(1), E, scalar_E);
+  computeCovariantDerivative(W_local, F, F_edges, V, scalar_E, del_W_F, 1);
+  computeEdgeWeights_noop(W.col(2), E, scalar_E);
+  computeCovariantDerivative(W_local, F, F_edges, V, scalar_E, del_W_F, 2);
+
 //  std::cout << del_W_F;
 //  Eigen::MatrixXd W_recovered;
 //  computeRecoveredDistanceField_test(W_local, F, V, W_recovered);
@@ -155,15 +190,21 @@ int main(int argc, char *argv[])
   colorField.resize(nFaces, 3);
 
   Eigen::VectorXd Z(nFaces);
+  double maxerror = 0;
   for (int i = 0; i < nFaces; i++)
   {
       Z(i) = log(del_W_F.row(i).norm());
+      if (maxerror < Z(i))
+      {
+	  maxerror = Z(i);
+          std::cout << del_W_F.row(i) << "\n";
+      }
   }
 //  Eigen::VectorXd Z = W.col(0); // - del_W_F;// - W_recovered.col(0);
  // Eigen::VectorXd Z = del_W_F.transpose() * del_W_F;// - W_recovered.col(0);
   
 //  igl::jet(Z,true,colorField);
-  igl::colormap(igl::COLOR_MAP_TYPE_PARULA,Z, true, colorField);
+  igl::colormap(igl::COLOR_MAP_TYPE_INFERNO,Z, true, colorField);
 
 
   // Plot the mesh
@@ -171,13 +212,14 @@ int main(int argc, char *argv[])
   viewer.data.set_mesh(V, F);
   viewer.data.set_face_based(true);
  
-  viewer.data.set_colors(colorField);
+//  viewer.data.set_colors(colorField);
 
   Eigen::MatrixXd eps = Eigen::MatrixXd::Constant(nFaces,3,.001);
 
   const Eigen::RowVector3d red(0.8,0.2,0.2),blue(0.2,0.2,0.8);
-  viewer.data.add_edges(centroids_F  - del_W_F* avg/2, centroids_F, blue);
-//  viewer.data.add_edges(centroids_F + W*avg/2 - del_W_F, centroids_F + eps, blue);
+  viewer.data.add_edges(centroids_F  + del_W_F*avg/2, centroids_F, blue);
+  viewer.data.add_edges(centroids_F + W*avg/2 + eps, centroids_F + eps, red);
+//  viewer.data.add_edges(centroids_F + W*avg/2, centroids_F + eps, blue);
 //  viewer.data.add_edges(centroids_F, centroids_F *2 * avg, blue);
 
   viewer.launch();
