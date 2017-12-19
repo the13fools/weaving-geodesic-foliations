@@ -152,15 +152,15 @@ int main(int argc, char *argv[])
   Eigen::MatrixXd centroids_F;
   computeCentroids(F,V,centroids_F);
   
-  Eigen::Vector3d p(.5,.5,0);
+  Eigen::Vector3d p(.0,.0,0);
   Eigen::MatrixXd W;
-//  computeDistanceField(p, centroids_F, W);
-  computeWhirlpool(p, centroids_F, W);
+  computeDistanceField(p, centroids_F, W);
+//  computeWhirlpool(p, centroids_F, W);
 
 
   Eigen::MatrixXd W_test;
-//  computeDistanceField(p, centroids_F, W);
-  computeTestField(p, centroids_F, W_test);
+  computeDistanceField(p, centroids_F, W_test);
+//  computeTestField(p, centroids_F, W_test);
 
   Eigen::MatrixXd W_local;
   computeLocalCoordinatesForDistanceField(W_test, F, V, W_local);
@@ -174,14 +174,6 @@ int main(int argc, char *argv[])
       computeEdgeWeights(W.col(i), V, E, scalar_E); 
       computeCovariantDerivative(W_local, F, F_edges, V, scalar_E, del_W_F, i);
   }
-/*
-  computeEdgeWeights(W.col(0), V, E, scalar_E);
-  computeCovariantDerivative(W_local, F, F_edges, V, scalar_E, del_W_F, 0);
-  computeEdgeWeights_noop(W.col(1), E, scalar_E);
-  computeCovariantDerivative(W_local, F, F_edges, V, scalar_E, del_W_F, 1);
-  computeEdgeWeights_noop(W.col(2), E, scalar_E);
-  computeCovariantDerivative(W_local, F, F_edges, V, scalar_E, del_W_F, 2);
-*/
 //  std::cout << del_W_F;
 //  Eigen::MatrixXd W_recovered;
 //  computeRecoveredDistanceField_test(W_local, F, V, W_recovered);
@@ -207,7 +199,7 @@ int main(int argc, char *argv[])
  // Eigen::VectorXd Z = del_W_F.transpose() * del_W_F;// - W_recovered.col(0);
   
 //  igl::jet(Z,true,colorField);
-  igl::colormap(igl::COLOR_MAP_TYPE_INFERNO,Z, true, colorField);
+  igl::colormap(igl::COLOR_MAP_TYPE_MAGMA,Z, true, colorField);
 
 
   // Plot the mesh
@@ -215,7 +207,7 @@ int main(int argc, char *argv[])
   viewer.data.set_mesh(V, F);
   viewer.data.set_face_based(true);
  
-//  viewer.data.set_colors(colorField);
+  viewer.data.set_colors(colorField);
 
   Eigen::MatrixXd eps = Eigen::MatrixXd::Constant(nFaces,3,.001);
 
