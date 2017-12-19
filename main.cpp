@@ -48,7 +48,7 @@ void computeEdgeWeights(const Eigen::VectorXd &scalar_F,
 		scalar_E(i) += factor * scalar_F(faceId);
 	    }	
 	}
-	scalar_E(i) = .5 * (V(E(i,0),0) + V(E(i,1),0));
+//	scalar_E(i) = .5 * (V(E(i,0),0) + V(E(i,1),0));
     }    
 }
 
@@ -169,20 +169,19 @@ int main(int argc, char *argv[])
   del_W_F.resize(F.rows(), 3);
   del_W_F.setZero();
   Eigen::VectorXd scalar_E;
-/*
   for (int i = 0; i < 3; i++) 
   {
       computeEdgeWeights(W.col(i), V, E, scalar_E); 
       computeCovariantDerivative(W_local, F, F_edges, V, scalar_E, del_W_F, i);
   }
-*/
+/*
   computeEdgeWeights(W.col(0), V, E, scalar_E);
   computeCovariantDerivative(W_local, F, F_edges, V, scalar_E, del_W_F, 0);
   computeEdgeWeights_noop(W.col(1), E, scalar_E);
   computeCovariantDerivative(W_local, F, F_edges, V, scalar_E, del_W_F, 1);
   computeEdgeWeights_noop(W.col(2), E, scalar_E);
   computeCovariantDerivative(W_local, F, F_edges, V, scalar_E, del_W_F, 2);
-
+*/
 //  std::cout << del_W_F;
 //  Eigen::MatrixXd W_recovered;
 //  computeRecoveredDistanceField_test(W_local, F, V, W_recovered);
