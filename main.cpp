@@ -2,8 +2,30 @@
 #include <igl/avg_edge_length.h>
 
 #include <math.h>
+#include <iostream>
+#include <fstream>
+
 
 #include "DataLoad.h"
+
+
+void computeEdgeWeights_fromverts(const Eigen::VectorXd &scalar_V, 
+                   const Eigen::MatrixXi &F_edges,
+                   const Eigen::MatrixXd &V,
+      	           const Eigen::MatrixXi &E, 
+		   Eigen::VectorXd &scalar_E) 
+{
+    int nfaces = scalar_V.rows();
+    int nedges = E.rows();
+    
+    scalar_E.resize(nedges);
+    scalar_E = Eigen::VectorXd::Constant(nedges, 0);
+
+    for (int i = 0; i < nedges; i++)
+    {
+	scalar_E(i) = .5 * ( scalar_V(E(i, 0)) + scalar_V(E(i, 1)) ) ;
+    }    
+}
 
 void computeEdgeWeights_noop(const Eigen::VectorXd &scalar_F, 
                    const Eigen::MatrixXi &E, 
@@ -153,12 +175,14 @@ void showVectorField()
     Eigen::Vector3d p(px, py,0);
     Eigen::MatrixXd W;
     computeDistanceField(p, centroids_F, W);
-    //  computeWhirlpool(p, centroids_F, W);
+//    computeDistanceField(p, V, W);
+//    computeWhirlpool(p, centroids_F, W);
+//    computeWhirlpool(p, V, W);
 
 
     Eigen::MatrixXd W_test;
     computeDistanceField(p, centroids_F, W_test);
-    //  computeTestField(p, centroids_F, W_test);
+//    computeTestField(p, centroids_F, W_test);
 
     Eigen::MatrixXd W_local;
     computeLocalCoordinatesForDistanceField(W_test, F, V, W_local);
@@ -182,6 +206,8 @@ void showVectorField()
     int nFaces = F.rows(); 
     colorField.resize(nFaces, 3);
 
+    std::ofstream myfile ("derivatives.txt");
+
     Eigen::VectorXd Z(nFaces);
     double maxerror = 0;
     for (int i = 0; i < nFaces; i++)
@@ -190,9 +216,17 @@ void showVectorField()
         if (maxerror < Z(i))
         {
             maxerror = Z(i);
-            std::cout << del_W_F.row(i) << "\n";
-        }
+	}
+
+	if (myfile.is_open())
+	{
+	    myfile << del_W_F.row(i) << "\n";
+	//    std::cout << del_W_F.row(i) << "\n";
+	
+	}
+	else std::cout << "Unable to open file";
     }
+    myfile.close();
     //  Eigen::VectorXd Z = W.col(0); // - del_W_F;// - W_recovered.col(0);
     // Eigen::VectorXd Z = del_W_F.transpose() * del_W_F;// - W_recovered.col(0);
 
