@@ -9,41 +9,6 @@
 #include "DataLoad.h"
 
 
-void computeEdgeWeights_fromverts(const Eigen::VectorXd &scalar_V, 
-                   const Eigen::MatrixXi &F_edges,
-                   const Eigen::MatrixXd &V,
-      	           const Eigen::MatrixXi &E, 
-		   Eigen::VectorXd &scalar_E) 
-{
-    int nfaces = scalar_V.rows();
-    int nedges = E.rows();
-    
-    scalar_E.resize(nedges);
-    scalar_E = Eigen::VectorXd::Constant(nedges, 0);
-
-    for (int i = 0; i < nedges; i++)
-    {
-	scalar_E(i) = .5 * ( scalar_V(E(i, 0)) + scalar_V(E(i, 1)) ) ;
-    }    
-}
-
-void computeEdgeWeights_noop(const Eigen::VectorXd &scalar_F, 
-                   const Eigen::MatrixXi &E, 
-		   Eigen::VectorXd &scalar_E) 
-{
-    int nfaces = scalar_F.rows();
-    int nedges = E.rows();
-    
-    scalar_E.resize(nedges);
-    scalar_E = Eigen::VectorXd::Constant(nedges, 0);
-
-    for (int i = 0; i < nedges; i++)
-    {
-	scalar_E(i) = 0.;
-    }    
-}
-
-
 void computeEdgeWeights(const Eigen::VectorXd &scalar_F, 
                    const Eigen::MatrixXd &V,
                    const Eigen::MatrixXi &E, 
@@ -166,6 +131,7 @@ igl::viewer::Viewer *viewer;
 double px = 0;
 double py = 0;
 
+
 void showVectorField()
 {
     Eigen::MatrixXd colorField;
@@ -175,9 +141,7 @@ void showVectorField()
     Eigen::Vector3d p(px, py,0);
     Eigen::MatrixXd W;
     computeDistanceField(p, centroids_F, W);
-//    computeDistanceField(p, V, W);
 //    computeWhirlpool(p, centroids_F, W);
-//    computeWhirlpool(p, V, W);
 
 
     Eigen::MatrixXd W_test;
