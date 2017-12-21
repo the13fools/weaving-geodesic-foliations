@@ -4,6 +4,7 @@
 #include <math.h>
 
 #include "DataLoad.h"
+#include "FaceBased.h"
 
 void computeEdgeWeights_noop(const Eigen::VectorXd &scalar_F, 
                    const Eigen::MatrixXi &E, 
@@ -115,6 +116,19 @@ void computeCovariantDerivative(const Eigen::MatrixXd &W_local,
     }
 }
 
+void computeCovariantDerivativeNew(const Eigen::MatrixXi &F, const Eigen::MatrixXd &V, const Eigen::MatrixXi &E, const Eigen::MatrixXi &F_edges, const Eigen::MatrixXd &v, const Eigen::MatrixXd &w,
+    Eigen::MatrixXd &result)
+{
+    std::vector<Eigen::SparseMatrix<double> > Ms;
+    computeGradientMatrices(F, V, E, F_edges, Ms);
+    result.resize(v.rows(), v.cols());
+    int nfaces = F.rows();
+    for (int i = 0; i < nfaces; i++)
+    {
+        result.row(i) = w.row(i) * Ms[i] * v;
+    }
+}
+
 void computeRecoveredDistanceField_test(const Eigen::MatrixXd &W_local, 
 					const Eigen::MatrixXi &F, 
 			                const Eigen::MatrixXd &V, 
@@ -153,12 +167,12 @@ void showVectorField()
     Eigen::Vector3d p(px, py,0);
     Eigen::MatrixXd W;
     computeDistanceField(p, centroids_F, W);
-    //  computeWhirlpool(p, centroids_F, W);
+    //computeWhirlpool(p, centroids_F, W);
 
 
     Eigen::MatrixXd W_test;
     computeDistanceField(p, centroids_F, W_test);
-    //  computeTestField(p, centroids_F, W_test);
+    //computeTestField(p, centroids_F, W_test);
 
     Eigen::MatrixXd W_local;
     computeLocalCoordinatesForDistanceField(W_test, F, V, W_local);
@@ -172,6 +186,11 @@ void showVectorField()
         computeEdgeWeights(W.col(i), V, E, scalar_E); 
         computeCovariantDerivative(W_local, F, F_edges, V, scalar_E, del_W_F, i);
     }
+
+    Eigen::MatrixXd covresult;
+    computeCovariantDerivativeNew(F, V, E, F_edges, W, W_test, covresult);
+    int nfaces = F.rows();
+    
     //  std::cout << del_W_F;
     //  Eigen::MatrixXd W_recovered;
     //  computeRecoveredDistanceField_test(W_local, F, V, W_recovered);
@@ -210,7 +229,7 @@ void showVectorField()
     Eigen::MatrixXd eps = Eigen::MatrixXd::Constant(nFaces,3,.001);
 
     const Eigen::RowVector3d red(0.8,0.2,0.2),blue(0.2,0.2,0.8);
-    viewer->data.add_edges(centroids_F  + del_W_F*avg/2, centroids_F, blue);
+    viewer->data.add_edges(centroids_F  + covresult*avg/2, centroids_F, blue);
 }
 
 int main(int argc, char *argv[])
