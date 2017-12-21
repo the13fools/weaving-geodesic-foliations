@@ -7,8 +7,9 @@
 
 
 #include "DataLoad.h"
+#include "Covariant.h"
 
-
+/*
 void computeEdgeWeights(const Eigen::VectorXd &scalar_F, 
                    const Eigen::MatrixXd &V,
                    const Eigen::MatrixXi &E, 
@@ -122,6 +123,8 @@ void computeRecoveredDistanceField_test(const Eigen::MatrixXd &W_local,
         W_recovered.row(i) = rec;
     }
 }
+
+*/
 
 Eigen::MatrixXd V;
 Eigen::MatrixXi F, E, F_edges;
