@@ -52,6 +52,7 @@ void evaluateOperator(const Eigen::MatrixXd &DM_local,
     Eigen::Vector3d component(0, 0, 0);
     component(idx) = 1;
 
+// This is super slow because it does a bunch of irrelevant multiplications...    
 //    Eigen::MatrixXd weights = DM_local * W_local.transpose();
 
     for (int i = 0; i < DM_local.rows(); i++)
@@ -71,6 +72,12 @@ Eigen::MatrixXd centroids_F;
 
 Eigen::MatrixXd del_W_F;
 
+void updateWInGradientDirection(
+	const Eigen::MatrixXd &DM_local,
+	Eigen::MatrixXd &W, int idx)
+{
+
+}
 
 void updateView(Eigen::VectorXd faceColors)
 {
@@ -96,11 +103,39 @@ void updateView(Eigen::VectorXd faceColors)
     viewer->data.add_edges(centroids_F  + del_W_F*avg/2, centroids_F, blue);
 }
 
+
 void takeGradientDescentStep()
 {
+    Eigen::MatrixXd W_local;
+    computeLocalCoordinatesForDistanceField(W, F, V, W_local);
 
+    del_W_F.resize(F.rows(), 3);
+    del_W_F.setZero();
+    Eigen::MatrixXd DM_local;
+
+    // Not effecient, but will make it feel more correct to update, then show
+    for (int i = 0; i < 3; i++) 
+    {
+        computeCovariantOperator(W.col(i), F, F_edges, V, E, DM_local);	
+	updateWInGradientDirection(DM_local, W, i);
+    }
+    
+    for (int i = 0; i < 3; i++) 
+    {
+        computeCovariantOperator(W.col(i), F, F_edges, V, E, DM_local);	
+ 	evaluateOperator(DM_local, W_local, del_W_F, i);
+    }
+
+    int nFaces = F.rows(); 
+
+    Eigen::VectorXd Z(nFaces);
+    double maxerror = 0;
+    for (int i = 0; i < nFaces; i++)
+    {
+        Z(i) = log(1 / del_W_F.row(i).norm());
+    }
+    updateView(Z);
 }
-
 
 void showVectorField()
 {
