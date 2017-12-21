@@ -18,6 +18,49 @@ igl::viewer::Viewer *viewer;
 double px = 0;
 double py = 0;
 
+void computeCovariantOperator(const Eigen::VectorXd &scalar_F,
+    const Eigen::MatrixXi &F,
+    const Eigen::MatrixXi &F_edges,
+    const Eigen::MatrixXd &V,
+    const Eigen::MatrixXi &E,
+    Eigen::MatrixXd &DM_local)
+{
+    Eigen::VectorXd scalar_E;
+    computeEdgeWeights(scalar_F, V, E, scalar_E); 
+    
+    int nfaces = F.rows();
+
+    DM_local.resize(nfaces, 2);
+
+    for (int i = 0; i < nfaces; i++)
+    {
+        Eigen::Vector3d u = V.row(F(i, 1)) - V.row(F(i, 0));
+        Eigen::Vector3d v = V.row(F(i, 2)) - V.row(F(i, 0));
+
+        double u_weight = 2 * (scalar_E(F_edges(i, 0)) - scalar_E(F_edges(i, 1)));
+        double v_weight = 2 * (scalar_E(F_edges(i, 0)) - scalar_E(F_edges(i, 2)));
+
+        DM_local(i, 0) = u_weight;
+	DM_local(i, 1) = v_weight; 
+    }
+}
+
+void evaluateOperator(const Eigen::MatrixXd &DM_local,
+	const Eigen::MatrixXd &W_local, 
+        Eigen::MatrixXd &del_W_F, int idx)
+{
+    Eigen::Vector3d component(0, 0, 0);
+    component(idx) = 1;
+
+//    Eigen::MatrixXd weights = DM_local * W_local.transpose();
+
+    for (int i = 0; i < DM_local.rows(); i++)
+    {
+ 
+ 	del_W_F.row(i) += component * (DM_local(i, 0) * W_local(i, 0) + DM_local(i,1) * W_local(i, 1));
+ 
+    }
+}
 
 void showVectorField()
 {
@@ -41,15 +84,12 @@ void showVectorField()
     Eigen::MatrixXd del_W_F;
     del_W_F.resize(F.rows(), 3);
     del_W_F.setZero();
-    Eigen::VectorXd scalar_E;
+    Eigen::MatrixXd DM_local;
     for (int i = 0; i < 3; i++) 
     {
-        computeEdgeWeights(W.col(i), V, E, scalar_E); 
-        computeCovariantDerivative(W_local, F, F_edges, V, scalar_E, del_W_F, i);
+        computeCovariantOperator(W.col(i), F, F_edges, V, E, DM_local);
+        evaluateOperator(DM_local, W_local, del_W_F, i);
     }
-    //  std::cout << del_W_F;
-    //  Eigen::MatrixXd W_recovered;
-    //  computeRecoveredDistanceField_test(W_local, F, V, W_recovered);
 
     // Average edge length for sizing
     const double avg = igl::avg_edge_length(V,F);
