@@ -174,41 +174,80 @@ void updateView(const Eigen::MatrixXd del_W_F, int step)
     viewer->data.add_edges(centroids_F  + (W - W_init)*avg/2, centroids_F, green);
 }
 
+
+void project(Eigen::MatrixXd &v)
+{
+	int nfaces = (int)v.rows();
+	double fieldMass = 0;
+	for (int i = 0; i < nfaces; i++)
+	{
+	    fieldMass += v.row(i).squaredNorm();
+	} 
+
+	v *= (double) nfaces / fieldMass;	
+}
+
+double energy(const Eigen::MatrixXd &v)
+{
+	int nfaces = (int)v.rows();
+	del_W_F(nfaces, 3);
+	del_W_F.setZero();
+	computeCovariantOperatorNew(F, V, E, F_edges, v, v, Ms, del_W_F);
+	double result = 0;
+	for(int i=0; i<nfaces; i++)
+		result += del_W_F.row(i).dot(del_W_F.row(i));
+	return result;
+}
+
+void lineSearch(const Eigen::MatrixXd &v, const Eigen::MatrixXd &gradV, double &t, double &newenergy)
+{
+    double c1 = 1.5;
+    double c2 = 0.5;
+    t *= c1;
+    double orig = energy(v);
+    std::cout << "original energy " << orig << std::endl;
+    while(true)
+    {
+    	Eigen::MatrixXd testv = v - t*gradV;    
+    	project(testv);
+    	newenergy = energy(testv);
+	std::cout << "new energy, t = " << t << ": " << newenergy << std::endl;
+        if(newenergy < orig)
+		return;
+	else
+		t *= c2;
+    }
+}
+
+
+
 int descentStep = 0;
 void takeGradientDescentStep()
 {
-    Eigen::MatrixXd W_local;
-    computeLocalCoordinatesForDistanceField(W, F, V, W_local);
-
     int nfaces = F.rows();
 
     del_W_F.resize(nfaces, 3);
     del_W_F.setZero();
     Eigen::MatrixXd Op_Grad;
+    double t = 1.0;
 
     // Not effecient, but will make it feel more correct to update, then show
     for (int i = 0; i < desc_steps; i++) 
     {
-        computeCovariantOperatorNew(F, V, E, F_edges, W, W_test, Ms, del_W_F);
+        computeCovariantOperatorNew(F, V, E, F_edges, W, W, Ms, del_W_F);
         computeOperatorGradient(Ms, del_W_F, W, Op_Grad);
-
-        W -= Op_Grad * .000001; 
-
-        // Normalize W 
-	double fieldMass = 0;
-	for (int i = 0; i < nfaces; i++)
-	{
-	    fieldMass += W.row(i).squaredNorm();
-	} 
-
-	W *= (double) nfaces / fieldMass;
+	double newenergy = 0;
+	lineSearch(W, Op_Grad, t, newenergy);
+        W -= t*Op_Grad; 
+	project(W);
     }
 
-    computeCovariantOperatorNew(F, V, E, F_edges, W, W_test, Ms, del_W_F);
+    computeCovariantOperatorNew(F, V, E, F_edges, W, W, Ms, del_W_F);
        
     descentStep++;
     updateView(del_W_F, descentStep);
 }
+
 
 void showVectorField()
 {
