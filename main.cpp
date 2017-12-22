@@ -89,11 +89,20 @@ Eigen::MatrixXd centroids_F;
 
 Eigen::MatrixXd del_W_F;
 
-void updateWInGradientDirection(
-	const Eigen::MatrixXd &DM_local,
-	Eigen::MatrixXd &W, int idx)
+void computeOperatorGradient( const std::vector<Eigen::SparseMatrix<double> > &Ms,
+	const Eigen::MatrixXd &del_W_F,
+	const Eigen::MatrixXd &v,
+	Eigen::MatrixXd &Op_Grad)
 {
+    int nfaces = v.rows();
 
+    Op_Grad = Eigen::MatrixXd::Zero(nfaces, 3);
+
+    for (int i = 0; i < nfaces; i++)
+    {
+        Op_Grad += Ms[i].transpose() * v.row(i).transpose() * del_W_F.transpose();
+//        Op_Grad.row(i) += del_W_F.transpose() * v.row(i).transpose() * Ms[i].transpose();
+    }
 }
 
 
@@ -162,29 +171,22 @@ void takeGradientDescentStep()
 
     del_W_F.resize(F.rows(), 3);
     del_W_F.setZero();
-    Eigen::MatrixXd DM_local;
+    Eigen::MatrixXd Op_Grad;
 
     // Not effecient, but will make it feel more correct to update, then show
-    for (int i = 0; i < 3; i++) 
+    for (int i = 0; i < 1; i++) 
     {
-        computeCovariantOperator(W.col(i), F, F_edges, V, E, DM_local);	
-	updateWInGradientDirection(DM_local, W, i);
-    }
-    
-    for (int i = 0; i < 3; i++) 
-    {
-        computeCovariantOperator(W.col(i), F, F_edges, V, E, DM_local);	
- 	evaluateOperator(DM_local, W_local, del_W_F, i);
+     //   computeCovariantOperator(W.col(i), F, F_edges, V, E, DM_local);	
+//	updateWInGradientDirection(DM_local, W, i);
+  
+        computeCovariantOperatorNew(F, V, E, F_edges, W, W_test, Ms, del_W_F);
+        computeOperatorGradient(Ms, del_W_F, W, Op_Grad);
+
+        W -= Op_Grad * .001;
+
     }
 
-    int nFaces = F.rows(); 
-
-    Eigen::VectorXd Z(nFaces);
-    double maxerror = 0;
-    for (int i = 0; i < nFaces; i++)
-    {
-        Z(i) = log(1 / del_W_F.row(i).norm());
-    }
+    computeCovariantOperatorNew(F, V, E, F_edges, W, W_test, Ms, del_W_F);
        
     descentStep++;
     updateView(del_W_F, descentStep);
@@ -201,17 +203,6 @@ void showVectorField()
     computeDistanceField(p, centroids_F, W_test);
 //    computeTestField(p, centroids_F, W_test);
 
-    /*Eigen::MatrixXd W_local;
-    computeLocalCoordinatesForDistanceField(W_test, F, V, W_local);
-
-    del_W_F.resize(F.rows(), 3);
-    del_W_F.setZero();
-    Eigen::MatrixXd DM_local;
-    for (int i = 0; i < 3; i++) 
-    {
-        computeCovariantOperator(W.col(i), F, F_edges, V, E, DM_local);
-        evaluateOperator(DM_local, W_local, del_W_F, i);
-    }*/
     computeCovariantOperatorNew(F, V, E, F_edges, W, W_test, Ms, del_W_F);
 
     int nFaces = F.rows(); 
