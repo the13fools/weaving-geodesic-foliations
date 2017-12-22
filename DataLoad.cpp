@@ -74,7 +74,6 @@ void computeDistanceField(const Eigen::Vector3d p, const Eigen::MatrixXd &centro
     }
 }
 
-
 void buildEdges(const Eigen::MatrixXi &F, Eigen::MatrixXi &E)
 {
     map<pair<int, int>, Vector4i, std::less<pair<int, int> >,

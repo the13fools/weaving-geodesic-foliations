@@ -17,6 +17,8 @@ igl::viewer::Viewer *viewer;
 
 double px = 0;
 double py = 0;
+int desc_steps = 10;
+
 
 void computeCovariantOperator(const Eigen::VectorXd &scalar_F,
     const Eigen::MatrixXi &F,
@@ -185,7 +187,7 @@ void takeGradientDescentStep()
     Eigen::MatrixXd Op_Grad;
 
     // Not effecient, but will make it feel more correct to update, then show
-    for (int i = 0; i < 10; i++) 
+    for (int i = 0; i < desc_steps; i++) 
     {
         computeCovariantOperatorNew(F, V, E, F_edges, W, W_test, Ms, del_W_F);
         computeOperatorGradient(Ms, del_W_F, W, Op_Grad);
@@ -233,6 +235,18 @@ void showVectorField()
 
 }
 
+void addNoiseToField() 
+{
+    double eps = .01;
+    Eigen::MatrixXd noise = Eigen::MatrixXd::Random( W.rows(), 3 ) * eps;
+
+    W += noise;
+    W_init += noise; 
+
+    descentStep = 0;
+    updateView(del_W_F, descentStep);
+}
+
 
 int main(int argc, char *argv[])
 {  
@@ -255,9 +269,11 @@ int main(int argc, char *argv[])
       // Expose a variable
       viewer.ngui->addVariable("Center X",px);
       viewer.ngui->addVariable("Center Y",py);
+      viewer.ngui->addVariable("Descent Steps",desc_steps);
 
       // Add a button
       viewer.ngui->addButton("Recompute Derivative", showVectorField);
+      viewer.ngui->addButton("Add Noise to Field", addNoiseToField);
       viewer.ngui->addButton("Grad Descent Step", takeGradientDescentStep);
 
       // call to generate menu
