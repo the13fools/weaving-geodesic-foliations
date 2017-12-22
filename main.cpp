@@ -89,6 +89,9 @@ Eigen::MatrixXd centroids_F;
 
 Eigen::MatrixXd del_W_F;
 
+
+
+
 void computeOperatorGradient( const std::vector<Eigen::SparseMatrix<double> > &Ms,
 	const Eigen::MatrixXd &del_W_F,
 	const Eigen::MatrixXd &v,
@@ -100,9 +103,63 @@ void computeOperatorGradient( const std::vector<Eigen::SparseMatrix<double> > &M
 
     for (int i = 0; i < nfaces; i++)
     {
-        Op_Grad += Ms[i].transpose() * v.row(i).transpose() * del_W_F.transpose();
+	Eigen::VectorXd temp = Ms[i].transpose() * v.row(i).transpose(); 
+	Op_Grad += temp * del_W_F.row(i);
+
+        Eigen::VectorXd rowTemp = del_W_F.row(i) * v.transpose();
+	Op_Grad.row(i) += rowTemp * Ms[i].transpose();
+    }
+
+
+
+/*    std::vector<Eigen::Triplet<double> > delCoeffs;
+    std::vector<Eigen::Triplet<double> > vCoeffs;
+
+    std::cout << del_W_F.rows() << " r del c " << del_W_F.cols() << " v "  << v.rows() << v.cols();
+
+    Eigen::SparseMatrix<double> del_W_F_sparse;
+    del_W_F_sparse.resize(nfaces, 3);
+
+    Eigen::SparseMatrix<double> v_sparse;
+    v_sparse.resize(3, nfaces);
+
+    for (int i = 0; i < nfaces; i++) 
+    {
+        for (int j = 0; j < 3; j++) 
+	{
+            delCoeffs.push_back(Eigen::Triplet<double>(i, j, del_W_F(i,j)));
+            vCoeffs.push_back(Eigen::Triplet<double>(  j, i, v(i,j)));
+	}
+    }
+
+    v_sparse.setFromTriplets(vCoeffs.begin(), vCoeffs.end());
+    del_W_F_sparse.setFromTriplets(delCoeffs.begin(), delCoeffs.end());
+
+    Eigen::SparseMatrix<double> sp;
+
+    for (int i = 0; i < 100; i++)
+    {
+//        Op_Grad += Ms[i].transpose() * v_sparse.row(i).transpose() * del_W_F_sparse.transpose();
+//          Ms[i].transpose() * v_sparse.row(i).transpose() * del_W_F_sparse.transpose();
+        sp = Eigen::SparseMatrix<double>(Ms[i].transpose()) * Eigen::SparseMatrix<double>(v_sparse.row(i)) * Eigen::SparseMatrix<double>(del_W_F_sparse.transpose()) ;
+
+	for(int k=0; k<sp.outerSize(); ++k)
+	{
+	// Iterate over inside
+	    for(Eigen::SparseMatrix<double>::InnerIterator it (sp,k); it; ++it)
+	    {
+	      //           // it.row(),  it.col(), it.value()  
+	        Op_Grad(it.col(), it.row()) += it.value();
+	    }
+	}
+
+        Op_Grad += sp;
 //        Op_Grad.row(i) += del_W_F.transpose() * v.row(i).transpose() * Ms[i].transpose();
     }
+
+//    Op_Grad = sp;
+*/
+
 }
 
 
@@ -182,7 +239,7 @@ void takeGradientDescentStep()
         computeCovariantOperatorNew(F, V, E, F_edges, W, W_test, Ms, del_W_F);
         computeOperatorGradient(Ms, del_W_F, W, Op_Grad);
 
-        W -= Op_Grad * .001;
+        W -= Op_Grad * .000001;
 
     }
 
