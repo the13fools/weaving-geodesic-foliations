@@ -81,6 +81,7 @@ void computeCovariantOperatorNew(const Eigen::MatrixXi &F,
 }
 
 Eigen::MatrixXd W; // This can be thought of as 3 ``independent'' scalar fields
+Eigen::MatrixXd W_init; // W at init, for visualizing change in descent 
 Eigen::MatrixXd W_test; // The derivative is tested in this direction
 std::vector<Eigen::SparseMatrix<double> > Ms; // the gradient operator; Ms[i] * F gives the gradient of F on triangle i
 
@@ -109,56 +110,6 @@ void computeOperatorGradient( const std::vector<Eigen::SparseMatrix<double> > &M
         Eigen::VectorXd rowTemp = del_W_F.row(i) * v.transpose();
 	Op_Grad.row(i) += rowTemp * Ms[i].transpose();
     }
-
-
-
-/*    std::vector<Eigen::Triplet<double> > delCoeffs;
-    std::vector<Eigen::Triplet<double> > vCoeffs;
-
-    std::cout << del_W_F.rows() << " r del c " << del_W_F.cols() << " v "  << v.rows() << v.cols();
-
-    Eigen::SparseMatrix<double> del_W_F_sparse;
-    del_W_F_sparse.resize(nfaces, 3);
-
-    Eigen::SparseMatrix<double> v_sparse;
-    v_sparse.resize(3, nfaces);
-
-    for (int i = 0; i < nfaces; i++) 
-    {
-        for (int j = 0; j < 3; j++) 
-	{
-            delCoeffs.push_back(Eigen::Triplet<double>(i, j, del_W_F(i,j)));
-            vCoeffs.push_back(Eigen::Triplet<double>(  j, i, v(i,j)));
-	}
-    }
-
-    v_sparse.setFromTriplets(vCoeffs.begin(), vCoeffs.end());
-    del_W_F_sparse.setFromTriplets(delCoeffs.begin(), delCoeffs.end());
-
-    Eigen::SparseMatrix<double> sp;
-
-    for (int i = 0; i < 100; i++)
-    {
-//        Op_Grad += Ms[i].transpose() * v_sparse.row(i).transpose() * del_W_F_sparse.transpose();
-//          Ms[i].transpose() * v_sparse.row(i).transpose() * del_W_F_sparse.transpose();
-        sp = Eigen::SparseMatrix<double>(Ms[i].transpose()) * Eigen::SparseMatrix<double>(v_sparse.row(i)) * Eigen::SparseMatrix<double>(del_W_F_sparse.transpose()) ;
-
-	for(int k=0; k<sp.outerSize(); ++k)
-	{
-	// Iterate over inside
-	    for(Eigen::SparseMatrix<double>::InnerIterator it (sp,k); it; ++it)
-	    {
-	      //           // it.row(),  it.col(), it.value()  
-	        Op_Grad(it.col(), it.row()) += it.value();
-	    }
-	}
-
-        Op_Grad += sp;
-//        Op_Grad.row(i) += del_W_F.transpose() * v.row(i).transpose() * Ms[i].transpose();
-    }
-
-//    Op_Grad = sp;
-*/
 
 }
 
@@ -207,17 +158,18 @@ void updateView(const Eigen::MatrixXd del_W_F, int step)
     viewer->data.set_colors(colorField);
 
     Eigen::MatrixXd eps = Eigen::MatrixXd::Constant(nFaces,3,.001);
-
+/*
     Eigen::MatrixXd field;
     field.resize(nFaces, 3);
     for (int i = 0; i < nFaces; i++)
     {
 	field.row(i) = W.row(i).normalized();
     }
-
+*/
     const Eigen::RowVector3d green(0.1,0.9,0.2),blue(0.1,0.2,0.8);
-    viewer->data.add_edges(centroids_F  + del_W_F*avg/2, centroids_F, blue);
-    viewer->data.add_edges(centroids_F  + field*avg/2, centroids_F, green);
+  //  viewer->data.add_edges(centroids_f  + del_w_f*avg/2, centroids_f, blue);
+    viewer->data.add_edges(centroids_F  + W*avg/2, centroids_F, blue);
+    viewer->data.add_edges(centroids_F  + (W - W_init)*avg/2, centroids_F, green);
 }
 
 int descentStep = 0;
@@ -226,21 +178,28 @@ void takeGradientDescentStep()
     Eigen::MatrixXd W_local;
     computeLocalCoordinatesForDistanceField(W, F, V, W_local);
 
-    del_W_F.resize(F.rows(), 3);
+    int nfaces = F.rows();
+
+    del_W_F.resize(nfaces, 3);
     del_W_F.setZero();
     Eigen::MatrixXd Op_Grad;
 
     // Not effecient, but will make it feel more correct to update, then show
-    for (int i = 0; i < 1; i++) 
+    for (int i = 0; i < 10; i++) 
     {
-     //   computeCovariantOperator(W.col(i), F, F_edges, V, E, DM_local);	
-//	updateWInGradientDirection(DM_local, W, i);
-  
         computeCovariantOperatorNew(F, V, E, F_edges, W, W_test, Ms, del_W_F);
         computeOperatorGradient(Ms, del_W_F, W, Op_Grad);
 
-        W -= Op_Grad * .000001;
+        W -= Op_Grad * .000001; 
 
+        // Normalize W 
+	double fieldMass = 0;
+	for (int i = 0; i < nfaces; i++)
+	{
+	    fieldMass += W.row(i).squaredNorm();
+	} 
+
+	W *= (double) nfaces / fieldMass;
     }
 
     computeCovariantOperatorNew(F, V, E, F_edges, W, W_test, Ms, del_W_F);
@@ -255,7 +214,9 @@ void showVectorField()
 
     Eigen::Vector3d p(px, py,0);
     computeDistanceField(p, centroids_F, W);
+    computeDistanceField(p, centroids_F, W_init);
 //    computeWhirlpool(p, centroids_F, W);
+//    W_init = W;
 
     computeDistanceField(p, centroids_F, W_test);
 //    computeTestField(p, centroids_F, W_test);

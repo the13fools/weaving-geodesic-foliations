@@ -65,9 +65,12 @@ void computeDistanceField(const Eigen::Vector3d p, const Eigen::MatrixXd &centro
     W.resize(nfaces, 3);
     for (int i = 0; i < nfaces; i++) 
     { 
-        Eigen::Vector3d blah = -centroids.row(i);
-	blah += p;
-	W.row(i) = blah.normalized();
+        Eigen::Vector3d vec = -centroids.row(i);
+	vec += p;
+        vec.normalize();
+//	Eigen::Vector3d eps = Eigen::Vector3d::Random();
+//	W.row(i) = vec + eps * .01;
+	W.row(i) = vec;
     }
 }
 
