@@ -63,10 +63,14 @@ void evaluateOperator(const Eigen::MatrixXd &DM_local,
     }
 }
 
-void computeCovariantOperatorNew(const Eigen::MatrixXi &F, const Eigen::MatrixXd &V, const Eigen::MatrixXi &E, const Eigen::MatrixXi &F_edges, 
-    const Eigen::MatrixXd &v, const Eigen::MatrixXd &w,
-    const std::vector<Eigen::SparseMatrix<double> > &Ms,
-    Eigen::MatrixXd &result)
+void computeCovariantOperatorNew(const Eigen::MatrixXi &F, 
+	const Eigen::MatrixXd &V, 
+	const Eigen::MatrixXi &E, 
+	const Eigen::MatrixXi &F_edges, 
+        const Eigen::MatrixXd &v, 
+	const Eigen::MatrixXd &w,
+        const std::vector<Eigen::SparseMatrix<double> > &Ms,
+        Eigen::MatrixXd &result)
 {
     result.resize(v.rows(), v.cols());
     int nfaces = F.rows();
@@ -92,15 +96,41 @@ void updateWInGradientDirection(
 
 }
 
-void updateView(Eigen::VectorXd faceColors)
+
+
+double energy_OP = 0.;
+void updateView(const Eigen::MatrixXd del_W_F, int step)
 {
+    int nFaces = F.rows(); 
+    char derFName[50];
+    sprintf(derFName, "der_step_%d.txt", step);
+    std::ofstream myfile (derFName);
+
+
+    // Set mesh colors and log operator state
+    Eigen::VectorXd Z(nFaces);
+    energy_OP = 0.;
+//    std::cout << del_W_F.rows() << " " << del_W_F.cols() << "\n";
+    for (int i = 0; i < nFaces; i++)
+    {
+        Z(i) = log(del_W_F.row(i).norm() + .000005);
+
+	if (myfile.is_open())
+	{
+	    myfile << del_W_F.row(i) << "\n";
+            energy_OP += del_W_F.row(i).squaredNorm();       
+	}
+	else std::cout << "Unable to open file";
+    }
+    myfile.close();
+    std::cout << energy_OP << "\n";
+
     // Average edge length for sizing
     const double avg = igl::avg_edge_length(V,F);
-    int nFaces = F.rows(); 
     colorField.resize(nFaces, 3);
     
     //  igl::jet(Z,true,colorField);
-    igl::colormap(igl::COLOR_MAP_TYPE_MAGMA,faceColors, true, colorField);
+    igl::colormap(igl::COLOR_MAP_TYPE_MAGMA,Z, true, colorField);
 
 
     // Plot the mesh
@@ -112,11 +142,19 @@ void updateView(Eigen::VectorXd faceColors)
 
     Eigen::MatrixXd eps = Eigen::MatrixXd::Constant(nFaces,3,.001);
 
-    const Eigen::RowVector3d red(0.8,0.2,0.2),blue(0.2,0.2,0.8);
+    Eigen::MatrixXd field;
+    field.resize(nFaces, 3);
+    for (int i = 0; i < nFaces; i++)
+    {
+	field.row(i) = W.row(i).normalized();
+    }
+
+    const Eigen::RowVector3d green(0.1,0.9,0.2),blue(0.1,0.2,0.8);
     viewer->data.add_edges(centroids_F  + del_W_F*avg/2, centroids_F, blue);
+    viewer->data.add_edges(centroids_F  + field*avg/2, centroids_F, green);
 }
 
-
+int descentStep = 0;
 void takeGradientDescentStep()
 {
     Eigen::MatrixXd W_local;
@@ -147,7 +185,9 @@ void takeGradientDescentStep()
     {
         Z(i) = log(1 / del_W_F.row(i).norm());
     }
-    updateView(Z);
+       
+    descentStep++;
+    updateView(del_W_F, descentStep);
 }
 
 void showVectorField()
@@ -176,31 +216,11 @@ void showVectorField()
 
     int nFaces = F.rows(); 
 
-    std::ofstream myfile ("derivatives.txt");
-
-    Eigen::VectorXd Z(nFaces);
-    double maxerror = 0;
-    for (int i = 0; i < nFaces; i++)
-    {
-        Z(i) = log(del_W_F.row(i).norm());
-        if (maxerror < Z(i))
-        {
-            maxerror = Z(i);
-	}
-
-	if (myfile.is_open())
-	{
-	    myfile << del_W_F.row(i) << "\n";
-	//    std::cout << del_W_F.row(i) << "\n";
-	
-	}
-	else std::cout << "Unable to open file";
-    }
-    myfile.close();
     //  Eigen::VectorXd Z = W.col(0); // - del_W_F;// - W_recovered.col(0);
     // Eigen::VectorXd Z = del_W_F.transpose() * del_W_F;// - W_recovered.col(0);
 
-    updateView(Z);   
+    descentStep = 0;
+    updateView(del_W_F, descentStep);   
 
 }
 
