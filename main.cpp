@@ -5,6 +5,10 @@
 #include <iostream>
 #include <fstream>
 
+// For making directories
+#include <sys/stat.h>
+// #include <direct.h>
+
 #include "DataLoad.h"
 #include "Covariant.h"
 #include "FaceBased.h"
@@ -18,6 +22,9 @@ igl::viewer::Viewer *viewer;
 double px = 0;
 double py = 0;
 int desc_steps = 10;
+int desc_loops = 3;
+char fileName[50] = "0-0-10ksteps";
+std::string folderName = "logging_location";
 
 
 void computeCovariantOperator(const Eigen::VectorXd &scalar_F,
@@ -84,7 +91,7 @@ void computeCovariantOperatorNew(const Eigen::MatrixXi &F,
 
 Eigen::MatrixXd W; // This can be thought of as 3 ``independent'' scalar fields
 Eigen::MatrixXd W_init; // W at init, for visualizing change in descent 
-Eigen::MatrixXd W_test; // The derivative is tested in this direction
+
 std::vector<Eigen::SparseMatrix<double> > Ms; // the gradient operator; Ms[i] * F gives the gradient of F on triangle i
 
 Eigen::MatrixXd colorField;
@@ -115,34 +122,51 @@ void computeOperatorGradient( const std::vector<Eigen::SparseMatrix<double> > &M
 
 }
 
+void logToFile(const Eigen::MatrixXd W, std::string foldername, std::string filename)
+{
+    char folderpath[50];
+    sprintf(folderpath, "log/%s", foldername.c_str());
+    mkdir("log", S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+    mkdir(folderpath, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+    char logpath[50];
+    sprintf(logpath, "%s/%s.txt", folderpath, filename.c_str());   
+    std::ofstream myfile (logpath);
+    for(int i = 0; i < W.rows(); i++)
+    {
+        if (myfile.is_open())
+        {
+	    myfile << W.row(i) << "\n";
+	}
 
+	else
+	{
+	    std::cout << "Unable to open file";
+	    break;
+	}
+    } 
+    myfile.close();
+}
 
 double energy_OP = 0.;
 void updateView(const Eigen::MatrixXd del_W_F, int step)
 {
     int nFaces = F.rows(); 
-    char derFName[50];
-    sprintf(derFName, "der_step_%d.txt", step);
-    std::ofstream myfile (derFName);
 
+    logToFile(W, folderName, std::to_string(step)); 
 
     // Set mesh colors and log operator state
     Eigen::VectorXd Z(nFaces);
+    Eigen::Vector3d testDir(1,0,0);
     energy_OP = 0.;
-//    std::cout << del_W_F.rows() << " " << del_W_F.cols() << "\n";
+    
     for (int i = 0; i < nFaces; i++)
     {
-        Z(i) = log(del_W_F.row(i).norm() + .000005);
+   //     Z(i) = log(del_W_F.row(i).norm() + .000005);
+        Z(i) = (W-W_init).row(i).normalized().dot(testDir);
 
-	if (myfile.is_open())
-	{
-	    myfile << del_W_F.row(i) << "\n";
-            energy_OP += del_W_F.row(i).squaredNorm();       
-	}
-	else std::cout << "Unable to open file";
+	energy_OP += del_W_F.row(i).squaredNorm();       
     }
-    myfile.close();
-    std::cout << energy_OP << "\n";
+    std::cout << energy_OP << " Operator Energy\n";
 
     // Average edge length for sizing
     const double avg = igl::avg_edge_length(V,F);
@@ -184,7 +208,7 @@ void project(Eigen::MatrixXd &v)
 	    fieldMass += v.row(i).squaredNorm();
 	} 
 
-	v *= (double) nfaces / fieldMass;	
+	v *= (double) sqrt(nfaces / fieldMass);	
 }
 
 double energy(const Eigen::MatrixXd &v)
@@ -206,13 +230,17 @@ void lineSearch(const Eigen::MatrixXd &v, const Eigen::MatrixXd &gradV, double &
     t *= c1;
     double orig = energy(v);
     std::cout << "original energy " << orig << std::endl;
+    Eigen::MatrixXd v_cp = v;
+    project(v_cp);
+    double projected = energy(v_cp);
+    std::cout << "projected energy " << projected << std::endl;
     while(true)
     {
     	Eigen::MatrixXd testv = v - t*gradV;    
     	project(testv);
     	newenergy = energy(testv);
 	std::cout << "new energy, t = " << t << ": " << newenergy << std::endl;
-        if(newenergy < orig)
+	if(newenergy < orig || t < .0000000000001)
 		return;
 	else
 		t *= c2;
@@ -224,6 +252,7 @@ void lineSearch(const Eigen::MatrixXd &v, const Eigen::MatrixXd &gradV, double &
 int descentStep = 0;
 void takeGradientDescentStep()
 {
+for(int loops = 0; loops < desc_loops; loops++) {
     int nfaces = F.rows();
 
     del_W_F.resize(nfaces, 3);
@@ -246,7 +275,7 @@ void takeGradientDescentStep()
        
     descentStep++;
     updateView(del_W_F, descentStep);
-}
+}}
 
 
 void showVectorField()
@@ -259,32 +288,43 @@ void showVectorField()
 //    computeWhirlpool(p, centroids_F, W);
 //    W_init = W;
 
-    computeDistanceField(p, centroids_F, W_test);
-//    computeTestField(p, centroids_F, W_test);
 
-    computeCovariantOperatorNew(F, V, E, F_edges, W, W_test, Ms, del_W_F);
+    computeCovariantOperatorNew(F, V, E, F_edges, W, W, Ms, del_W_F);
 
     int nFaces = F.rows(); 
 
     //  Eigen::VectorXd Z = W.col(0); // - del_W_F;// - W_recovered.col(0);
     // Eigen::VectorXd Z = del_W_F.transpose() * del_W_F;// - W_recovered.col(0);
 
-    descentStep = 0;
+    project(W_init);
+    logToFile(W_init, folderName, "0W");
+    descentStep = 1;
     updateView(del_W_F, descentStep);   
 
 }
 
+
+
 void addNoiseToField() 
 {
-    double eps = .01;
+    double eps = .1;
     Eigen::MatrixXd noise = Eigen::MatrixXd::Random( W.rows(), 3 ) * eps;
+    for (int i = 0; i < W.rows(); i++)
+    {
+        noise(i, 2) = 0.;
+    }
 
     W += noise;
-    W_init += noise; 
+  //  W_init += noise; // This way we see the error from the ground truth
 
-    descentStep = 0;
+    project(W);
+
+    computeCovariantOperatorNew(F, V, E, F_edges, W, W, Ms, del_W_F);
+
+    descentStep = 1;
     updateView(del_W_F, descentStep);
 }
+
 
 
 int main(int argc, char *argv[])
@@ -302,6 +342,9 @@ int main(int argc, char *argv[])
   viewer->data.set_face_based(true);
   viewer->callback_init = [&](igl::viewer::Viewer& viewer)
   {
+      
+      viewer.ngui->window()->setVisible(false);
+      viewer.ngui->addWindow(Eigen::Vector2i(10, 60), "Weaving"); 
       // Add new group
       viewer.ngui->addGroup("Vector Field Options");
 
@@ -309,11 +352,14 @@ int main(int argc, char *argv[])
       viewer.ngui->addVariable("Center X",px);
       viewer.ngui->addVariable("Center Y",py);
       viewer.ngui->addVariable("Descent Steps",desc_steps);
+      viewer.ngui->addVariable("Descent Outer Loops",desc_loops);
 
       // Add a button
       viewer.ngui->addButton("Recompute Derivative", showVectorField);
       viewer.ngui->addButton("Add Noise to Field", addNoiseToField);
       viewer.ngui->addButton("Grad Descent Step", takeGradientDescentStep);
+
+      viewer.ngui->addVariable("Log Folder", folderName);
 
       // call to generate menu
       viewer.screen->performLayout();
