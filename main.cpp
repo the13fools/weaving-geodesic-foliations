@@ -26,6 +26,12 @@ int desc_loops = 3;
 char fileName[50] = "0-0-10ksteps";
 std::string folderName = "logging_location";
 
+enum shading_enum {
+   OP_ERROR = 0,
+   INIT_DIRECTION,
+   INIT_MAGNITUDE
+};
+shading_enum shading_enum_state = INIT_DIRECTION;
 
 void computeCovariantOperator(const Eigen::VectorXd &scalar_F,
     const Eigen::MatrixXi &F,
@@ -161,8 +167,18 @@ void updateView(const Eigen::MatrixXd del_W_F, int step)
     
     for (int i = 0; i < nFaces; i++)
     {
-   //     Z(i) = log(del_W_F.row(i).norm() + .000005);
-        Z(i) = (W-W_init).row(i).normalized().dot(testDir);
+        switch (shading_enum_state)
+	{
+            case OP_ERROR:
+                Z(i) = log(del_W_F.row(i).norm() + .000005);
+		break;
+            case INIT_DIRECTION:
+		Z(i) = (W-W_init).row(i).normalized().dot(testDir);
+		break;
+            case INIT_MAGNITUDE:
+		Z(i) = log( (W-W_init).row(i).squaredNorm() );
+		break;
+	}
 
 	energy_OP += del_W_F.row(i).squaredNorm();       
     }
@@ -360,6 +376,9 @@ int main(int argc, char *argv[])
       viewer.ngui->addButton("Grad Descent Step", takeGradientDescentStep);
 
       viewer.ngui->addVariable("Log Folder", folderName);
+      viewer.ngui->addVariable("Shade State", shading_enum_state, true)
+          ->setItems({"Operator Error", "Update Direction", "Update Magnitude"});
+
 
       // call to generate menu
       viewer.screen->performLayout();
