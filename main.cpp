@@ -111,6 +111,7 @@ void computeOperatorGradient( const std::vector<Eigen::SparseMatrix<double> > &M
 
 }
 
+
 void logToFile(const Eigen::MatrixXd W, std::string foldername, std::string filename)
 {
     char folderpath[50];
@@ -136,6 +137,47 @@ void logToFile(const Eigen::MatrixXd W, std::string foldername, std::string file
     myfile.close();
 }
 
+
+double energy(const Eigen::MatrixXd &v)
+{
+	int nfaces = (int)v.rows();
+	del_W_F(nfaces, 3);
+	del_W_F.setZero();
+	computeCovariantOperatorNew(F, V, E, F_edges, v, v, Ms, del_W_F);
+	double result = 0;
+	for(int i=0; i<nfaces; i++)
+		result += del_W_F.row(i).dot(del_W_F.row(i));
+	return result;
+}
+
+
+
+void computeOperatorGradient_finitedifference( const std::vector<Eigen::SparseMatrix<double> > &Ms,
+	const Eigen::MatrixXd &del_W_F,
+	const Eigen::MatrixXd &v,
+	Eigen::MatrixXd &Op_Grad)
+{
+    int nfaces = v.rows();
+
+    double e = energy(v); 
+
+    Op_Grad = Eigen::MatrixXd::Zero(nfaces, 3);
+    double eps = .0000001;
+
+    for (int i = 0; i < nfaces; i++)
+    {
+        for (int j = 0; j < 3; j++) 
+	{
+            Eigen::MatrixXd shifted = v;
+	    shifted(i, j) += eps;
+	    double diff = energy(shifted);
+	    Op_Grad(i, j) = (diff - e) / eps;
+	}	
+	std::cout << i << "\n";
+    }
+
+}
+
 double energy_OP = 0.;
 void updateView(const Eigen::MatrixXd del_W_F, int step)
 {
@@ -146,7 +188,8 @@ void updateView(const Eigen::MatrixXd del_W_F, int step)
 
     Eigen::MatrixXd Op_Grad;
     computeOperatorGradient(Ms, del_W_F, W, Op_Grad);
-    
+    logToFile(Op_Grad, folderName, "op_grad"); 
+
     // Set mesh colors and log operator state
     Eigen::VectorXd Z(nFaces);
     Eigen::Vector3d testDir(1,0,0);
@@ -161,7 +204,7 @@ void updateView(const Eigen::MatrixXd del_W_F, int step)
 		break;
             case INIT_DIRECTION:
 	//	Z(i) = (W-W_init).row(i).normalized().dot(testDir);
-		Z(i) = (Op_Grad).row(i).normalized().dot(testDir);
+		Z(i) = (Op_Grad).row(i).normalized().dot(testDir) + .000005;
 		break;
             case INIT_MAGNITUDE:
 		Z(i) = log( (W-W_init).row(i).squaredNorm() );
@@ -208,10 +251,11 @@ void updateView(const Eigen::MatrixXd del_W_F, int step)
 	field.row(i) = W.row(i).normalized();
     }
 */
-    const Eigen::RowVector3d green(0.1,0.9,0.2),blue(0.1,0.2,0.8);
+    const Eigen::RowVector3d red(0.9,.1,.1),green(0.1,0.9,0.2),blue(0.1,0.2,0.8);
   //  viewer->data.add_edges(centroids_f  + del_w_f*avg/2, centroids_f, blue);
+    
+    viewer->data.add_edges(centroids_F  + (W - W_init)*avg/2*operator_scale, centroids_F, red);
     viewer->data.add_edges(centroids_F  + W*avg/2, centroids_F, blue);
-//    viewer->data.add_edges(centroids_F  + (W - W_init)*avg/2, centroids_F, green);
     viewer->data.add_edges(centroids_F  + (Op_Grad)*avg/2*operator_scale, centroids_F, green);
 }
 
@@ -226,18 +270,6 @@ void project(Eigen::MatrixXd &v)
 	} 
 
 	v *= (double) sqrt(nfaces / fieldMass);	
-}
-
-double energy(const Eigen::MatrixXd &v)
-{
-	int nfaces = (int)v.rows();
-	del_W_F(nfaces, 3);
-	del_W_F.setZero();
-	computeCovariantOperatorNew(F, V, E, F_edges, v, v, Ms, del_W_F);
-	double result = 0;
-	for(int i=0; i<nfaces; i++)
-		result += del_W_F.row(i).dot(del_W_F.row(i));
-	return result;
 }
 
 void lineSearch(const Eigen::MatrixXd &v, const Eigen::MatrixXd &gradV, double &t, double &newenergy)
@@ -298,44 +330,15 @@ for(int loops = 0; loops < desc_loops; loops++) {
 }}
 
 
-/*
-int descentStep = 0;
-void takeGradientDescentStep()
-{
-for(int loops = 0; loops < desc_loops; loops++) {
-    int nfaces = F.rows();
-
-    del_W_F.resize(nfaces, 3);
-    del_W_F.setZero();
-    Eigen::MatrixXd Op_Grad;
-    double t = 1.0;
-
-    // Not effecient, but will make it feel more correct to update, then show
-    for (int i = 0; i < desc_steps; i++) 
-    {
-        computeCovariantOperatorNew(F, V, E, F_edges, W, W, Ms, del_W_F);
-        computeOperatorGradient(Ms, del_W_F, W, Op_Grad);
-	double newenergy = 0;
-	lineSearch(W, Op_Grad, t, newenergy);
-        W -= t*Op_Grad; 
-	project(W);
-    }
-
-    computeCovariantOperatorNew(F, V, E, F_edges, W, W, Ms, del_W_F);
-       
-    descentStep++;
-    updateView(del_W_F, descentStep);
-}}
-*/
-
 void showVectorField()
 {
     computeCentroids(F,V,centroids_F);
 
     Eigen::Vector3d p(px, py,0);
-//    computeDistanceField(p, centroids_F, W);
+    computeDistanceField(p, centroids_F, W);
     computeDistanceField(p, centroids_F, W_init);
-    computeWhirlpool(p, centroids_F, W);
+//    computeWhirlpool(p, centroids_F, W_init);
+//    computeWhirlpool(p, centroids_F, W);
 //    W_init = W;
 
 
@@ -346,7 +349,7 @@ void showVectorField()
     //  Eigen::VectorXd Z = W.col(0); // - del_W_F;// - W_recovered.col(0);
     // Eigen::VectorXd Z = del_W_F.transpose() * del_W_F;// - W_recovered.col(0);
 
-    project(W_init);
+//    project(W_init);
     logToFile(W_init, folderName, "0W");
     descentStep = 1;
     updateView(del_W_F, descentStep);   
@@ -413,6 +416,7 @@ int main(int argc, char *argv[])
       viewer.ngui->addVariable("Log Folder", folderName);
       viewer.ngui->addVariable("Shade State", shading_enum_state, true)
           ->setItems({"Operator Error", "Update Direction", "Update Magnitude"});
+//	  ->setCallback([] { updateView(del_W_F, descentStep); });
 
 
       // call to generate menu
