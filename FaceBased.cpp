@@ -56,6 +56,16 @@ static void oneFaceGradientMatrix(const Eigen::MatrixXi &F, const Eigen::MatrixX
     }
     c /= 3.0;
 
+    double centroidDist = 0.;
+    double edgeLen = 0.;
+    for (int i = 0; i < 3; i++)
+    { 
+        int v1 = (i + 1) % 3;
+        int v2 = (i + 2) % 3;
+    	centroidDist += (centroids[i] - c).norm();
+	edgeLen += (V.row(F(faceidx, v2)) - V.row(F(faceidx, v1))).norm();
+    }
+
     //rotate each centroid into the plane of the triangle faceidx and compute ci minus c
     Eigen::Vector3d ciminusc[3];
     for (int i = 0; i < 3; i++)
@@ -66,6 +76,11 @@ static void oneFaceGradientMatrix(const Eigen::MatrixXi &F, const Eigen::MatrixX
         double alpha = commones[i].dot(diff);
         double beta = t2.dot(diff);
         ciminusc[i] = midpts[i] + alpha * commones[i] + beta * t1 - c;
+     
+        int v1 = (i + 1) % 3;
+        int v2 = (i + 2) % 3;	
+	double edge = (V.row(F(faceidx, v2)) - V.row(F(faceidx, v1))).norm();
+	ciminusc[i] *= (edge / edgeLen) * (centroids[i] - c).norm() / centroidDist;
     }
 
     // compute N
