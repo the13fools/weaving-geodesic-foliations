@@ -26,6 +26,8 @@ int desc_loops = 3;
 char fileName[50] = "0-0-10ksteps";
 std::string folderName = "logging_location";
 
+double operator_scale = 1.;
+
 enum shading_enum {
    OP_ERROR = 0,
    INIT_DIRECTION,
@@ -60,23 +62,6 @@ void computeCovariantOperator(const Eigen::VectorXd &scalar_F,
     }
 }
 
-void evaluateOperator(const Eigen::MatrixXd &DM_local,
-	const Eigen::MatrixXd &W_local, 
-        Eigen::MatrixXd &del_W_F, int idx)
-{
-    Eigen::Vector3d component(0, 0, 0);
-    component(idx) = 1;
-
-// This is super slow because it does a bunch of irrelevant multiplications...    
-//    Eigen::MatrixXd weights = DM_local * W_local.transpose();
-
-    for (int i = 0; i < DM_local.rows(); i++)
-    {
- 
- 	del_W_F.row(i) += component * (DM_local(i, 0) * W_local(i, 0) + DM_local(i,1) * W_local(i, 1));
- 
-    }
-}
 
 void computeCovariantOperatorNew(const Eigen::MatrixXi &F, 
 	const Eigen::MatrixXd &V, 
@@ -104,8 +89,6 @@ Eigen::MatrixXd colorField;
 Eigen::MatrixXd centroids_F;
 
 Eigen::MatrixXd del_W_F;
-
-
 
 
 void computeOperatorGradient( const std::vector<Eigen::SparseMatrix<double> > &Ms,
@@ -160,6 +143,10 @@ void updateView(const Eigen::MatrixXd del_W_F, int step)
 
     logToFile(W, folderName, std::to_string(step)); 
 
+
+    Eigen::MatrixXd Op_Grad;
+    computeOperatorGradient(Ms, del_W_F, W, Op_Grad);
+    
     // Set mesh colors and log operator state
     Eigen::VectorXd Z(nFaces);
     Eigen::Vector3d testDir(1,0,0);
@@ -173,7 +160,8 @@ void updateView(const Eigen::MatrixXd del_W_F, int step)
                 Z(i) = log(del_W_F.row(i).norm() + .000005);
 		break;
             case INIT_DIRECTION:
-		Z(i) = (W-W_init).row(i).normalized().dot(testDir);
+	//	Z(i) = (W-W_init).row(i).normalized().dot(testDir);
+		Z(i) = (Op_Grad).row(i).normalized().dot(testDir);
 		break;
             case INIT_MAGNITUDE:
 		Z(i) = log( (W-W_init).row(i).squaredNorm() );
@@ -189,7 +177,19 @@ void updateView(const Eigen::MatrixXd del_W_F, int step)
     colorField.resize(nFaces, 3);
     
     //  igl::jet(Z,true,colorField);
-    igl::colormap(igl::COLOR_MAP_TYPE_MAGMA,Z, true, colorField);
+
+    switch (shading_enum_state)
+    {
+	case OP_ERROR:
+            igl::colormap(igl::COLOR_MAP_TYPE_MAGMA,Z, true, colorField);
+	    break;
+	case INIT_DIRECTION:
+            igl::colormap(igl::COLOR_MAP_TYPE_INFERNO,Z, true, colorField);
+	    break;
+	case INIT_MAGNITUDE:
+            igl::colormap(igl::COLOR_MAP_TYPE_MAGMA,Z, true, colorField);
+	    break;
+    }
 
 
     // Plot the mesh
@@ -211,7 +211,8 @@ void updateView(const Eigen::MatrixXd del_W_F, int step)
     const Eigen::RowVector3d green(0.1,0.9,0.2),blue(0.1,0.2,0.8);
   //  viewer->data.add_edges(centroids_f  + del_w_f*avg/2, centroids_f, blue);
     viewer->data.add_edges(centroids_F  + W*avg/2, centroids_F, blue);
-    viewer->data.add_edges(centroids_F  + (W - W_init)*avg/2, centroids_F, green);
+//    viewer->data.add_edges(centroids_F  + (W - W_init)*avg/2, centroids_F, green);
+    viewer->data.add_edges(centroids_F  + (Op_Grad)*avg/2*operator_scale, centroids_F, green);
 }
 
 
@@ -253,7 +254,7 @@ void lineSearch(const Eigen::MatrixXd &v, const Eigen::MatrixXd &gradV, double &
     while(true)
     {
     	Eigen::MatrixXd testv = v - t*gradV;    
-    	project(testv);
+ //   	project(testv);
     	newenergy = energy(testv);
 	std::cout << "new energy, t = " << t << ": " << newenergy << std::endl;
 	if(newenergy < orig || t < .0000000000001)
@@ -265,6 +266,39 @@ void lineSearch(const Eigen::MatrixXd &v, const Eigen::MatrixXd &gradV, double &
 
 
 
+int descentStep = 0;
+void takeGradientDescentStep()
+{
+for(int loops = 0; loops < desc_loops; loops++) {
+    int nfaces = F.rows();
+
+    del_W_F.resize(nfaces, 3);
+    del_W_F.setZero();
+    Eigen::MatrixXd Op_Grad;
+    double t = 1.0;
+
+    // Not effecient, but will make it feel more correct to update, then show
+    for (int i = 0; i < desc_steps; i++) 
+    {
+    
+	computeCovariantOperatorNew(F, V, E, F_edges, W, W, Ms, del_W_F);
+        computeOperatorGradient(Ms, del_W_F, W, Op_Grad);
+	
+	double newenergy = 0;
+	lineSearch(W, Op_Grad, t, newenergy);
+        W -= t*Op_Grad; 	
+
+	//	project(W);
+    }
+
+    computeCovariantOperatorNew(F, V, E, F_edges, W, W, Ms, del_W_F);
+       
+    descentStep++;
+    updateView(del_W_F, descentStep);
+}}
+
+
+/*
 int descentStep = 0;
 void takeGradientDescentStep()
 {
@@ -292,16 +326,16 @@ for(int loops = 0; loops < desc_loops; loops++) {
     descentStep++;
     updateView(del_W_F, descentStep);
 }}
-
+*/
 
 void showVectorField()
 {
     computeCentroids(F,V,centroids_F);
 
     Eigen::Vector3d p(px, py,0);
-    computeDistanceField(p, centroids_F, W);
+//    computeDistanceField(p, centroids_F, W);
     computeDistanceField(p, centroids_F, W_init);
-//    computeWhirlpool(p, centroids_F, W);
+    computeWhirlpool(p, centroids_F, W);
 //    W_init = W;
 
 
@@ -365,6 +399,7 @@ int main(int argc, char *argv[])
       viewer.ngui->addGroup("Vector Field Options");
 
       // Expose a variable
+      viewer.ngui->addVariable("Operator Scale",operator_scale);
       viewer.ngui->addVariable("Center X",px);
       viewer.ngui->addVariable("Center Y",py);
       viewer.ngui->addVariable("Descent Steps",desc_steps);
