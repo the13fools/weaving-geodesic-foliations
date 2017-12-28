@@ -4,6 +4,7 @@
 #include <Eigen/Core>
 
 
+Eigen::MatrixXd readMatrix(const char *filename);
 
 void computeCentroids(const Eigen::MatrixXi &F,const Eigen::MatrixXd &V, Eigen::MatrixXd &centroids);
 void computeDistanceField(const Eigen::Vector3d p, const Eigen::MatrixXd &centroids, Eigen::MatrixXd &W);

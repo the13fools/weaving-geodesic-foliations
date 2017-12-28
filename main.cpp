@@ -25,6 +25,7 @@ int desc_steps = 10;
 int desc_loops = 3;
 char fileName[50] = "0-0-10ksteps";
 std::string folderName = "logging_location";
+std::string fieldName = "field_dt.txt";
 
 double operator_scale = 1.;
 
@@ -111,7 +112,6 @@ void computeOperatorGradient( const std::vector<Eigen::SparseMatrix<double> > &M
 
 }
 
-
 void logToFile(const Eigen::MatrixXd W, std::string foldername, std::string filename)
 {
     char folderpath[50];
@@ -147,7 +147,7 @@ double energy(const Eigen::MatrixXd &v)
 	double result = 0;
 	for(int i=0; i<nfaces; i++)
 		result += del_W_F.row(i).dot(del_W_F.row(i));
-	return result;
+	return result / 2.;
 }
 
 
@@ -178,6 +178,25 @@ void computeOperatorGradient_finitedifference( const std::vector<Eigen::SparseMa
 
 }
 
+
+Eigen::MatrixXd Op_Grad_fd;
+bool is_fd_set;
+void computeFiniteDifference() 
+{
+    is_fd_set = true;
+    computeOperatorGradient_finitedifference(Ms, del_W_F, W, Op_Grad_fd);
+    logToFile(Op_Grad_fd, folderName, "fd2");
+}
+
+void loadFiniteDifference()
+{
+    Op_Grad_fd = readMatrix("fd.txt");
+//    Op_Grad_fd.resize(W.rows(), W.cols());
+//    for (int i = 0; i < W.rows(); i++)
+//	Op_Grad_fd.row(i) = temp.row(i);
+}
+
+
 double energy_OP = 0.;
 void updateView(const Eigen::MatrixXd del_W_F, int step)
 {
@@ -185,6 +204,14 @@ void updateView(const Eigen::MatrixXd del_W_F, int step)
 
     logToFile(W, folderName, std::to_string(step)); 
 
+
+    if (!is_fd_set) 
+    {
+	is_fd_set = true;
+ //       computeOperatorGradient(Ms, del_W_F, W, Op_Grad_fd);
+        loadFiniteDifference();
+//	std::cout << Op_Grad_fd.rows() << " " << Op_Grad_fd.cols() << "\n";
+    }
 
     Eigen::MatrixXd Op_Grad;
     computeOperatorGradient(Ms, del_W_F, W, Op_Grad);
@@ -195,19 +222,33 @@ void updateView(const Eigen::MatrixXd del_W_F, int step)
     Eigen::Vector3d testDir(1,0,0);
     energy_OP = 0.;
     
+    double max_error = 0.;
     for (int i = 0; i < nFaces; i++)
     {
         switch (shading_enum_state)
 	{
             case OP_ERROR:
-                Z(i) = log(del_W_F.row(i).norm() + .000005);
+     //           Z(i) = log(del_W_F.row(i).norm() + .000005);
+    //            Z(i) = Op_Grad.row(i).norm();
+//		std::cout << Z(i) << "\n";
+                Z(i) = (Op_Grad.row(i) - Op_Grad_fd.row(i)).norm() / Op_Grad.row(i).norm() * 2;
+                if (Z(i) > max_error) 
+		{
+		    std::cout << i << " " << Z(i) << "\n";
+		    max_error = Z(i);
+		}
 		break;
             case INIT_DIRECTION:
 	//	Z(i) = (W-W_init).row(i).normalized().dot(testDir);
 		Z(i) = (Op_Grad).row(i).normalized().dot(testDir) + .000005;
 		break;
             case INIT_MAGNITUDE:
-		Z(i) = log( (W-W_init).row(i).squaredNorm() );
+//		Z(i) = log( (W-W_init).row(i).squaredNorm() );
+		Eigen::Vector3d test_vec(-Op_Grad(i,1), Op_Grad(i,0), 0);
+		Z(i) = (Op_Grad_fd).row(i).normalized()
+		           .dot(test_vec.normalized()) + .000005;
+        //        std::cout << Z(i) << "\n";
+      		Z(1) = 1;
 		break;
 	}
 
@@ -230,7 +271,7 @@ void updateView(const Eigen::MatrixXd del_W_F, int step)
             igl::colormap(igl::COLOR_MAP_TYPE_INFERNO,Z, true, colorField);
 	    break;
 	case INIT_MAGNITUDE:
-            igl::colormap(igl::COLOR_MAP_TYPE_MAGMA,Z, true, colorField);
+            igl::colormap(igl::COLOR_MAP_TYPE_JET,Z, true, colorField);
 	    break;
     }
 
@@ -254,7 +295,8 @@ void updateView(const Eigen::MatrixXd del_W_F, int step)
     const Eigen::RowVector3d red(0.9,.1,.1),green(0.1,0.9,0.2),blue(0.1,0.2,0.8);
   //  viewer->data.add_edges(centroids_f  + del_w_f*avg/2, centroids_f, blue);
     
-    viewer->data.add_edges(centroids_F  + (W - W_init)*avg/2*operator_scale, centroids_F, red);
+//    viewer->data.add_edges(centroids_F  + (W - W_init)*avg/2*operator_scale, centroids_F, red);
+//    viewer->data.add_edges(centroids_F  + (Op_Grad*operator_scale - Op_Grad_fd)*avg/2, centroids_F, red);
     viewer->data.add_edges(centroids_F  + W*avg/2, centroids_F, blue);
     viewer->data.add_edges(centroids_F  + (Op_Grad)*avg/2*operator_scale, centroids_F, green);
 }
@@ -289,12 +331,13 @@ void lineSearch(const Eigen::MatrixXd &v, const Eigen::MatrixXd &gradV, double &
  //   	project(testv);
     	newenergy = energy(testv);
 	std::cout << "new energy, t = " << t << ": " << newenergy << std::endl;
-	if(newenergy < orig || t < .0000000000001)
+	if(newenergy < orig || t < .00000001)
 		return;
 	else
 		t *= c2;
     }
 }
+
 
 
 
@@ -329,6 +372,15 @@ for(int loops = 0; loops < desc_loops; loops++) {
     updateView(del_W_F, descentStep);
 }}
 
+void loadField()
+{
+    W = readMatrix(fieldName.c_str());
+
+    computeCovariantOperatorNew(F, V, E, F_edges, W, W, Ms, del_W_F);
+
+    descentStep = 1;
+    updateView(del_W_F, descentStep);
+}
 
 void showVectorField()
 {
@@ -336,18 +388,33 @@ void showVectorField()
 
     Eigen::Vector3d p(px, py,0);
     computeDistanceField(p, centroids_F, W);
+
     computeDistanceField(p, centroids_F, W_init);
 //    computeWhirlpool(p, centroids_F, W_init);
 //    computeWhirlpool(p, centroids_F, W);
 //    W_init = W;
+/*    W = Eigen::MatrixXd::Zero(W_init.rows(), W_init.cols());
+    for (int i = 0; i < W_init.rows(); i++) 
+    {
+	for (int j = 0; j < 3; j++)
+	{
+	    const Eigen::Vector4i &einfo = E.row(F_edges(i,j));
+	    // if face faceidx is on the boundary, return empty matrix
+	    if (einfo[2] == -1 || einfo[3] == -1)
+	    {
+		W.row(i) = W_init.row(i);
+		break;
+	    }
+	    else 
+	    {
+	       W.row(i) = Eigen::VectorXd::Random(3) * .00001;
+	    }
+	}
 
+    }
+*/
 
     computeCovariantOperatorNew(F, V, E, F_edges, W, W, Ms, del_W_F);
-
-    int nFaces = F.rows(); 
-
-    //  Eigen::VectorXd Z = W.col(0); // - del_W_F;// - W_recovered.col(0);
-    // Eigen::VectorXd Z = del_W_F.transpose() * del_W_F;// - W_recovered.col(0);
 
 //    project(W_init);
     logToFile(W_init, folderName, "0W");
@@ -355,7 +422,6 @@ void showVectorField()
     updateView(del_W_F, descentStep);   
 
 }
-
 
 
 void addNoiseToField() 
@@ -412,12 +478,16 @@ int main(int argc, char *argv[])
       viewer.ngui->addButton("Recompute Derivative", showVectorField);
       viewer.ngui->addButton("Add Noise to Field", addNoiseToField);
       viewer.ngui->addButton("Grad Descent Step", takeGradientDescentStep);
+      viewer.ngui->addButton("Compute Finite Diff", computeFiniteDifference);
 
       viewer.ngui->addVariable("Log Folder", folderName);
       viewer.ngui->addVariable("Shade State", shading_enum_state, true)
           ->setItems({"Operator Error", "Update Direction", "Update Magnitude"});
 //	  ->setCallback([] { updateView(del_W_F, descentStep); });
 
+
+      viewer.ngui->addVariable("Load Field Name", fieldName);
+      viewer.ngui->addButton("Load Field", loadField);
 
       // call to generate menu
       viewer.screen->performLayout();
