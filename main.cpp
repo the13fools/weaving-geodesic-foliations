@@ -13,9 +13,17 @@
 #include "Covariant.h"
 #include "FaceBased.h"
 
+// stuff that is precomputed about the mesh and doesn't change during optimization
+struct MeshData
+{
+    Eigen::MatrixXd V; // vertex positions
+    Eigen::MatrixXi F; // face indices
+    Eigen::MatrixXi E; // edge indices
+    Eigen::MatrixXi F_edges; // face edge indices
+    std::vector<Eigen::SparseMatrix<double> > Ms; // the gradient operator; Ms[i] * F gives the gradient of F on triangle i
+};
 
-Eigen::MatrixXd V;
-Eigen::MatrixXi F, E, F_edges;
+MeshData curMesh;
 
 igl::viewer::Viewer *viewer;
 
@@ -36,101 +44,81 @@ enum shading_enum {
 };
 shading_enum shading_enum_state = INIT_DIRECTION;
 
-void computeCovariantOperator(const Eigen::VectorXd &scalar_F,
-    const Eigen::MatrixXi &F,
-    const Eigen::MatrixXi &F_edges,
-    const Eigen::MatrixXd &V,
-    const Eigen::MatrixXi &E,
-    Eigen::MatrixXd &DM_local)
-{
-    Eigen::VectorXd scalar_E;
-    computeEdgeWeights(scalar_F, V, E, scalar_E); 
-    
-    int nfaces = F.rows();
-
-    DM_local.resize(nfaces, 2);
-
-    for (int i = 0; i < nfaces; i++)
-    {
-        Eigen::Vector3d u = V.row(F(i, 1)) - V.row(F(i, 0));
-        Eigen::Vector3d v = V.row(F(i, 2)) - V.row(F(i, 0));
-
-        double u_weight = 2 * (scalar_E(F_edges(i, 0)) - scalar_E(F_edges(i, 1)));
-        double v_weight = 2 * (scalar_E(F_edges(i, 0)) - scalar_E(F_edges(i, 2)));
-
-        DM_local(i, 0) = u_weight;
-	DM_local(i, 1) = v_weight; 
-    }
-}
-
-
-void computeCovariantOperatorNew(const Eigen::MatrixXi &F, 
-	const Eigen::MatrixXd &V, 
-	const Eigen::MatrixXi &E, 
-	const Eigen::MatrixXi &F_edges, 
+void computeDelWV(const MeshData &mesh, 
         const Eigen::MatrixXd &v, 
-	const Eigen::MatrixXd &w,
-        const std::vector<Eigen::SparseMatrix<double> > &Ms,
+	    const Eigen::MatrixXd &w,
         Eigen::MatrixXd &result)
 {
     result.resize(v.rows(), v.cols());
-    int nfaces = F.rows();
+    int nfaces = mesh.F.rows();
     for (int i = 0; i < nfaces; i++)
     {
-        result.row(i) = w.row(i) * (Ms[i] * v);
+        result.row(i) = w.row(i) * (mesh.Ms[i] * v);
+    }
+}
+
+// energy function
+double energy(const MeshData &mesh,
+    const Eigen::MatrixXd &v, const Eigen::MatrixXd &w)
+{
+    Eigen::MatrixXd delwv;
+    computeDelWV(mesh, v, w, delwv);
+
+    int nfaces = (int)v.rows();
+    double result = 0;
+    for(int i=0; i<nfaces; i++)
+        result += delwv.row(i).dot(delwv.row(i));
+    return result / 2.0;
+}
+
+// energy derivative with respect to v
+void dvEnergy(const MeshData &mesh,  
+    const Eigen::MatrixXd &v,
+    const Eigen::MatrixXd &w,
+    Eigen::MatrixXd &dE)
+{
+    int nfaces = v.rows();
+
+    dE.resize(nfaces, 3);
+    dE.setZero();
+
+    Eigen::MatrixXd delwv;
+    computeDelWV(mesh, v, w, delwv);
+
+    for (int i = 0; i < nfaces; i++)
+    {
+        Eigen::VectorXd temp = mesh.Ms[i].transpose() * w.row(i).transpose(); 
+        dE += temp * delwv.row(i);
+    }
+}
+
+// energy derivative with respect to w
+void dwEnergy(const MeshData &mesh,
+    const Eigen::MatrixXd &v,
+    const Eigen::MatrixXd &w,
+    Eigen::MatrixXd &dE)
+{
+    int nfaces = v.rows();
+
+    dE.resize(nfaces, 3);
+    dE.setZero();
+
+    Eigen::MatrixXd delwv;
+    computeDelWV(mesh, v, w, delwv);
+
+    for (int i = 0; i < nfaces; i++)
+    {
+        Eigen::VectorXd rowTemp = delwv.row(i) * v.transpose();
+        dE.row(i) += rowTemp.transpose() * mesh.Ms[i].transpose();
     }
 }
 
 Eigen::MatrixXd W; // This can be thought of as 3 ``independent'' scalar fields
 Eigen::MatrixXd W_init; // W at init, for visualizing change in descent 
 
-std::vector<Eigen::SparseMatrix<double> > Ms; // the gradient operator; Ms[i] * F gives the gradient of F on triangle i
-
 Eigen::MatrixXd colorField;
 Eigen::MatrixXd centroids_F;
 
-Eigen::MatrixXd del_W_F;
-
-
-void computeOperatorGradient2( const std::vector<Eigen::SparseMatrix<double> > &Ms,
-	const Eigen::MatrixXd &del_W_F,
-	const Eigen::MatrixXd &v,
-	Eigen::MatrixXd &Op_Grad)
-{
-    int nfaces = v.rows();
-
-    Op_Grad = Eigen::MatrixXd::Zero(nfaces, 3);
-
-    for (int i = 0; i < nfaces; i++)
-    {
-//	Eigen::VectorXd temp = Ms[i].transpose() * v.row(i).transpose(); 
-//	Op_Grad += temp * del_W_F.row(i);
-
-        Eigen::VectorXd rowTemp = del_W_F.row(i) * v.transpose();
-	Op_Grad.row(i) += rowTemp * Ms[i].transpose();
-    }
-
-}
-
-void computeOperatorGradient( const std::vector<Eigen::SparseMatrix<double> > &Ms,
-	const Eigen::MatrixXd &del_W_F,
-	const Eigen::MatrixXd &v,
-	Eigen::MatrixXd &Op_Grad)
-{
-    int nfaces = v.rows();
-
-    Op_Grad = Eigen::MatrixXd::Zero(nfaces, 3);
-
-    for (int i = 0; i < nfaces; i++)
-    {
-	Eigen::VectorXd temp = Ms[i].transpose() * v.row(i).transpose(); 
-	Op_Grad += temp * del_W_F.row(i);
-
- //       Eigen::VectorXd rowTemp = del_W_F.row(i) * v.transpose();
-//	Op_Grad.row(i) += rowTemp * Ms[i].transpose();
-    }
-
-}
 
 void logToFile(const Eigen::MatrixXd W, std::string foldername, std::string filename)
 {
@@ -160,28 +148,11 @@ void logToFile(const Eigen::MatrixXd W, std::string foldername, std::string file
 }
 
 
-double energy(const Eigen::MatrixXd &v)
-{
-	int nfaces = (int)v.rows();
-	del_W_F(nfaces, 3);
-	del_W_F.setZero();
-	computeCovariantOperatorNew(F, V, E, F_edges, v, v, Ms, del_W_F);
-	double result = 0;
-	for(int i=0; i<nfaces; i++)
-		result += del_W_F.row(i).dot(del_W_F.row(i));
-	return result / 2.;
-}
-
-
-
-void computeOperatorGradient_finitedifference( const std::vector<Eigen::SparseMatrix<double> > &Ms,
-	const Eigen::MatrixXd &del_W_F,
-	const Eigen::MatrixXd &v,
-	Eigen::MatrixXd &Op_Grad)
+void computeOperatorGradient_finitedifference(const Eigen::MatrixXd &v, Eigen::MatrixXd &Op_Grad)
 {
     int nfaces = v.rows();
 
-    double e = energy(v); 
+    double e = energy(curMesh, v,v); 
 
     Op_Grad = Eigen::MatrixXd::Zero(nfaces, 3);
     double eps = .0000001;
@@ -192,7 +163,7 @@ void computeOperatorGradient_finitedifference( const std::vector<Eigen::SparseMa
 	{
             Eigen::MatrixXd shifted = v;
 	    shifted(i, j) += eps;
-	    double diff = energy(shifted);
+	    double diff = energy(curMesh, shifted, shifted);
 	    Op_Grad(i, j) = (diff - e) / eps;
 	}	
 	std::cout << i << "\n";
@@ -206,7 +177,7 @@ bool is_fd_set;
 void computeFiniteDifference() 
 {
     is_fd_set = true;
-    computeOperatorGradient_finitedifference(Ms, del_W_F, W, Op_Grad_fd);
+    computeOperatorGradient_finitedifference(W, Op_Grad_fd);
     logToFile(Op_Grad_fd, folderName, "fd2");
 }
 
@@ -222,7 +193,7 @@ void loadFiniteDifference()
 double energy_OP = 0.;
 void updateView(const Eigen::MatrixXd del_W_F, int step)
 {
-    int nFaces = F.rows(); 
+    int nFaces = curMesh.F.rows(); 
 
     logToFile(W, folderName, std::to_string(step)); 
 
@@ -231,14 +202,14 @@ void updateView(const Eigen::MatrixXd del_W_F, int step)
     {
 	is_fd_set = true;
  //       computeOperatorGradient(Ms, del_W_F, W, Op_Grad_fd);
-        loadFiniteDifference();
+//        loadFiniteDifference();
 //	std::cout << Op_Grad_fd.rows() << " " << Op_Grad_fd.cols() << "\n";
     }
 
     Eigen::MatrixXd Op_Grad;
-    computeOperatorGradient(Ms, del_W_F, W, Op_Grad);
+    dvEnergy(curMesh, W, W, Op_Grad);
     Eigen::MatrixXd Op_Grad2;
-    computeOperatorGradient(Ms, del_W_F, W, Op_Grad2);
+    dvEnergy(curMesh, W, W, Op_Grad2);
     logToFile(Op_Grad, folderName, "op_grad"); 
     logToFile(Op_Grad2, folderName, "op_grad2"); 
 
@@ -284,7 +255,7 @@ void updateView(const Eigen::MatrixXd del_W_F, int step)
     std::cout << energy_OP << " Operator Energy\n";
 
     // Average edge length for sizing
-    const double avg = igl::avg_edge_length(V,F);
+    const double avg = igl::avg_edge_length(curMesh.V,curMesh.F);
     colorField.resize(nFaces, 3);
     
     //  igl::jet(Z,true,colorField);
@@ -305,7 +276,7 @@ void updateView(const Eigen::MatrixXd del_W_F, int step)
 
     // Plot the mesh
     viewer->data.clear();
-    viewer->data.set_mesh(V, F);
+    viewer->data.set_mesh(curMesh.V, curMesh.F);
     viewer->data.set_face_based(true);
 
     viewer->data.set_colors(colorField);
@@ -329,39 +300,22 @@ void updateView(const Eigen::MatrixXd del_W_F, int step)
 }
 
 
-void project(Eigen::MatrixXd &v)
-{
-	int nfaces = (int)v.rows();
-	double fieldMass = 0;
-	for (int i = 0; i < nfaces; i++)
-	{
-	    fieldMass += v.row(i).squaredNorm();
-	} 
-
-	v *= (double) sqrt(nfaces / fieldMass);	
-}
-
 void lineSearch(const Eigen::MatrixXd &v, const Eigen::MatrixXd &gradV, double &t, double &newenergy)
 {
     double c1 = 1.5;
     double c2 = 0.5;
     t *= c1;
-    double orig = energy(v);
+    double orig = energy(curMesh, v, v);
     std::cout << "original energy " << orig << std::endl;
-    Eigen::MatrixXd v_cp = v;
-    project(v_cp);
-    double projected = energy(v_cp);
-    std::cout << "projected energy " << projected << std::endl;
-    while(true)
+    while (true)
     {
-    	Eigen::MatrixXd testv = v - t*gradV;    
- //   	project(testv);
-    	newenergy = energy(testv);
-	std::cout << "new energy, t = " << t << ": " << newenergy << std::endl;
-	if(newenergy < orig || t < .00000001)
-		return;
-	else
-		t *= c2;
+        Eigen::MatrixXd testv = v - t*gradV;
+        newenergy = energy(curMesh, testv, testv);
+        std::cout << "new energy, t = " << t << ": " << newenergy << std::endl;
+        if (newenergy < orig || t < .00000001)
+            return;
+        else
+            t *= c2;
     }
 }
 
@@ -371,47 +325,46 @@ void lineSearch(const Eigen::MatrixXd &v, const Eigen::MatrixXd &gradV, double &
 int descentStep = 0;
 void takeGradientDescentStep()
 {
-for(int loops = 0; loops < desc_loops; loops++) {
-    int nfaces = F.rows();
+    for (int loops = 0; loops < desc_loops; loops++) {
+        int nfaces = curMesh.F.rows();
 
-    del_W_F.resize(nfaces, 3);
-    del_W_F.setZero();
-    Eigen::MatrixXd Op_Grad;
-    double t = 1.0;
+        Eigen::MatrixXd Op_Grad(curMesh.F.rows(), 3);
+        double t = 1.0;
+        Eigen::MatrixXd del_W_V;
+        // Not effecient, but will make it feel more correct to update, then show
+        for (int i = 0; i < desc_steps; i++)
+        {
+            Op_Grad.setZero();
+            computeDelWV(curMesh, W, W, del_W_V);
+            Eigen::MatrixXd dE(curMesh.F.rows(), 3);
+            dvEnergy(curMesh, W, W, dE);
+            Op_Grad += dE;
+            dwEnergy(curMesh, W, W, dE);
+            Op_Grad += dE;
 
-    // Not effecient, but will make it feel more correct to update, then show
-    for (int i = 0; i < desc_steps; i++) 
-    {
-    
-	computeCovariantOperatorNew(F, V, E, F_edges, W, W, Ms, del_W_F);
-        computeOperatorGradient(Ms, del_W_F, W, Op_Grad);
-	
-	double newenergy = 0;
-	lineSearch(W, Op_Grad, t, newenergy);
-        W -= t*Op_Grad; 	
-
-	//	project(W);
+            double newenergy = 0;
+            lineSearch(W, Op_Grad, t, newenergy);
+            W -= t*Op_Grad;
+        }
+        computeDelWV(curMesh, W, W, del_W_V);
+        descentStep++;
+        updateView(del_W_V, descentStep);
     }
-
-    computeCovariantOperatorNew(F, V, E, F_edges, W, W, Ms, del_W_F);
-       
-    descentStep++;
-    updateView(del_W_F, descentStep);
-}}
+}
 
 void loadField()
 {
     W = readMatrix(fieldName.c_str());
-
-    computeCovariantOperatorNew(F, V, E, F_edges, W, W, Ms, del_W_F);
+    Eigen::MatrixXd del_W_V;
+    computeDelWV(curMesh, W, W, del_W_V);
 
     descentStep = 1;
-    updateView(del_W_F, descentStep);
+    updateView(del_W_V, descentStep);
 }
 
 void showVectorField()
 {
-    computeCentroids(F,V,centroids_F);
+    computeCentroids(curMesh.F,curMesh.V,centroids_F);
 
     Eigen::Vector3d p(px, py,0);
     computeDistanceField(p, centroids_F, W);
@@ -440,13 +393,13 @@ void showVectorField()
 
     }
 */
-
-    computeCovariantOperatorNew(F, V, E, F_edges, W, W, Ms, del_W_F);
+    Eigen::MatrixXd del_W_V;
+    computeDelWV(curMesh, W, W, del_W_V);
 
 //    project(W_init);
     logToFile(W_init, folderName, "0W");
     descentStep = 1;
-    updateView(del_W_F, descentStep);   
+    updateView(del_W_V, descentStep);   
 
 }
 
@@ -463,12 +416,31 @@ void addNoiseToField()
     W += noise;
   //  W_init += noise; // This way we see the error from the ground truth
 
-    project(W);
-
-    computeCovariantOperatorNew(F, V, E, F_edges, W, W, Ms, del_W_F);
+    Eigen::MatrixXd del_W_V;
+    computeDelWV(curMesh, W, W, del_W_V);
 
     descentStep = 1;
-    updateView(del_W_F, descentStep);
+    updateView(del_W_V, descentStep);
+}
+
+void testGradients()
+{
+    int triangleToTest = 100;
+    double energyorig = energy(curMesh, W, W);
+    for (int i = 0; i < 2; i++)
+    {
+        Eigen::MatrixXd perturbed = W;
+        perturbed(triangleToTest, i) += 1e-6;
+        double energynewv = energy(curMesh, perturbed, W);
+        double energyneww = energy(curMesh, W, perturbed);
+        double findiffv = (energynewv - energyorig) / 1e-6;
+        double findiffw = (energyneww - energyorig) / 1e-6;
+        Eigen::MatrixXd OpGradv;
+        Eigen::MatrixXd OpGradw;
+        dvEnergy(curMesh, W, W, OpGradv);
+        dwEnergy(curMesh, W, W, OpGradw);
+        std::cout << "v: " << findiffv << " vs " << OpGradv(triangleToTest, i) << "    w: " << findiffw << " vs " << OpGradw(triangleToTest, i) << std::endl;                   
+    }
 }
 
 
@@ -477,14 +449,14 @@ int main(int argc, char *argv[])
 {  
   //   assignFaceVal(F,viz);;
 
-  igl::readOBJ("../circ.obj", V, F);
-  buildEdges(F, E);
-  buildEdgesPerFace(F, E, F_edges);
-  computeGradientMatrices(F, V, E, F_edges, Ms);
+  igl::readOBJ("../circ.obj", curMesh.V, curMesh.F);
+  buildEdges(curMesh.F, curMesh.E);
+  buildEdgesPerFace(curMesh.F, curMesh.E, curMesh.F_edges);
+  computeGradientMatrices(curMesh.F, curMesh.V, curMesh.E, curMesh.F_edges, curMesh.Ms);
 
   // Plot the mesh  
   viewer = new igl::viewer::Viewer();
-  viewer->data.set_mesh(V, F);
+  viewer->data.set_mesh(curMesh.V, curMesh.F);
   viewer->data.set_face_based(true);
   viewer->callback_init = [&](igl::viewer::Viewer& viewer)
   {
@@ -506,6 +478,7 @@ int main(int argc, char *argv[])
       viewer.ngui->addButton("Compute Finite Diff", computeFiniteDifference);
       viewer.ngui->addButton("Recompute Derivative", showVectorField);
       viewer.ngui->addButton("Grad Descent Step", takeGradientDescentStep);
+      viewer.ngui->addButton("Test Gradients", testGradients);
 
       viewer.ngui->addVariable("Log Folder", folderName);
       viewer.ngui->addVariable("Shade State", shading_enum_state, true)
