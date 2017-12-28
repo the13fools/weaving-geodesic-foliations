@@ -21,8 +21,8 @@ igl::viewer::Viewer *viewer;
 
 double px = 0;
 double py = 0;
-int desc_steps = 10;
-int desc_loops = 3;
+int desc_steps = 1; // Inner Loop
+int desc_loops = 1; // Outer Loop
 char fileName[50] = "0-0-10ksteps";
 std::string folderName = "logging_location";
 std::string fieldName = "field_dt.txt";
@@ -92,6 +92,26 @@ Eigen::MatrixXd centroids_F;
 Eigen::MatrixXd del_W_F;
 
 
+void computeOperatorGradient2( const std::vector<Eigen::SparseMatrix<double> > &Ms,
+	const Eigen::MatrixXd &del_W_F,
+	const Eigen::MatrixXd &v,
+	Eigen::MatrixXd &Op_Grad)
+{
+    int nfaces = v.rows();
+
+    Op_Grad = Eigen::MatrixXd::Zero(nfaces, 3);
+
+    for (int i = 0; i < nfaces; i++)
+    {
+//	Eigen::VectorXd temp = Ms[i].transpose() * v.row(i).transpose(); 
+//	Op_Grad += temp * del_W_F.row(i);
+
+        Eigen::VectorXd rowTemp = del_W_F.row(i) * v.transpose();
+	Op_Grad.row(i) += rowTemp * Ms[i].transpose();
+    }
+
+}
+
 void computeOperatorGradient( const std::vector<Eigen::SparseMatrix<double> > &Ms,
 	const Eigen::MatrixXd &del_W_F,
 	const Eigen::MatrixXd &v,
@@ -106,8 +126,8 @@ void computeOperatorGradient( const std::vector<Eigen::SparseMatrix<double> > &M
 	Eigen::VectorXd temp = Ms[i].transpose() * v.row(i).transpose(); 
 	Op_Grad += temp * del_W_F.row(i);
 
-        Eigen::VectorXd rowTemp = del_W_F.row(i) * v.transpose();
-	Op_Grad.row(i) += rowTemp * Ms[i].transpose();
+ //       Eigen::VectorXd rowTemp = del_W_F.row(i) * v.transpose();
+//	Op_Grad.row(i) += rowTemp * Ms[i].transpose();
     }
 
 }
@@ -215,7 +235,10 @@ void updateView(const Eigen::MatrixXd del_W_F, int step)
 
     Eigen::MatrixXd Op_Grad;
     computeOperatorGradient(Ms, del_W_F, W, Op_Grad);
+    Eigen::MatrixXd Op_Grad2;
+    computeOperatorGradient(Ms, del_W_F, W, Op_Grad2);
     logToFile(Op_Grad, folderName, "op_grad"); 
+    logToFile(Op_Grad2, folderName, "op_grad2"); 
 
     // Set mesh colors and log operator state
     Eigen::VectorXd Z(nFaces);
@@ -231,7 +254,7 @@ void updateView(const Eigen::MatrixXd del_W_F, int step)
      //           Z(i) = log(del_W_F.row(i).norm() + .000005);
     //            Z(i) = Op_Grad.row(i).norm();
 //		std::cout << Z(i) << "\n";
-                Z(i) = (Op_Grad.row(i) - Op_Grad_fd.row(i)).norm() / Op_Grad.row(i).norm() * 2;
+                Z(i) = (Op_Grad.row(i) + Op_Grad2.row(i) - Op_Grad_fd.row(i)).norm() / ( Op_Grad.row(i) + Op_Grad2.row(i) ).norm() * 2;
                 if (Z(i) > max_error) 
 		{
 		    std::cout << i << " " << Z(i) << "\n";
@@ -240,15 +263,17 @@ void updateView(const Eigen::MatrixXd del_W_F, int step)
 		break;
             case INIT_DIRECTION:
 	//	Z(i) = (W-W_init).row(i).normalized().dot(testDir);
-		Z(i) = (Op_Grad).row(i).normalized().dot(testDir) + .000005;
+//		Z(i) = (Op_Grad).row(i).normalized().dot(testDir) + .000005;
+		Z(i) = (Op_Grad).row(i).norm();
 		break;
             case INIT_MAGNITUDE:
 //		Z(i) = log( (W-W_init).row(i).squaredNorm() );
-		Eigen::Vector3d test_vec(-Op_Grad(i,1), Op_Grad(i,0), 0);
-		Z(i) = (Op_Grad_fd).row(i).normalized()
-		           .dot(test_vec.normalized()) + .000005;
+//		Eigen::Vector3d test_vec(-Op_Grad(i,1), Op_Grad(i,0), 0);
+//		Z(i) = (Op_Grad_fd).row(i).normalized()
+//		           .dot(test_vec.normalized()) + .000005;
         //        std::cout << Z(i) << "\n";
-      		Z(1) = 1;
+//  		Z(1) = 1;
+                Z(i) = (Op_Grad2).row(i).norm();
 		break;
 	}
 
@@ -265,14 +290,14 @@ void updateView(const Eigen::MatrixXd del_W_F, int step)
     switch (shading_enum_state)
     {
 	case OP_ERROR:
-            igl::colormap(igl::COLOR_MAP_TYPE_MAGMA,Z, true, colorField);
+            igl::colormap(igl::COLOR_MAP_TYPE_INFERNO,Z, true, colorField);
 	    break;
 	case INIT_DIRECTION:
             igl::colormap(igl::COLOR_MAP_TYPE_INFERNO,Z, true, colorField);
 	    break;
 	case INIT_MAGNITUDE:
-            igl::colormap(igl::COLOR_MAP_TYPE_JET,Z, true, colorField);
-	    break;
+            igl::colormap(igl::COLOR_MAP_TYPE_INFERNO,Z, true, colorField);
+	    break; // MAGMA, JET
     }
 
 
@@ -475,10 +500,10 @@ int main(int argc, char *argv[])
       viewer.ngui->addVariable("Descent Outer Loops",desc_loops);
 
       // Add a button
-      viewer.ngui->addButton("Recompute Derivative", showVectorField);
       viewer.ngui->addButton("Add Noise to Field", addNoiseToField);
-      viewer.ngui->addButton("Grad Descent Step", takeGradientDescentStep);
       viewer.ngui->addButton("Compute Finite Diff", computeFiniteDifference);
+      viewer.ngui->addButton("Recompute Derivative", showVectorField);
+      viewer.ngui->addButton("Grad Descent Step", takeGradientDescentStep);
 
       viewer.ngui->addVariable("Log Folder", folderName);
       viewer.ngui->addVariable("Shade State", shading_enum_state, true)
