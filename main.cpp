@@ -134,6 +134,7 @@ void computeOperatorGradient( const std::vector<Eigen::SparseMatrix<double> > &M
 
 void logToFile(const Eigen::MatrixXd W, std::string foldername, std::string filename)
 {
+#ifndef WIN32
     char folderpath[50];
     sprintf(folderpath, "log/%s", foldername.c_str());
     mkdir("log", S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
@@ -155,6 +156,7 @@ void logToFile(const Eigen::MatrixXd W, std::string foldername, std::string file
 	}
     } 
     myfile.close();
+#endif
 }
 
 
