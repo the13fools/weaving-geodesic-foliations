@@ -12,18 +12,9 @@
 #include "DataLoad.h"
 #include "Covariant.h"
 #include "FaceBased.h"
+#include "FieldOptimization.h"
 
-// stuff that is precomputed about the mesh and doesn't change during optimization
-struct MeshData
-{
-    Eigen::MatrixXd V; // vertex positions
-    Eigen::MatrixXi F; // face indices
-    Eigen::MatrixXi E; // edge indices
-    Eigen::MatrixXi F_edges; // face edge indices
-    std::vector<Eigen::SparseMatrix<double> > Ms; // the gradient operator; Ms[i] * F gives the gradient of F on triangle i
-};
-
-MeshData curMesh;
+MeshData *curMesh;
 
 igl::viewer::Viewer *viewer;
 
@@ -152,7 +143,7 @@ void computeOperatorGradient_finitedifference(const Eigen::MatrixXd &v, Eigen::M
 {
     int nfaces = v.rows();
 
-    double e = energy(curMesh, v,v); 
+    double e = energy(*curMesh, v,v); 
 
     Op_Grad = Eigen::MatrixXd::Zero(nfaces, 3);
     double eps = .0000001;
@@ -163,7 +154,7 @@ void computeOperatorGradient_finitedifference(const Eigen::MatrixXd &v, Eigen::M
 	{
             Eigen::MatrixXd shifted = v;
 	    shifted(i, j) += eps;
-	    double diff = energy(curMesh, shifted, shifted);
+	    double diff = energy(*curMesh, shifted, shifted);
 	    Op_Grad(i, j) = (diff - e) / eps;
 	}	
 	std::cout << i << "\n";
@@ -193,7 +184,7 @@ void loadFiniteDifference()
 double energy_OP = 0.;
 void updateView(const Eigen::MatrixXd del_W_F, int step)
 {
-    int nFaces = curMesh.F.rows(); 
+    int nFaces = curMesh->F.rows(); 
 
     logToFile(W, folderName, std::to_string(step)); 
 
@@ -207,9 +198,9 @@ void updateView(const Eigen::MatrixXd del_W_F, int step)
     }
 
     Eigen::MatrixXd Op_Grad;
-    dvEnergy(curMesh, W, W, Op_Grad);
+    dvEnergy(*curMesh, W, W, Op_Grad);
     Eigen::MatrixXd Op_Grad2;
-    dvEnergy(curMesh, W, W, Op_Grad2);
+    dvEnergy(*curMesh, W, W, Op_Grad2);
     logToFile(Op_Grad, folderName, "op_grad"); 
     logToFile(Op_Grad2, folderName, "op_grad2"); 
 
@@ -255,7 +246,7 @@ void updateView(const Eigen::MatrixXd del_W_F, int step)
     std::cout << energy_OP << " Operator Energy\n";
 
     // Average edge length for sizing
-    const double avg = igl::avg_edge_length(curMesh.V,curMesh.F);
+    const double avg = igl::avg_edge_length(curMesh->V,curMesh->F);
     colorField.resize(nFaces, 3);
     
     //  igl::jet(Z,true,colorField);
@@ -276,7 +267,7 @@ void updateView(const Eigen::MatrixXd del_W_F, int step)
 
     // Plot the mesh
     viewer->data.clear();
-    viewer->data.set_mesh(curMesh.V, curMesh.F);
+    viewer->data.set_mesh(curMesh->V, curMesh->F);
     viewer->data.set_face_based(true);
 
     viewer->data.set_colors(colorField);
@@ -305,12 +296,12 @@ void lineSearch(const Eigen::MatrixXd &v, const Eigen::MatrixXd &gradV, double &
     double c1 = 1.5;
     double c2 = 0.5;
     t *= c1;
-    double orig = energy(curMesh, v, v);
+    double orig = energy(*curMesh, v, v);
     std::cout << "original energy " << orig << std::endl;
     while (true)
     {
         Eigen::MatrixXd testv = v - t*gradV;
-        newenergy = energy(curMesh, testv, testv);
+        newenergy = energy(*curMesh, testv, testv);
         std::cout << "new energy, t = " << t << ": " << newenergy << std::endl;
         if (newenergy < orig || t < .00000001)
             return;
@@ -326,27 +317,27 @@ int descentStep = 0;
 void takeGradientDescentStep()
 {
     for (int loops = 0; loops < desc_loops; loops++) {
-        int nfaces = curMesh.F.rows();
+        int nfaces = curMesh->F.rows();
 
-        Eigen::MatrixXd Op_Grad(curMesh.F.rows(), 3);
+        Eigen::MatrixXd Op_Grad(curMesh->F.rows(), 3);
         double t = 1.0;
         Eigen::MatrixXd del_W_V;
         // Not effecient, but will make it feel more correct to update, then show
         for (int i = 0; i < desc_steps; i++)
         {
             Op_Grad.setZero();
-            computeDelWV(curMesh, W, W, del_W_V);
-            Eigen::MatrixXd dE(curMesh.F.rows(), 3);
-            dvEnergy(curMesh, W, W, dE);
+            computeDelWV(*curMesh, W, W, del_W_V);
+            Eigen::MatrixXd dE(curMesh->F.rows(), 3);
+            dvEnergy(*curMesh, W, W, dE);
             Op_Grad += dE;
-            dwEnergy(curMesh, W, W, dE);
+            dwEnergy(*curMesh, W, W, dE);
             Op_Grad += dE;
 
             double newenergy = 0;
             lineSearch(W, Op_Grad, t, newenergy);
             W -= t*Op_Grad;
         }
-        computeDelWV(curMesh, W, W, del_W_V);
+        computeDelWV(*curMesh, W, W, del_W_V);
         descentStep++;
         updateView(del_W_V, descentStep);
     }
@@ -356,7 +347,7 @@ void loadField()
 {
     W = readMatrix(fieldName.c_str());
     Eigen::MatrixXd del_W_V;
-    computeDelWV(curMesh, W, W, del_W_V);
+    computeDelWV(*curMesh, W, W, del_W_V);
 
     descentStep = 1;
     updateView(del_W_V, descentStep);
@@ -364,7 +355,7 @@ void loadField()
 
 void showVectorField()
 {
-    computeCentroids(curMesh.F,curMesh.V,centroids_F);
+    computeCentroids(curMesh->F,curMesh->V,centroids_F);
 
     Eigen::Vector3d p(px, py,0);
     computeDistanceField(p, centroids_F, W);
@@ -393,8 +384,10 @@ void showVectorField()
 
     }
 */
+    alternatingMinimization(W, *curMesh, 1, 1);
+
     Eigen::MatrixXd del_W_V;
-    computeDelWV(curMesh, W, W, del_W_V);
+    computeDelWV(*curMesh, W, W, del_W_V);
 
 //    project(W_init);
     logToFile(W_init, folderName, "0W");
@@ -417,7 +410,7 @@ void addNoiseToField()
   //  W_init += noise; // This way we see the error from the ground truth
 
     Eigen::MatrixXd del_W_V;
-    computeDelWV(curMesh, W, W, del_W_V);
+    computeDelWV(*curMesh, W, W, del_W_V);
 
     descentStep = 1;
     updateView(del_W_V, descentStep);
@@ -426,19 +419,19 @@ void addNoiseToField()
 void testGradients()
 {
     int triangleToTest = 100;
-    double energyorig = energy(curMesh, W, W);
+    double energyorig = energy(*curMesh, W, W);
     for (int i = 0; i < 2; i++)
     {
         Eigen::MatrixXd perturbed = W;
         perturbed(triangleToTest, i) += 1e-6;
-        double energynewv = energy(curMesh, perturbed, W);
-        double energyneww = energy(curMesh, W, perturbed);
+        double energynewv = energy(*curMesh, perturbed, W);
+        double energyneww = energy(*curMesh, W, perturbed);
         double findiffv = (energynewv - energyorig) / 1e-6;
         double findiffw = (energyneww - energyorig) / 1e-6;
         Eigen::MatrixXd OpGradv;
         Eigen::MatrixXd OpGradw;
-        dvEnergy(curMesh, W, W, OpGradv);
-        dwEnergy(curMesh, W, W, OpGradw);
+        dvEnergy(*curMesh, W, W, OpGradv);
+        dwEnergy(*curMesh, W, W, OpGradw);
         std::cout << "v: " << findiffv << " vs " << OpGradv(triangleToTest, i) << "    w: " << findiffw << " vs " << OpGradw(triangleToTest, i) << std::endl;                   
     }
 }
@@ -448,15 +441,14 @@ void testGradients()
 int main(int argc, char *argv[])
 {  
   //   assignFaceVal(F,viz);;
-
-  igl::readOBJ("../circ.obj", curMesh.V, curMesh.F);
-  buildEdges(curMesh.F, curMesh.E);
-  buildEdgesPerFace(curMesh.F, curMesh.E, curMesh.F_edges);
-  computeGradientMatrices(curMesh.F, curMesh.V, curMesh.E, curMesh.F_edges, curMesh.Ms);
-
+    Eigen::MatrixXd V;
+    Eigen::MatrixXi F;
+  igl::readOBJ("../circ.obj", V, F);
+  curMesh = new MeshData(V, F);
+  
   // Plot the mesh  
   viewer = new igl::viewer::Viewer();
-  viewer->data.set_mesh(curMesh.V, curMesh.F);
+  viewer->data.set_mesh(curMesh->V, curMesh->F);
   viewer->data.set_face_based(true);
   viewer->callback_init = [&](igl::viewer::Viewer& viewer)
   {
