@@ -104,11 +104,6 @@ void dwEnergy(const MeshData &mesh,
     }
 }
 
-//Eigen::MatrixXd W; // This can be thought of as 3 ``independent'' scalar fields
-//Eigen::MatrixXd W_init; // W at init, for visualizing change in descent 
-
-//Eigen::MatrixXd centroids_F;
-
 void logToFile(const Eigen::MatrixXd W, std::string foldername, std::string filename)
 {
 #ifndef WIN32
@@ -330,9 +325,9 @@ int main(int argc, char *argv[])
       // Add a button
       viewer.ngui->addButton("Add Noise to Field", addNoiseToField);
       viewer.ngui->addButton("Compute Finite Diff", computeFiniteDifference);
+      viewer.ngui->addButton("Test Gradients", testGradients);
       viewer.ngui->addButton("Recompute Derivative", showVectorField);
       viewer.ngui->addButton("Grad Descent Step", takeGradientDescentStep);
-      viewer.ngui->addButton("Test Gradients", testGradients);
 
       viewer.ngui->addVariable("Log Folder", folderName);
 //      viewer.ngui->addVariable("Shade State", shading_enum_state, true)
