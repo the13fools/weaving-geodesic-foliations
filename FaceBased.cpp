@@ -85,7 +85,7 @@ static void oneFaceGradientMatrix(const Eigen::MatrixXi &F, const Eigen::MatrixX
 	double edge = (V.row(F(faceidx, v2)) - V.row(F(faceidx, v1))).norm();
 //	ciminusc[i] *= (edge / edgeLen) * (centroids[i] - c).norm() / centroidDist;
 //	ciminusc[i] *= (edge * (centroids[i] - c).norm()) / adjustArea;
-	ciminusc[i] *= ( edge / (centroids[i] - c).norm() ) * adjustArea;
+	//ciminusc[i] *= ( edge / (centroids[i] - c).norm() ) * adjustArea;
     }
 
     // compute N
