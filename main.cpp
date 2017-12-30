@@ -100,6 +100,12 @@ void showVectorField()
 {
     Eigen::Vector3d p(px, py,0);
     computeDistanceField(p, curMesh->centroids_F, curMesh->v0);
+    curMesh->v0 = Eigen::MatrixXd(curMesh->F.rows(), 3);
+    curMesh->v0(0) = 1.;
+    curMesh->v0(1) = 1.;
+    curMesh->v0(2) = 1.;
+
+  
     initOptVars(curMesh->v0, curMesh->optVars);
 
 //    computeDistanceField(p, centroids_F, W_init);
@@ -130,6 +136,7 @@ void showVectorField()
     int nfaces = (int)curMesh->F.rows();
     w.handleWeights.resize(nfaces);
     w.handleWeights.setConstant(1.0);
+    w.handleWeights(0) = 1.;
     w.lambdaDreg = 1;
     w.lambdaGeodesic = 1000;
     w.lambdaVD = 1000;
@@ -148,7 +155,7 @@ void addNoiseToField()
     Eigen::MatrixXd noise = Eigen::MatrixXd::Random( curMesh->v0.rows(), 3 ) * eps;
     for (int i = 0; i < curMesh->v0.rows(); i++)
     {
-        noise(i, 2) = 0.;
+//        noise(i, 2) = 0.;
     }
 
     curMesh->v0 += noise;
@@ -164,7 +171,8 @@ int main(int argc, char *argv[])
   //   assignFaceVal(F,viz);;
     Eigen::MatrixXd V;
     Eigen::MatrixXi F;
-  igl::readOBJ("../circ.obj", V, F);
+//  igl::readOBJ("../circ.obj", V, F);
+  igl::readOBJ("../sphere_small.obj", V, F);
   curMesh = new MeshData(V, F);
   
   // Plot the mesh  
