@@ -240,6 +240,7 @@ double energy(OptVars &vars, const MeshData &mesh, double lambda, double mu)
         result += 0.5 * mu * (vars.D.segment<9>(9*i) - Msw).squaredNorm();
         result += 0.5 * mu * (vars.v.row(i) - vars.w.row(i)).squaredNorm();
         vars.faceEnergy(i) = result - prevResult; 
+        prevResult = result;
     }
     return result;
 }
