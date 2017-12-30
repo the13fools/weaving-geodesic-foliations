@@ -29,79 +29,6 @@ std::string fieldName = "field_dt.txt";
 double operator_scale = 1.;
 int opt_step = 0;
 
-void computeDelWV(const MeshData &mesh, 
-        const Eigen::MatrixXd &v, 
-	    const Eigen::MatrixXd &w,
-        Eigen::MatrixXd &result)
-{
-    result.resize(v.rows(), v.cols());
-    int nfaces = mesh.F.rows();
-    for (int i = 0; i < nfaces; i++)
-    {
-        result.row(i) = w.row(i) * (mesh.Ms[i] * v);
-    }
-}
-
-// energy function
-double energy(const MeshData &mesh,
-    const Eigen::MatrixXd &v, const Eigen::MatrixXd &w)
-{
-    Eigen::MatrixXd delwv;
-    computeDelWV(mesh, v, w, delwv);
-
-    int nfaces = (int)v.rows();
-    double result = 0;
-    for(int i=0; i<nfaces; i++)
-        result += delwv.row(i).dot(delwv.row(i));
-    return result / 2.0;
-}
-
-// energy derivative with respect to v
-void dvEnergy(const MeshData &mesh,  
-    const Eigen::MatrixXd &v,
-    const Eigen::MatrixXd &w,
-    Eigen::MatrixXd &dE)
-{
-    int nfaces = v.rows();
-
-    dE.resize(nfaces, 3);
-    dE.setZero();
-
-    Eigen::MatrixXd delwv;
-    computeDelWV(mesh, v, w, delwv);
-
-    for (int i = 0; i < nfaces; i++)
-    {
-        Eigen::VectorXd temp = mesh.Ms[i].transpose() * w.row(i).transpose(); 
-        dE += temp * delwv.row(i);
-    }
-}
-
-// energy derivative with respect to w
-void dwEnergy(const MeshData &mesh,
-    const Eigen::MatrixXd &v,
-    const Eigen::MatrixXd &w,
-    Eigen::MatrixXd &dE)
-{
-    int nfaces = v.rows();
-
-    dE.resize(nfaces, 3);
-    dE.setZero();
-
-    Eigen::MatrixXd delwv;
-    computeDelWV(mesh, v, w, delwv);
-
-    for (int i = 0; i < nfaces; i++)
-    {
-        Eigen::VectorXd rowTemp = delwv.row(i) * v.transpose();
-        dE.row(i) += rowTemp.transpose() * mesh.Ms[i].transpose();
-    }
-}
-
-Eigen::MatrixXd W; // This can be thought of as 3 ``independent'' scalar fields
-//Eigen::MatrixXd W_init; // W at init, for visualizing change in descent 
-
-
 void logToFile(const Eigen::MatrixXd W, std::string foldername, std::string filename)
 {
 #ifndef WIN32
@@ -129,68 +56,6 @@ void logToFile(const Eigen::MatrixXd W, std::string foldername, std::string file
 #endif
 }
 
-
-void computeOperatorGradient_finitedifference(const Eigen::MatrixXd &v, Eigen::MatrixXd &Op_Grad)
-{
-    int nfaces = v.rows();
-
-    double e = energy(*curMesh, v,v); 
-
-    Op_Grad = Eigen::MatrixXd::Zero(nfaces, 3);
-    double eps = .0000001;
-
-    for (int i = 0; i < nfaces; i++)
-    {
-        for (int j = 0; j < 3; j++) 
-	{
-            Eigen::MatrixXd shifted = v;
-	    shifted(i, j) += eps;
-	    double diff = energy(*curMesh, shifted, shifted);
-	    Op_Grad(i, j) = (diff - e) / eps;
-	}	
-	std::cout << i << "\n";
-    }
-
-}
-
-
-Eigen::MatrixXd Op_Grad_fd;
-bool is_fd_set;
-void computeFiniteDifference() 
-{
-    is_fd_set = true;
-    computeOperatorGradient_finitedifference(W, Op_Grad_fd);
-  //  logToFile(Op_Grad_fd, folderName, "fd2");
-}
-
-void loadFiniteDifference()
-{
-    Op_Grad_fd = readMatrix("fd.txt");
-//    Op_Grad_fd.resize(W.rows(), W.cols());
-//    for (int i = 0; i < W.rows(); i++)
-//	Op_Grad_fd.row(i) = temp.row(i);
-}
-
-
-void lineSearch(const Eigen::MatrixXd &v, const Eigen::MatrixXd &gradV, double &t, double &newenergy)
-{
-    double c1 = 1.5;
-    double c2 = 0.5;
-    t *= c1;
-    double orig = energy(*curMesh, v, v);
-    std::cout << "original energy " << orig << std::endl;
-    while (true)
-    {
-        Eigen::MatrixXd testv = v - t*gradV;
-        newenergy = energy(*curMesh, testv, testv);
-        std::cout << "new energy, t = " << t << ": " << newenergy << std::endl;
-        if (newenergy < orig || t < .00000001)
-            return;
-        else
-            t *= c2;
-    }
-}
-
 int descentStep = 0;
 void takeGradientDescentStep()
 {
@@ -216,32 +81,18 @@ void takeGradientDescentStep()
             W -= t*Op_Grad;
   */
 	    
-            alternatingMinimization(*curMesh, 10, 10, curMesh->optVars);
-            std::cout << opt_step << "\n";
-	}
-        computeDelWV(*curMesh, W, W, del_W_V);
+            alternatingMinimization(*curMesh, 1000, 1000, curMesh->optVars);
+    	}
         descentStep++;
         updateView(curMesh, viewer);
     }
 }
 
-void loadField()
-{
-    W = readMatrix(fieldName.c_str());
-    Eigen::MatrixXd del_W_V;
-    computeDelWV(*curMesh, W, W, del_W_V);
-
-    descentStep = 1;
-    updateView(curMesh, viewer);
-}
-
 void showVectorField()
 {
-    computeCentroids(curMesh->F,curMesh->V,curMesh->centroids_F);
-
     Eigen::Vector3d p(px, py,0);
     computeDistanceField(p, curMesh->centroids_F, curMesh->v0);
-    initOptVars(curMesh->v0, curMesh->Ms, curMesh->optVars);
+    initOptVars(curMesh->v0, curMesh->optVars);
 
 //    computeDistanceField(p, centroids_F, W_init);
 //    computeWhirlpool(p, centroids_F, W_init);
@@ -267,13 +118,8 @@ void showVectorField()
 
     }
 */
-    alternatingMinimization(*curMesh, 10, 10, curMesh->optVars);
+    alternatingMinimization(*curMesh, 1000, 1000, curMesh->optVars);
 
-    Eigen::MatrixXd del_W_V;
-    computeDelWV(*curMesh, W, W, del_W_V);
-
-//    project(W_init);
- //   logToFile(W_init, folderName, "0W");
     descentStep = 1;
     updateView(curMesh, viewer);
 
@@ -283,42 +129,18 @@ void showVectorField()
 void addNoiseToField() 
 {
     double eps = .1;
-    Eigen::MatrixXd noise = Eigen::MatrixXd::Random( W.rows(), 3 ) * eps;
-    for (int i = 0; i < W.rows(); i++)
+    Eigen::MatrixXd noise = Eigen::MatrixXd::Random( curMesh->v0.rows(), 3 ) * eps;
+    for (int i = 0; i < curMesh->v0.rows(); i++)
     {
         noise(i, 2) = 0.;
     }
 
-    W += noise;
-  //  W_init += noise; // This way we see the error from the ground truth
-
-    Eigen::MatrixXd del_W_V;
-    computeDelWV(*curMesh, W, W, del_W_V);
-
+    curMesh->v0 += noise;
+    initOptVars(curMesh->v0, curMesh->optVars);
+  
     descentStep = 1;
     updateView(curMesh, viewer);
 }
-
-void testGradients()
-{
-    int triangleToTest = 100;
-    double energyorig = energy(*curMesh, W, W);
-    for (int i = 0; i < 2; i++)
-    {
-        Eigen::MatrixXd perturbed = W;
-        perturbed(triangleToTest, i) += 1e-6;
-        double energynewv = energy(*curMesh, perturbed, W);
-        double energyneww = energy(*curMesh, W, perturbed);
-        double findiffv = (energynewv - energyorig) / 1e-6;
-        double findiffw = (energyneww - energyorig) / 1e-6;
-        Eigen::MatrixXd OpGradv;
-        Eigen::MatrixXd OpGradw;
-        dvEnergy(*curMesh, W, W, OpGradv);
-        dwEnergy(*curMesh, W, W, OpGradw);
-        std::cout << "v: " << findiffv << " vs " << OpGradv(triangleToTest, i) << "    w: " << findiffw << " vs " << OpGradw(triangleToTest, i) << std::endl;                   
-    }
-}
-
 
 
 int main(int argc, char *argv[])
@@ -350,8 +172,6 @@ int main(int argc, char *argv[])
 
       // Add a button
       viewer.ngui->addButton("Add Noise to Field", addNoiseToField);
-      viewer.ngui->addButton("Compute Finite Diff", computeFiniteDifference);
-      viewer.ngui->addButton("Test Gradients", testGradients);
       viewer.ngui->addButton("Recompute Derivative", showVectorField);
       viewer.ngui->addButton("Grad Descent Step", takeGradientDescentStep);
 
@@ -360,9 +180,6 @@ int main(int argc, char *argv[])
 //          ->setItems({"Operator Error", "Update Direction", "Update Magnitude"});
 //	  ->setCallback([] { updateView(del_W_F, descentStep); });
 
-
-      viewer.ngui->addVariable("Load Field Name", fieldName);
-      viewer.ngui->addButton("Load Field", loadField);
 
       // call to generate menu
       viewer.screen->performLayout();

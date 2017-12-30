@@ -9,24 +9,6 @@ using namespace std;
 
 
 
-void computeCentroids(const Eigen::MatrixXi &F,const Eigen::MatrixXd &V, Eigen::MatrixXd &centroids)
-{
- //   Eigen::MatrixXd interp; 
-    int nfaces = F.rows();
-    int nverts = V.rows();
-    
-    centroids.resize(nfaces, 3);
-    for (int i = 0; i < nfaces; i++) 
-    { 
-	Eigen::Vector3d pos(0,0,0);
-	for (int j = 0; j < 3; j++) 
-	{
-//	    std::cout << V.row(F(i,j)) << "\n" << F(i,j) << "\n\n";
-	    pos += V.row(F(i,j));
-	}
-	centroids.row(i) = pos/3;
-    }
-}
 
 
 void computeTestField(const Eigen::Vector3d p, const Eigen::MatrixXd &centroids, Eigen::MatrixXd &W)
