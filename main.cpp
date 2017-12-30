@@ -269,8 +269,6 @@ void showVectorField()
 */
     alternatingMinimization(*curMesh, 10, 10, curMesh->optVars);
 
-    Eigen::MatrixXd del_W_V;
-    computeDelWV(*curMesh, W, W, del_W_V);
 
 //    project(W_init);
  //   logToFile(W_init, folderName, "0W");
@@ -283,17 +281,16 @@ void showVectorField()
 void addNoiseToField() 
 {
     double eps = .1;
-    Eigen::MatrixXd noise = Eigen::MatrixXd::Random( W.rows(), 3 ) * eps;
-    for (int i = 0; i < W.rows(); i++)
+    Eigen::MatrixXd noise = Eigen::MatrixXd::Random( curMesh->v0.rows(), 3 ) * eps;
+    for (int i = 0; i < curMesh->v0.rows(); i++)
     {
         noise(i, 2) = 0.;
     }
 
-    W += noise;
+    curMesh->v0 += noise;
   //  W_init += noise; // This way we see the error from the ground truth
-
-    Eigen::MatrixXd del_W_V;
-    computeDelWV(*curMesh, W, W, del_W_V);
+    
+    initOptVars(curMesh->v0, curMesh->Ms, curMesh->optVars);
 
     descentStep = 1;
     updateView(curMesh, viewer);
