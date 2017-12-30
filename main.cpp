@@ -26,6 +26,22 @@ char fileName[50] = "0-0-10ksteps";
 std::string folderName = "logging_location";
 std::string fieldName = "field_dt.txt";
 
+int idx0 = 890;
+int idx1 = 4064;
+int idx2 = 4537;
+int idx3 = 9243;
+
+double lambda = 10.;
+
+double px0 = 10.;
+double py0 = 0.;
+double px1 = 10.;
+double py1 = 0.;
+double px2 = 0.;
+double py2 = 10.;
+double px3 = 0.;
+double py3 = 10.;
+
 double operator_scale = 1.;
 int opt_step = 0;
 
@@ -56,17 +72,25 @@ void logToFile(const Eigen::MatrixXd W, std::string foldername, std::string file
 #endif
 }
 
+
+Weights w;
+
 int descentStep = 0;
 void takeGradientDescentStep()
 {
     int nfaces = curMesh->F.rows();
-    Weights w;
+/*    Weights w;
     w.handleWeights.resize(nfaces);
     w.handleWeights.setConstant(1.0);
     w.lambdaDreg = 1;
     w.lambdaGeodesic = 1000;
     w.lambdaVD = 1000;
     w.lambdaVW = 1000;
+*/
+
+    w.lambdaGeodesic = lambda;
+    w.lambdaVD = lambda;
+    w.lambdaVW = lambda;
 
     for (int loops = 0; loops < desc_loops; loops++) {
 
@@ -99,7 +123,14 @@ void takeGradientDescentStep()
 void showVectorField()
 {
     Eigen::Vector3d p(px, py,0);
-    computeDistanceField(p, curMesh->centroids_F, curMesh->v0);
+ //   computeDistanceField(p, curMesh->centroids_F, curMesh->v0);
+   
+    curMesh->v0 = Eigen::MatrixXd::Zero(curMesh->F.rows(), 3);
+    curMesh->v0.row(idx0) = Eigen::Vector3d(px0, py0, 0.);
+    curMesh->v0.row(idx1) = Eigen::Vector3d(px1, py1, 0.);
+    curMesh->v0.row(idx2) = Eigen::Vector3d(px2, py2, 0.);
+    curMesh->v0.row(idx3) = Eigen::Vector3d(px3, py3, 0.);
+   
     initOptVars(curMesh->v0, curMesh->optVars);
 
 //    computeDistanceField(p, centroids_F, W_init);
@@ -126,14 +157,19 @@ void showVectorField()
 
     }
 */
-    Weights w;
+ //   Weights w;
     int nfaces = (int)curMesh->F.rows();
     w.handleWeights.resize(nfaces);
-    w.handleWeights.setConstant(1.0);
+    w.handleWeights.setConstant(0.0);
+    w.handleWeights(idx0) = 1.0;    
+    w.handleWeights(idx1) = 1.0;    
+    w.handleWeights(idx2) = 1.0;    
+    w.handleWeights(idx3) = 1.0;    
+   
     w.lambdaDreg = 1;
-    w.lambdaGeodesic = 1000;
-    w.lambdaVD = 1000;
-    w.lambdaVW = 1000;
+    w.lambdaGeodesic = lambda;
+    w.lambdaVD = lambda;
+    w.lambdaVW = lambda;
     alternatingMinimization(*curMesh, w, curMesh->optVars);
 
     descentStep = 1;
@@ -175,7 +211,7 @@ int main(int argc, char *argv[])
   {
       
       viewer.ngui->window()->setVisible(false);
-      viewer.ngui->addWindow(Eigen::Vector2i(10, 60), "Weaving"); 
+      viewer.ngui->addWindow(Eigen::Vector2i(10, 10), "Weaving"); 
       // Add new group
       viewer.ngui->addGroup("Vector Field Options");
 
@@ -196,6 +232,21 @@ int main(int argc, char *argv[])
 //          ->setItems({"Operator Error", "Update Direction", "Update Magnitude"});
 //	  ->setCallback([] { updateView(del_W_F, descentStep); });
 
+      viewer.ngui->addWindow(Eigen::Vector2i(10, 400), "Handles");
+      viewer.ngui->addVariable("Norm Vectors", curMesh->vs.normFaceVectors);
+      viewer.ngui->addVariable("lambda", lambda);
+      viewer.ngui->addVariable("idx0", idx0);
+      viewer.ngui->addVariable("px",px0);
+      viewer.ngui->addVariable("py",py0);
+      viewer.ngui->addVariable("idx1", idx1);
+      viewer.ngui->addVariable("px",px1);
+      viewer.ngui->addVariable("py",py1);
+      viewer.ngui->addVariable("idx0", idx2);
+      viewer.ngui->addVariable("px",px2);
+      viewer.ngui->addVariable("py",py2);
+      viewer.ngui->addVariable("idx0", idx3);
+      viewer.ngui->addVariable("px",px3);
+      viewer.ngui->addVariable("py",py3);
 
       // call to generate menu
       viewer.screen->performLayout();

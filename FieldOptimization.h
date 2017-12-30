@@ -25,6 +25,11 @@ struct Weights
     Eigen::VectorXd handleWeights; // one weight per face, 1.0 = use the input v0 on this face as a handle, 0.0 = ignore this input v0.
 };
 
+struct VisualizationState
+{
+    bool normFaceVectors;
+};
+
 // Keep application state in here until it gets annoying. 
 // All state that varies with optimization goes into it's own structs for ease of refactoring later
 struct MeshData
@@ -43,6 +48,7 @@ struct MeshData
     Eigen::MatrixXd v0; // v at init, for visualizing change in descent and computing energy    
 
     OptVars optVars;
+    VisualizationState vs;
 };
 
 void initOptVars(const Eigen::MatrixXd &v0, OptVars &vars);
