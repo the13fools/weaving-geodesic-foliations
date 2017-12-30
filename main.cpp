@@ -216,7 +216,8 @@ void takeGradientDescentStep()
             W -= t*Op_Grad;
   */
 	    
-            alternatingMinimization(*curMesh, 10, 10, curMesh->optVars);
+            Weights w;
+            alternatingMinimization(*curMesh, w, curMesh->optVars);
             std::cout << opt_step << "\n";
 	}
         computeDelWV(*curMesh, W, W, del_W_V);
@@ -267,7 +268,8 @@ void showVectorField()
 
     }
 */
-    alternatingMinimization(*curMesh, 10, 10, curMesh->optVars);
+    Weights w;
+    alternatingMinimization(*curMesh, w, curMesh->optVars);
 
     Eigen::MatrixXd del_W_V;
     computeDelWV(*curMesh, W, W, del_W_V);
@@ -283,13 +285,14 @@ void showVectorField()
 void addNoiseToField() 
 {
     double eps = .1;
-    Eigen::MatrixXd noise = Eigen::MatrixXd::Random( W.rows(), 3 ) * eps;
-    for (int i = 0; i < W.rows(); i++)
+    Eigen::MatrixXd noise = Eigen::MatrixXd::Random( curMesh->v0.rows(), 3 ) * eps;
+    for (int i = 0; i < curMesh->v0.rows(); i++)
     {
         noise(i, 2) = 0.;
     }
 
-    W += noise;
+    curMesh->v0 += noise;
+    initOptVars(curMesh->v0, curMesh->Ms, curMesh->optVars);
   //  W_init += noise; // This way we see the error from the ground truth
 
     Eigen::MatrixXd del_W_V;
