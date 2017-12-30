@@ -59,8 +59,16 @@ void logToFile(const Eigen::MatrixXd W, std::string foldername, std::string file
 int descentStep = 0;
 void takeGradientDescentStep()
 {
+    int nfaces = curMesh->F.rows();
+    Weights w;
+    w.handleWeights.resize(nfaces);
+    w.handleWeights.setConstant(1.0);
+    w.lambdaDreg = 1;
+    w.lambdaGeodesic = 1000;
+    w.lambdaVD = 1000;
+    w.lambdaVW = 1000;
+
     for (int loops = 0; loops < desc_loops; loops++) {
-        int nfaces = curMesh->F.rows();
 
         Eigen::MatrixXd Op_Grad(curMesh->F.rows(), 3);
         double t = 1.0;
@@ -80,8 +88,8 @@ void takeGradientDescentStep()
             lineSearch(W, Op_Grad, t, newenergy);
             W -= t*Op_Grad;
   */
-	    
-            alternatingMinimization(*curMesh, 1000, 1000, curMesh->optVars);
+	
+            alternatingMinimization(*curMesh, w, curMesh->optVars);
     	}
         descentStep++;
         updateView(curMesh, viewer);
@@ -118,7 +126,15 @@ void showVectorField()
 
     }
 */
-    alternatingMinimization(*curMesh, 1000, 1000, curMesh->optVars);
+    Weights w;
+    int nfaces = (int)curMesh->F.rows();
+    w.handleWeights.resize(nfaces);
+    w.handleWeights.setConstant(1.0);
+    w.lambdaDreg = 1;
+    w.lambdaGeodesic = 1000;
+    w.lambdaVD = 1000;
+    w.lambdaVW = 1000;
+    alternatingMinimization(*curMesh, w, curMesh->optVars);
 
     descentStep = 1;
     updateView(curMesh, viewer);

@@ -16,6 +16,15 @@ struct OptVars
     Eigen::MatrixXd W_opt;
 };
 
+struct Weights
+{
+    double lambdaGeodesic; // weight of the geodesic constraints
+    double lambdaVW; // weight of v = w constraint
+    double lambdaVD; // weight of v, D compatibility constraint
+    double lambdaDreg; // weight of regularization term on D
+    Eigen::VectorXd handleWeights; // one weight per face, 1.0 = use the input v0 on this face as a handle, 0.0 = ignore this input v0.
+};
+
 // Keep application state in here until it gets annoying. 
 // All state that varies with optimization goes into it's own structs for ease of refactoring later
 struct MeshData
@@ -39,6 +48,6 @@ struct MeshData
 void initOptVars(const Eigen::MatrixXd &v0, OptVars &vars);
 
 
-void alternatingMinimization(const MeshData &mesh, double lambda, double mu, OptVars &vars);
+void alternatingMinimization(const MeshData &mesh, Weights &w, OptVars &vars);
 
 #endif
