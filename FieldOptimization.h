@@ -26,8 +26,11 @@ struct MeshData
     Eigen::MatrixXi E; // edge indices
     Eigen::MatrixXi F_edges; // face edge indices
     std::vector<Eigen::Matrix3d> Js; // rotations by 90 degrees
+    Eigen::MatrixXd Ms; // discrete gradient operator vectors
 
     Eigen::MatrixXd centroids_F;
+    Eigen::SparseMatrix<double> H; // precomputed matrices for compatibility Hessian
+    Eigen::SparseMatrix<double> C; 
     Eigen::MatrixXd v0; // v at init, for visualizing change in descent and computing energy    
 
     OptVars optVars;

@@ -199,6 +199,64 @@ MeshData::MeshData(const Eigen::MatrixXd &V,
     buildEdgesPerFace(F, E, F_edges);
     computeJs(F, V, Js);
     computeCentroids(F,V,centroids_F);
+    computeGradientMatrices(F, V, E, F_edges, Ms);
+
+    int nfaces = (int)F.rows();
+    H.resize(3 * nfaces, 3 * nfaces);
+    vector<Triplet<double> > compattermcoeffs;
+    int nedges = (int)E.rows();
+    for (int i = 0; i < nedges; i++)
+    {
+        int face1 = E(i, 2);
+        int face2 = E(i, 3);
+        if (face1 == -1 || face2 == -1)
+            continue;
+
+        for (int j = 0; j < 3; j++)
+        {
+            compattermcoeffs.push_back(Triplet<double>(3 * face1 + j, 3 * face1 + j, 2.0));
+            compattermcoeffs.push_back(Triplet<double>(3 * face2 + j, 3 * face2 + j, 2.0));
+            compattermcoeffs.push_back(Triplet<double>(3 * face1 + j, 3 * face2 + j, -2.0));
+            compattermcoeffs.push_back(Triplet<double>(3 * face2 + j, 3 * face1 + j, -2.0));
+        }
+    }
+    H.setFromTriplets(compattermcoeffs.begin(), compattermcoeffs.end());
+
+    C.resize(9 * nfaces, 9 * nfaces);
+    std::vector<Eigen::Triplet<double> > Ccoeffs;
+    for (int i = 0; i < nedges; i++)
+    {
+        int face1 = E(i, 2);
+        int face2 = E(i, 3);
+        if (face1 == -1 || face2 == -1)
+            continue;
+        Eigen::Vector3d c1 = Ms.row(2 * i);
+        Eigen::Vector3d c2 = Ms.row(2 * i + 1);
+        Eigen::MatrixXd cmat1(9, 3);
+        cmat1.setZero();
+        Eigen::MatrixXd cmat2(9, 3);
+        cmat2.setZero();
+        for (int j = 0; j < 3; j++)
+        {
+            cmat1(j, 0) = c1[j];
+            cmat1(3 + j, 1) = c1[j];
+            cmat1(6 + j, 2) = c1[j];
+            cmat2(j, 0) = c2[j];
+            cmat2(3 + j, 1) = c2[j];
+            cmat2(6 + j, 2) = c2[j];
+        }
+        Eigen::MatrixXd cTc1 = cmat1*cmat1.transpose();
+        Eigen::MatrixXd cTc2 = cmat2*cmat2.transpose();
+        for(int j=0; j<9; j++)
+            for (int k = 0; k < 9; k++)
+            {
+                if(cTc1(j,k) != 0.0)
+                    Ccoeffs.push_back(Eigen::Triplet<double>(9 * face1 + j, 9 * face1 + k, cTc1(j, k)));
+                if(cTc2(j,k) != 0.0)
+                    Ccoeffs.push_back(Eigen::Triplet<double>(9 * face2 + j, 9 * face2 + k, cTc2(j, k)));
+            }
+    }
+    C.setFromTriplets(Ccoeffs.begin(), Ccoeffs.end());
 }
 
 double energy(const OptVars &vars, const MeshData &mesh, double lambda, double mu)
@@ -236,10 +294,11 @@ double energy(const OptVars &vars, const MeshData &mesh, double lambda, double m
         {
             D2.row(j) = vars.D.segment<3>(9 * face2 + 3 * j);
         }
-        Eigen::Vector3d cdiff = mesh.centroids_F.row(face2) - mesh.centroids_F.row(face1);
+        Eigen::Vector3d c1 = mesh.Ms.row(2 * i);
+        Eigen::Vector3d c2 = mesh.Ms.row(2 * i + 1);
         Eigen::Vector3d vdiff = vars.v.segment<3>(3 * face2) - vars.v.segment<3>(3 * face1);
-        result += 0.5 * mu * (D1*cdiff - vdiff).squaredNorm();
-        result += 0.5 * mu * (D2*cdiff - vdiff).squaredNorm();
+        result += 0.5 * mu * (D1*c1 - vdiff).squaredNorm();
+        result += 0.5 * mu * (D2*c2 - vdiff).squaredNorm();
     }
 
     result += 0.5 * mu * (vars.v - vars.w).squaredNorm();
@@ -274,31 +333,12 @@ void dvEnergy(const OptVars &vars, const MeshData &mesh, double lambda, double m
     SparseMatrix<double> lambdaterm(3 * nfaces, 3 * nfaces);
     lambdaterm.setFromTriplets(lambdatermcoeffs.begin(), lambdatermcoeffs.end());
     M += lambda * lambdaterm;
-
-    vector<Triplet<double> > compattermcoeffs;
-    int nedges = (int)mesh.E.rows();
-    for (int i = 0; i < nedges; i++)
-    {
-        int face1 = mesh.E(i, 2);
-        int face2 = mesh.E(i, 3);
-        if (face1 == -1 || face2 == -1)
-            continue;
-
-        for (int j = 0; j < 3; j++)
-        {
-            compattermcoeffs.push_back(Triplet<double>(3 * face1 + j, 3 * face1 + j, 2.0));
-            compattermcoeffs.push_back(Triplet<double>(3 * face2 + j, 3 * face2 + j, 2.0));
-            compattermcoeffs.push_back(Triplet<double>(3 * face1 + j, 3 * face2 + j, -2.0));
-            compattermcoeffs.push_back(Triplet<double>(3 * face2 + j, 3 * face1 + j, -2.0));
-        }
-
-    }
-    SparseMatrix<double> compatmat(3 * nfaces, 3 * nfaces);
-    compatmat.setFromTriplets(compattermcoeffs.begin(), compattermcoeffs.end());
-    M += mu*compatmat;
+   
+    M += mu*mesh.H;
 
     b.resize(3 * nfaces);
     b.setZero();
+    int nedges = (int)mesh.E.rows();
     for (int i = 0; i < nedges; i++)
     {
         int face1 = mesh.E(i, 2);
@@ -315,11 +355,12 @@ void dvEnergy(const OptVars &vars, const MeshData &mesh, double lambda, double m
         {
             D2.row(j) = vars.D.segment<3>(9 * face2 + 3 * j);
         }
-        Eigen::Vector3d cdiff = mesh.centroids_F.row(face2) - mesh.centroids_F.row(face1);
-        b.segment<3>(3 * face2) += mu*D1*cdiff;
-        b.segment<3>(3 * face1) -= mu*D1*cdiff;
-        b.segment<3>(3 * face1) -= mu*D2*cdiff;
-        b.segment<3>(3 * face2) += mu*D2*cdiff;
+        Eigen::Vector3d c1 = mesh.Ms.row(2*i);
+        Eigen::Vector3d c2 = mesh.Ms.row(2*i+1);
+        b.segment<3>(3 * face2) += mu*D1*c1;
+        b.segment<3>(3 * face1) -= mu*D1*c1;
+        b.segment<3>(3 * face1) -= mu*D2*c2;
+        b.segment<3>(3 * face2) += mu*D2*c2;
     }
 
     for (int i = 0; i < nfaces; i++)
@@ -393,10 +434,11 @@ void dDEnergy(const OptVars &vars, const MeshData &mesh, double lambda, double m
     lambdaterm.setFromTriplets(lambdatermcoeffs.begin(), lambdatermcoeffs.end());
     M += lambda * lambdaterm;
 
+    M += mu * mesh.C;
+
     b.resize(9 * nfaces);
     b.setZero();
 
-    std::vector<Eigen::Triplet<double> > compattermcoeffs;
     int nedges = (int)mesh.E.rows();
     for (int i = 0; i < nedges; i++)
     {
@@ -404,30 +446,26 @@ void dDEnergy(const OptVars &vars, const MeshData &mesh, double lambda, double m
         int face2 = mesh.E(i, 3);
         if (face1 == -1 || face2 == -1)
             continue;
-        Eigen::Vector3d cdiff = mesh.centroids_F.row(face2) - mesh.centroids_F.row(face1);
-        Eigen::MatrixXd cmat(9, 3);
-        cmat.setZero();
+        Eigen::Vector3d c1 = mesh.Ms.row(2 * i);
+        Eigen::Vector3d c2 = mesh.Ms.row(2 * i + 1);
+        Eigen::MatrixXd cmat1(9, 3);
+        cmat1.setZero();
+        Eigen::MatrixXd cmat2(9, 3);
+        cmat2.setZero();
         for (int j = 0; j < 3; j++)
         {
-            cmat(j, 0) = cdiff[j];
-            cmat(3 + j, 1) = cdiff[j];
-            cmat(6 + j, 2) = cdiff[j];
+            cmat1(j, 0) = c1[j];
+            cmat1(3 + j, 1) = c1[j];
+            cmat1(6 + j, 2) = c1[j];
+            cmat2(j, 0) = c2[j];
+            cmat2(3 + j, 1) = c2[j];
+            cmat2(6 + j, 2) = c2[j];
         }
-        Eigen::MatrixXd cTc = cmat*cmat.transpose();
-        for(int j=0; j<9; j++)
-            for (int k = 0; k < 9; k++)
-            {
-                compattermcoeffs.push_back(Eigen::Triplet<double>(9 * face1 + j, 9 * face1 + k, cTc(j, k)));
-                compattermcoeffs.push_back(Eigen::Triplet<double>(9 * face2 + j, 9 * face2 + k, cTc(j, k)));
-            }
+    
         Eigen::Vector3d vdiff = vars.v.segment<3>(3 * face2) - vars.v.segment<3>(3 * face1);
-        b.segment<9>(9 * face1) += mu * cmat * vdiff;
-        b.segment<9>(9 * face2) += mu * cmat * vdiff;
-    }
-
-    SparseMatrix<double> compatmat(9 * nfaces, 9 * nfaces);
-    compatmat.setFromTriplets(compattermcoeffs.begin(), compattermcoeffs.end());
-    M += mu * compatmat;
+        b.segment<9>(9 * face1) += mu * cmat1 * vdiff;
+        b.segment<9>(9 * face2) += mu * cmat2 * vdiff;
+    }    
 }
 
 void checkFiniteDifferences(const OptVars &vars, const MeshData &mesh, double lambda, double mu)
