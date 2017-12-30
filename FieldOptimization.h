@@ -5,7 +5,19 @@
 #include <Eigen/Sparse>
 #include <vector>
 
-// stuff that is precomputed about the mesh and doesn't change during optimization
+
+struct OptVars
+{
+    Eigen::VectorXd v; //3F
+    Eigen::VectorXd w; //3F
+    Eigen::VectorXd D; //9F
+
+    Eigen::MatrixXd V_opt;
+    Eigen::MatrixXd W_opt;
+};
+
+// Keep application state in here until it gets annoying. 
+// All state that varies with optimization goes into it's own structs for ease of refactoring later
 struct MeshData
 {
     MeshData(const Eigen::MatrixXd &V, const Eigen::MatrixXi &F);
@@ -19,16 +31,16 @@ struct MeshData
     Eigen::SparseMatrix <double> A; // precomputed matrices used in alternating minimization
     std::vector<Eigen::SparseMatrix<double> > Mbars;
     Eigen::SparseMatrix <double> Mbar;
-    
+
+    Eigen::MatrixXd centroids_F;
+    Eigen::MatrixXd v0; // v at init, for visualizing change in descent and computing energy    
+
+    OptVars optVars;
 };
 
-struct OptVars
-{
-    Eigen::VectorXd v; //3F
-    Eigen::VectorXd w; //3F
-    Eigen::VectorXd D; //9F
-};
+void initOptVars(const Eigen::MatrixXd &v0, const std::vector<Eigen::SparseMatrix<double> > Ms, OptVars &vars);
 
-void alternatingMinimization(const Eigen::MatrixXd &v0, const MeshData &mesh, double lambda, double mu);
+
+void alternatingMinimization(const MeshData &mesh, double lambda, double mu, OptVars &vars);
 
 #endif

@@ -3,6 +3,8 @@
 #include <iostream>
 #include "FaceBased.h"
 
+#include <Eigen/Geometry>
+
 using namespace std;
 using namespace Eigen;
 
@@ -150,7 +152,36 @@ void computeJs(const Eigen::MatrixXi &F, const Eigen::MatrixXd &V, std::vector<E
     }
 }
 
-MeshData::MeshData(const Eigen::MatrixXd &V, const Eigen::MatrixXi &F) : V(V), F(F)
+void initOptVars(const Eigen::MatrixXd &v0,
+                 const std::vector<Eigen::SparseMatrix<double> > Ms,
+	         OptVars &vars)
+{
+    vars.V_opt = v0;
+    vars.W_opt = v0;
+
+    // unroll optimization variables
+    int nfaces = (int)v0.rows();
+    vars.v.resize(3 * nfaces);
+    vars.w.resize(3 * nfaces);
+    for (int i = 0; i < nfaces; i++)
+    {
+        vars.v.segment<3>(3 * i) = v0.row(i).transpose();
+        vars.w.segment<3>(3 * i) = v0.row(i).transpose();
+    }
+    vars.D.resize(9 * nfaces);
+    for (int i = 0; i < nfaces; i++)
+    {
+        Eigen::Matrix3d Di = Ms[i] * v0;
+        for (int j = 0; j < 3; j++)
+        {
+            vars.D.segment<3>(9 * i + 3 * j) = Di.row(j);
+        }
+    }
+    
+}
+
+MeshData::MeshData(const Eigen::MatrixXd &V, 
+	           const Eigen::MatrixXi &F) : V(V), F(F)
 {
     buildEdges(F, E);
     buildEdgesPerFace(F, E, F_edges);
@@ -186,13 +217,13 @@ MeshData::MeshData(const Eigen::MatrixXd &V, const Eigen::MatrixXi &F) : V(V), F
     Mbar.setFromTriplets(Mbarcoeffs.begin(), Mbarcoeffs.end());
 }
 
-double energy(const OptVars &vars, const Eigen::MatrixXd &v0, const MeshData &mesh, double lambda, double mu)
+double energy(const OptVars &vars, const MeshData &mesh, double lambda, double mu)
 {
     double result = 0;
     int nfaces = (int)mesh.F.rows();
     for (int i = 0; i < nfaces; i++)
     {
-        result += 0.5 * (v0.row(i).transpose() - vars.v.segment<3>(3 * i)).squaredNorm();
+        result += 0.5 * (mesh.v0.row(i).transpose() - vars.v.segment<3>(3 * i)).squaredNorm();
         Matrix3d Di;
         for (int j = 0; j < 3; j++)
         {
@@ -212,7 +243,7 @@ double energy(const OptVars &vars, const Eigen::MatrixXd &v0, const MeshData &me
 }
 
 // computes energy derivative, of the form M * v + b
-void dvEnergy(const Eigen::MatrixXd &v0, const OptVars &vars, const MeshData &mesh, double lambda, double mu, Eigen::SparseMatrix<double> &M, Eigen::VectorXd &b)
+void dvEnergy(const OptVars &vars, const MeshData &mesh, double lambda, double mu, Eigen::SparseMatrix<double> &M, Eigen::VectorXd &b)
 {
     int nfaces = (int)mesh.F.rows();
     M.resize(3 * nfaces, 3 * nfaces);
@@ -243,14 +274,14 @@ void dvEnergy(const Eigen::MatrixXd &v0, const OptVars &vars, const MeshData &me
 
     for (int i = 0; i < nfaces; i++)
     {
-        b.segment<3>(3 * i) = v0.row(i).transpose();
+        b.segment<3>(3 * i) = mesh.v0.row(i).transpose();
     }
     b += mu * vars.w;
     b += mu * mesh.Mbar.transpose() * vars.D;    
 }
 
 // computes energy derivative, of the form M * w + b
-void dwEnergy(const Eigen::MatrixXd &v0, const OptVars &vars, const MeshData &mesh, double lambda, double mu, Eigen::SparseMatrix<double> &M, Eigen::VectorXd &b)
+void dwEnergy(const OptVars &vars, const MeshData &mesh, double lambda, double mu, Eigen::SparseMatrix<double> &M, Eigen::VectorXd &b)
 {
     int nfaces = (int)mesh.F.rows();
     M.resize(3 * nfaces, 3 * nfaces);
@@ -285,7 +316,7 @@ void dwEnergy(const Eigen::MatrixXd &v0, const OptVars &vars, const MeshData &me
 }
 
 // computes energy derivative, of the form M * D + b
-void dDEnergy(const Eigen::MatrixXd &v0, const OptVars &vars, const MeshData &mesh, double lambda, double mu, Eigen::SparseMatrix<double> &M, Eigen::VectorXd &b)
+void dDEnergy(const OptVars &vars, const MeshData &mesh, double lambda, double mu, Eigen::SparseMatrix<double> &M, Eigen::VectorXd &b)
 {
     int nfaces = (int)mesh.F.rows();
     M.resize(9 * nfaces, 9 * nfaces);
@@ -321,7 +352,7 @@ void dDEnergy(const Eigen::MatrixXd &v0, const OptVars &vars, const MeshData &me
     b += mu * mesh.Mbar * vars.w;
 }
 
-void checkFiniteDifferences(const Eigen::MatrixXd &v0, const OptVars &vars, const MeshData &mesh, double lambda, double mu)
+void checkFiniteDifferences(const OptVars &vars, const MeshData &mesh, double lambda, double mu)
 {
     int nfaces = (int)mesh.F.rows();
     OptVars test = vars;
@@ -332,87 +363,88 @@ void checkFiniteDifferences(const Eigen::MatrixXd &v0, const OptVars &vars, cons
     noise2.setRandom();
     test.w += 0.01 * noise2;
 
-    double orige = energy(test, v0, mesh, lambda, mu);
+    double orige = energy(test, mesh, lambda, mu);
 
     int idx = 100;
     OptVars perturbed = test;
     perturbed.v[idx] += 1e-6;
-    double newe = energy(perturbed, v0, mesh, lambda, mu);
+    double newe = energy(perturbed, mesh, lambda, mu);
     Eigen::SparseMatrix<double> M;
     Eigen::VectorXd b;
-    dvEnergy(v0, test, mesh, lambda, mu, M, b);
+    dvEnergy(test, mesh, lambda, mu, M, b);
     Eigen::VectorXd deriv = M * test.v - b;
     double findiff = (newe - orige) / 1e-6;
     std::cout << "Finite difference check v " << findiff << " vs " << deriv[idx] << std::endl;
 
     perturbed = test;
     perturbed.w[idx] += 1e-6;
-    newe = energy(perturbed, v0, mesh, lambda, mu);
-    dwEnergy(v0, test, mesh, lambda, mu, M, b);
+    newe = energy(perturbed, mesh, lambda, mu);
+    dwEnergy(test, mesh, lambda, mu, M, b);
     deriv = M * test.w - b;
     findiff = (newe - orige) / 1e-6;
     std::cout << "Finite difference check w " << findiff << " vs " << deriv[idx] << std::endl;
 
     perturbed = test;
     perturbed.D[idx] += 1e-6;
-    newe = energy(perturbed, v0, mesh, lambda, mu);
-    dDEnergy(v0, test, mesh, lambda, mu, M, b);
+    newe = energy(perturbed, mesh, lambda, mu);
+    dDEnergy(test, mesh, lambda, mu, M, b);
     deriv = M * test.D - b;
     findiff = (newe - orige) / 1e-6;
     std::cout << "Finite difference check D " << findiff << " vs " << deriv[idx] << std::endl;
 
 }
 
-void alternatingMinimization(const Eigen::MatrixXd &v0, const MeshData &mesh, double lambda, double mu)
+
+void rollupOptVars(OptVars &vars)
 {
-    // unroll optimization variables
-    OptVars vars;
-    int nfaces = (int)mesh.F.rows();
-    vars.v.resize(3 * nfaces);
-    vars.w.resize(3 * nfaces);
+    // rollup optimization variables
+    int nfaces = (int)vars.W_opt.rows();
     for (int i = 0; i < nfaces; i++)
     {
-        vars.v.segment<3>(3 * i) = v0.row(i).transpose();
-        vars.w.segment<3>(3 * i) = v0.row(i).transpose();
-    }
-    vars.D.resize(9 * nfaces);
-    for (int i = 0; i < nfaces; i++)
-    {
-        Eigen::Matrix3d Di = mesh.Ms[i] * v0;
-        for (int j = 0; j < 3; j++)
-        {
-            vars.D.segment<3>(9 * i + 3 * j) = Di.row(j);
-        }
+       for (int j = 0; j < 3; j++)
+       {
+           vars.V_opt(i, j) = vars.v(3*i + j);
+           vars.W_opt(i, j) = vars.w(3*i + j);
+       }
+ //   	vars.V_opt.row(i) = vars.v.segment<3>(3 * i);//.transpose(); 
+ //       vars.W_opt.row(i) = vars.w.segment<3>(3 * i);//.transpose(); 
     }
     
-    checkFiniteDifferences(v0, vars, mesh, lambda, mu);
+}
+
+void alternatingMinimization(const MeshData &mesh, double lambda, double mu, OptVars &vars)
+{
+//    checkFiniteDifferences(vars, mesh, lambda, mu);
     
-    double orig = energy(vars, v0, mesh, lambda, mu);
+    double orig = energy(vars, mesh, lambda, mu);
     std::cout << "Original energy: " << orig << std::endl;
     SparseMatrix<double> M;
     VectorXd b;
-    dvEnergy(v0, vars, mesh, lambda, mu, M, b);
+    dvEnergy(vars, mesh, lambda, mu, M, b);
     SimplicialLDLT<SparseMatrix<double> > solver;
     solver.compute(M);
     VectorXd newv = solver.solve(b);
     std::cout << "Residual: " << (M*newv - b).norm() << std::endl;
     vars.v = newv;
-    double newe = energy(vars, v0, mesh, lambda, mu);
+    double newe = energy(vars, mesh, lambda, mu);
     std::cout << "After v: " << newe << std::endl;
 
-    dwEnergy(v0, vars, mesh, lambda, mu, M, b);
+    dwEnergy(vars, mesh, lambda, mu, M, b);
     solver.compute(M);
     VectorXd neww = solver.solve(b);
     std::cout << "Residual: " << (M*neww - b).norm() << std::endl;
     vars.w = neww;
-    newe = energy(vars, v0, mesh, lambda, mu);
+//    std::cout << neww << std::endl;
+    newe = energy(vars, mesh, lambda, mu);
     std::cout << "After w: " << newe << std::endl;
 
-    dDEnergy(v0, vars, mesh, lambda, mu, M, b);
+    dDEnergy(vars, mesh, lambda, mu, M, b);
     solver.compute(M);
     VectorXd newD = solver.solve(b);
     std::cout << "Residual: " << (M*newD - b).norm() << std::endl;
     vars.D = newD;
-    newe = energy(vars, v0, mesh, lambda, mu);
+    newe = energy(vars, mesh, lambda, mu);
     std::cout << "After D: " << newe << std::endl;
+
+    rollupOptVars(vars);
 }
