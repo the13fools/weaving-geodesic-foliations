@@ -158,9 +158,9 @@ void initOptVars(const Eigen::MatrixXd &v0,
 {
     vars.V_opt = v0;
     vars.W_opt = v0;
-
     // unroll optimization variables
     int nfaces = (int)v0.rows();
+    vars.faceEnergy.resize(nfaces);
     vars.v.resize(3 * nfaces);
     vars.w.resize(3 * nfaces);
     for (int i = 0; i < nfaces; i++)
@@ -217,10 +217,11 @@ MeshData::MeshData(const Eigen::MatrixXd &V,
     Mbar.setFromTriplets(Mbarcoeffs.begin(), Mbarcoeffs.end());
 }
 
-double energy(const OptVars &vars, const MeshData &mesh, double lambda, double mu)
+double energy(OptVars &vars, const MeshData &mesh, double lambda, double mu)
 {
     double result = 0;
     int nfaces = (int)mesh.F.rows();
+    double prevResult = 0;
     for (int i = 0; i < nfaces; i++)
     {
         result += 0.5 * (mesh.v0.row(i).transpose() - vars.v.segment<3>(3 * i)).squaredNorm();
@@ -238,6 +239,7 @@ double energy(const OptVars &vars, const MeshData &mesh, double lambda, double m
         result += 0.5 * mu * (vars.D.segment<9>(9*i) - Msv).squaredNorm();
         result += 0.5 * mu * (vars.D.segment<9>(9*i) - Msw).squaredNorm();
         result += 0.5 * mu * (vars.v.row(i) - vars.w.row(i)).squaredNorm();
+        vars.faceEnergy(i) = result - prevResult; 
     }
     return result;
 }
@@ -445,6 +447,6 @@ void alternatingMinimization(const MeshData &mesh, double lambda, double mu, Opt
     vars.D = newD;
     newe = energy(vars, mesh, lambda, mu);
     std::cout << "After D: " << newe << std::endl;
-
+    
     rollupOptVars(vars);
 }

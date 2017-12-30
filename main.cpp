@@ -10,6 +10,7 @@
 // #include <direct.h>
 
 #include "DataLoad.h"
+#include "FileIO.h"
 #include "Covariant.h"
 #include "FaceBased.h"
 #include "FieldOptimization.h"
@@ -241,32 +242,32 @@ void showVectorField()
 
     Eigen::Vector3d p(px, py,0);
     computeDistanceField(p, curMesh->centroids_F, curMesh->v0);
-    initOptVars(curMesh->v0, curMesh->Ms, curMesh->optVars);
 
+    initOptVars(curMesh->v0, curMesh->Ms, curMesh->optVars);
 //    computeDistanceField(p, centroids_F, W_init);
 //    computeWhirlpool(p, centroids_F, W_init);
 //    computeWhirlpool(p, centroids_F, W);
 //    W_init = W;
-/*    W = Eigen::MatrixXd::Zero(W_init.rows(), W_init.cols());
-    for (int i = 0; i < W_init.rows(); i++) 
+/*    for (int i = 0; i < curMesh->v0.rows(); i++) 
     {
 	for (int j = 0; j < 3; j++)
 	{
-	    const Eigen::Vector4i &einfo = E.row(F_edges(i,j));
+	    const Eigen::Vector4i &einfo = curMesh->E.row(curMesh->F_edges(i,j));
 	    // if face faceidx is on the boundary, return empty matrix
 	    if (einfo[2] == -1 || einfo[3] == -1)
 	    {
-		W.row(i) = W_init.row(i);
+		curMesh->v0.row(i) = curMesh->v0.row(i);
 		break;
 	    }
-	    else 
+	    else if (j == 2) 
 	    {
-	       W.row(i) = Eigen::VectorXd::Random(3) * .00001;
+	       curMesh->v0.row(i) = Eigen::VectorXd::Random(3) * .00001;
 	    }
 	}
 
     }
-*/
+
+    initOptVars(curMesh->v0, curMesh->Ms, curMesh->optVars);*/
     alternatingMinimization(*curMesh, 10, 10, curMesh->optVars);
 
     Eigen::MatrixXd del_W_V;

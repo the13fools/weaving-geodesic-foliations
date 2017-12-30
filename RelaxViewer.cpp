@@ -61,8 +61,10 @@ void updateView(const MeshData *curMesh, igl::viewer::Viewer *viewer)
 //              Z(i) = (Op_Grad).row(i).norm();
                 break;
             case INIT_MAGNITUDE:
-                Z(i) = log( (curMesh->optVars.W_opt-curMesh->v0).row(i).squaredNorm() );
-//              Eigen::Vector3d test_vec(-Op_Grad(i,1), Op_Grad(i,0), 0);
+                Z(i) = curMesh->optVars.faceEnergy(i);
+      //          Z(i) = log( (curMesh->optVars.W_opt-curMesh->v0).row(i).squaredNorm() );
+
+		//              Eigen::Vector3d test_vec(-Op_Grad(i,1), Op_Grad(i,0), 0);
 //              Z(i) = (Op_Grad_fd).row(i).normalized()
 //                         .dot(test_vec.normalized()) + .000005;
         //        std::cout << Z(i) << "\n";

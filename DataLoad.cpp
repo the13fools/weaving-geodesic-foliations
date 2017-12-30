@@ -1,7 +1,5 @@
 #include "DataLoad.h"
 #include <Eigen/Geometry>
-#include <cassert>
-#include <iostream>
 
 #include <igl/viewer/Viewer.h>
 using namespace Eigen;

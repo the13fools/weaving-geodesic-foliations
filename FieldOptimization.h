@@ -14,6 +14,7 @@ struct OptVars
 
     Eigen::MatrixXd V_opt;
     Eigen::MatrixXd W_opt;
+    Eigen::VectorXd faceEnergy;
 };
 
 // Keep application state in here until it gets annoying. 

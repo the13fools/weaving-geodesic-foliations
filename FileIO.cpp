@@ -1,4 +1,14 @@
 
+#include <Eigen/Core>
+
+#include <Eigen/Geometry>
+#include "FileIO.h"
+
+#include <cassert>
+#include <iostream>
+#include <fstream>
+using namespace Eigen;
+using namespace std;
 
 #define MAXBUFSIZE  ((int) 1e6)
 Eigen::MatrixXd readMatrix(const char *filename)
