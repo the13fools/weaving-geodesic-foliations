@@ -29,7 +29,6 @@ struct MeshData
     std::vector<Eigen::Matrix3d> Js; // rotations by 90 degrees
 
     Eigen::SparseMatrix <double> A; // precomputed matrices used in alternating minimization
-    std::vector<Eigen::SparseMatrix<double> > Mbars;
     Eigen::SparseMatrix <double> Mbar;
 
     Eigen::MatrixXd centroids_F;

@@ -194,27 +194,22 @@ MeshData::MeshData(const Eigen::MatrixXd &V,
     A.setZero();
     Mbar.resize(9 * nfaces, 3 * nfaces);
     Mbar.setZero();
-    Mbars.resize(nfaces);
     vector<Triplet<double> > Mbarcoeffs;
     for (int i = 0; i < nfaces; i++)
     {
-        vector<Triplet<double> > Mibarcoeffs;
         for (int k = 0; k < Ms[i].outerSize(); k++)
         {
             for (SparseMatrix<double>::InnerIterator it(Ms[i], k); it; ++it)
             {
                 for (int l = 0; l < 3; l++)
                 {
-                    Mibarcoeffs.push_back(Triplet<double>(3 * (int)it.row() + l, 3 * (int)it.col() + l, it.value()));
                     Mbarcoeffs.push_back(Triplet<double>(9 * i +  3 * (int)it.row() + l, 3 * (int)it.col() + l, it.value()));                    
                 }
             }            
         }
-        Mbars[i].resize(9, 3 * nfaces);
-        Mbars[i].setFromTriplets(Mibarcoeffs.begin(), Mibarcoeffs.end());
-        A += Mbars[i].transpose()*Mbars[i];
     }
     Mbar.setFromTriplets(Mbarcoeffs.begin(), Mbarcoeffs.end());
+    A = Mbar.transpose() * Mbar;
 }
 
 double energy(const OptVars &vars, const MeshData &mesh, double lambda, double mu)
@@ -233,12 +228,10 @@ double energy(const OptVars &vars, const MeshData &mesh, double lambda, double m
         Eigen::Vector3d vi = vars.v.segment<3>(3 * i);
         double term = (wi.transpose() * mesh.Js[i].transpose() * Di.transpose() * vi);
         result += 0.5 * lambda * term*term;
-        Eigen::VectorXd Msv = mesh.Mbars[i] * vars.v;
-        Eigen::VectorXd Msw = mesh.Mbars[i] * vars.w;
-        result += 0.5 * mu * (vars.D.segment<9>(9*i) - Msv).squaredNorm();
-        result += 0.5 * mu * (vars.D.segment<9>(9*i) - Msw).squaredNorm();
-        result += 0.5 * mu * (vars.v.row(i) - vars.w.row(i)).squaredNorm();
     }
+    result += 0.5 * mu * (vars.D - mesh.Mbar * vars.w).squaredNorm();
+    result += 0.5 * mu * (vars.D - mesh.Mbar * vars.v).squaredNorm();
+    result += 0.5 * mu * (vars.v - vars.w).squaredNorm();
     return result;
 }
 
@@ -311,7 +304,7 @@ void dwEnergy(const OptVars &vars, const MeshData &mesh, double lambda, double m
     b.resize(3 * nfaces);
     b.setZero();
 
-    b += mu * vars.w;
+    b += mu * vars.v;
     b += mu * mesh.Mbar.transpose() * vars.D;    
 }
 

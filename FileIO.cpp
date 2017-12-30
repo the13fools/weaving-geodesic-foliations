@@ -1,4 +1,7 @@
+#include <Eigen/Core>
+#include <fstream>
 
+using namespace std;
 
 #define MAXBUFSIZE  ((int) 1e6)
 Eigen::MatrixXd readMatrix(const char *filename)
