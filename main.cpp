@@ -17,8 +17,9 @@
 MeshData *curMesh;
 
 igl::viewer::Viewer *viewer;
+Weights w;
 
-double px = 0;
+double px = 2;
 double py = 0;
 int desc_steps = 1; // Inner Loop
 int desc_loops = 1; // Outer Loop
@@ -59,14 +60,7 @@ void logToFile(const Eigen::MatrixXd W, std::string foldername, std::string file
 int descentStep = 0;
 void takeGradientDescentStep()
 {
-    int nfaces = curMesh->F.rows();
-    Weights w;
-    w.handleWeights.resize(nfaces);
-    w.handleWeights.setConstant(1.0);
-    w.lambdaDreg = 1;
-    w.lambdaGeodesic = 1000;
-    w.lambdaVD = 1000;
-    w.lambdaVW = 1000;
+    int nfaces = curMesh->F.rows();        
 
     for (int loops = 0; loops < desc_loops; loops++) {
 
@@ -76,19 +70,6 @@ void takeGradientDescentStep()
         // Not effecient, but will make it feel more correct to update, then show
         for (int i = 0; i < desc_steps; i++)
         {
-/*            Op_Grad.setZero();
-            computeDelWV(*curMesh, W, W, del_W_V);
-            Eigen::MatrixXd dE(curMesh->F.rows(), 3);
-            dvEnergy(*curMesh, W, W, dE);
-            Op_Grad += dE;
-            dwEnergy(*curMesh, W, W, dE);
-            Op_Grad += dE;
-
-            double newenergy = 0;
-            lineSearch(W, Op_Grad, t, newenergy);
-            W -= t*Op_Grad;
-  */
-	
             alternatingMinimization(*curMesh, w, curMesh->optVars);
     	}
         descentStep++;
@@ -100,48 +81,13 @@ void showVectorField()
 {
     Eigen::Vector3d p(px, py,0);
     computeDistanceField(p, curMesh->centroids_F, curMesh->v0);
-    curMesh->v0 = Eigen::MatrixXd(curMesh->F.rows(), 3);
-    curMesh->v0(0) = 1.;
-    curMesh->v0(1) = 1.;
-    curMesh->v0(2) = 1.;
-
-  
-    initOptVars(curMesh->v0, curMesh->optVars);
-
-//    computeDistanceField(p, centroids_F, W_init);
-//    computeWhirlpool(p, centroids_F, W_init);
-//    computeWhirlpool(p, centroids_F, W);
-//    W_init = W;
-/*    W = Eigen::MatrixXd::Zero(W_init.rows(), W_init.cols());
-    for (int i = 0; i < W_init.rows(); i++) 
-    {
-	for (int j = 0; j < 3; j++)
-	{
-	    const Eigen::Vector4i &einfo = E.row(F_edges(i,j));
-	    // if face faceidx is on the boundary, return empty matrix
-	    if (einfo[2] == -1 || einfo[3] == -1)
-	    {
-		W.row(i) = W_init.row(i);
-		break;
-	    }
-	    else 
-	    {
-	       W.row(i) = Eigen::VectorXd::Random(3) * .00001;
-	    }
-	}
-
-    }
-*/
-    Weights w;
     int nfaces = (int)curMesh->F.rows();
-    w.handleWeights.resize(nfaces);
-    w.handleWeights.setConstant(1.0);
-    w.handleWeights(0) = 1.;
-    w.lambdaDreg = 1;
-    w.lambdaGeodesic = 1000;
-    w.lambdaVD = 1000;
-    w.lambdaVW = 1000;
-    alternatingMinimization(*curMesh, w, curMesh->optVars);
+    for (int i = 0; i < nfaces; i++)
+    {
+        curMesh->v0.row(i) = projectOntoFace(curMesh->v0.row(i), curMesh->F, curMesh->V, i);
+    }
+      
+    initOptVars(*curMesh, curMesh->v0, curMesh->optVars);
 
     descentStep = 1;
     updateView(curMesh, viewer);
@@ -151,15 +97,17 @@ void showVectorField()
 
 void addNoiseToField() 
 {
+    int nvectors = curMesh->v0.rows();
+    if (nvectors == 0)
+        return;
     double eps = .1;
-    Eigen::MatrixXd noise = Eigen::MatrixXd::Random( curMesh->v0.rows(), 3 ) * eps;
-    for (int i = 0; i < curMesh->v0.rows(); i++)
-    {
-//        noise(i, 2) = 0.;
-    }
-
+    Eigen::MatrixXd noise = Eigen::MatrixXd::Random( nvectors, 3 ) * eps;
     curMesh->v0 += noise;
-    initOptVars(curMesh->v0, curMesh->optVars);
+    for (int i = 0; i < nvectors; i++)
+    {
+        curMesh->v0.row(i) = projectOntoFace(curMesh->v0.row(i), curMesh->F, curMesh->V, i);
+    }
+    initOptVars(*curMesh, curMesh->v0, curMesh->optVars);
   
     descentStep = 1;
     updateView(curMesh, viewer);
@@ -167,48 +115,56 @@ void addNoiseToField()
 
 
 int main(int argc, char *argv[])
-{  
-  //   assignFaceVal(F,viz);;
+{
     Eigen::MatrixXd V;
     Eigen::MatrixXi F;
-//  igl::readOBJ("../circ.obj", V, F);
-  igl::readOBJ("../sphere_small.obj", V, F);
-  curMesh = new MeshData(V, F);
-  
-  // Plot the mesh  
-  viewer = new igl::viewer::Viewer();
-  viewer->data.set_mesh(curMesh->V, curMesh->F);
-  viewer->data.set_face_based(true);
-  viewer->callback_init = [&](igl::viewer::Viewer& viewer)
-  {
-      
-      viewer.ngui->window()->setVisible(false);
-      viewer.ngui->addWindow(Eigen::Vector2i(10, 60), "Weaving"); 
-      // Add new group
-      viewer.ngui->addGroup("Vector Field Options");
+    if (!igl::readOBJ("../sphere.obj", V, F))
+        return -1;
+    curMesh = new MeshData(V, F);
 
-      // Expose a variable
-      viewer.ngui->addVariable("Operator Scale",operator_scale);
-      viewer.ngui->addVariable("Center X",px);
-      viewer.ngui->addVariable("Center Y",py);
-      viewer.ngui->addVariable("Descent Steps",desc_steps);
-      viewer.ngui->addVariable("Descent Outer Loops",desc_loops);
+    w.handleWeights.resize(F.rows());
+    w.handleWeights.setConstant(1.0);
+    w.lambdaDreg = 1e-4;
+    w.lambdaGeodesic = 1000;
+    w.lambdaVD = 1000;
+    w.lambdaVW = 1000;
 
-      // Add a button
-      viewer.ngui->addButton("Add Noise to Field", addNoiseToField);
-      viewer.ngui->addButton("Recompute Derivative", showVectorField);
-      viewer.ngui->addButton("Grad Descent Step", takeGradientDescentStep);
+    // Plot the mesh  
+    viewer = new igl::viewer::Viewer();
+    viewer->data.set_mesh(curMesh->V, curMesh->F);
+    viewer->data.set_face_based(true);
+    viewer->callback_init = [&](igl::viewer::Viewer& viewer)
+    {
 
-      viewer.ngui->addVariable("Log Folder", folderName);
-//      viewer.ngui->addVariable("Shade State", shading_enum_state, true)
-//          ->setItems({"Operator Error", "Update Direction", "Update Magnitude"});
-//	  ->setCallback([] { updateView(del_W_F, descentStep); });
+        viewer.ngui->window()->setVisible(false);
+        viewer.ngui->addWindow(Eigen::Vector2i(10, 60), "Weaving");
+        // Add new group
+        viewer.ngui->addGroup("Vector Field Options");
 
+        // Expose a variable
+        viewer.ngui->addVariable("Operator Scale", operator_scale);
+        viewer.ngui->addVariable("Center X", px);
+        viewer.ngui->addVariable("Center Y", py);
+        viewer.ngui->addVariable("Descent Steps", desc_steps);
+        viewer.ngui->addVariable("Descent Outer Loops", desc_loops);
 
-      // call to generate menu
-      viewer.screen->performLayout();
-      return false;
-  };
+        // Add a button
+        viewer.ngui->addButton("Add Noise to Field", addNoiseToField);
+        viewer.ngui->addButton("Compute Initial Field", showVectorField);
+        viewer.ngui->addButton("Grad Descent Step", takeGradientDescentStep);
 
-  viewer->launch();
+        viewer.ngui->addVariable("Log Folder", folderName);
+
+        viewer.ngui->addGroup("Weights");
+        viewer.ngui->addVariable("Geodesic", w.lambdaGeodesic);
+        viewer.ngui->addVariable("VW", w.lambdaVW);
+        viewer.ngui->addVariable("D Compatibility", w.lambdaVD);
+        viewer.ngui->addVariable("D Regularization", w.lambdaDreg);
+
+              // call to generate menu
+        viewer.screen->performLayout();
+        return false;
+    };
+
+    viewer->launch();
 }

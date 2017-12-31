@@ -16,24 +16,6 @@ void updateView(const MeshData *curMesh, igl::viewer::Viewer *viewer)
 {
     int nFaces = curMesh->F.rows();
 
-//    logToFile(W, folderName, std::to_string(step));
-
-
-//    if (!is_fd_set)
-//    {
-//        is_fd_set = true;
- //       computeOperatorGradient(Ms, del_W_F, W, Op_Grad_fd);
-//        loadFiniteDifference();
-//      std::cout << Op_Grad_fd.rows() << " " << Op_Grad_fd.cols() << "\n";
-//    }
-
-/*    Eigen::MatrixXd Op_Grad;
-    dvEnergy(*curMesh, W, W, Op_Grad);
-    Eigen::MatrixXd Op_Grad2;
-    dvEnergy(*curMesh, W, W, Op_Grad2);
-    logToFile(Op_Grad, folderName, "op_grad");
-    logToFile(Op_Grad2, folderName, "op_grad2");
-*/
     // Set mesh colors and log operator state
     Eigen::VectorXd Z(nFaces);
     Eigen::Vector3d testDir(1,0,0);

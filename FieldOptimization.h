@@ -8,8 +8,8 @@
 
 struct OptVars
 {
-    Eigen::VectorXd v; //3F
-    Eigen::VectorXd w; //3F
+    Eigen::VectorXd vbar; //2F
+    Eigen::VectorXd wbar; //2F
     Eigen::VectorXd D; //9F
 
     Eigen::MatrixXd V_opt;
@@ -36,16 +36,18 @@ struct MeshData
     Eigen::MatrixXi F_edges; // face edge indices
     std::vector<Eigen::Matrix3d> Js; // rotations by 90 degrees
     Eigen::MatrixXd Ms; // discrete gradient operator vectors
+    Eigen::MatrixXd B; // 3*faces x 2 matrix of barycentric bases
 
     Eigen::MatrixXd centroids_F;
     Eigen::SparseMatrix<double> H; // precomputed matrices for compatibility Hessian
     Eigen::SparseMatrix<double> C; 
     Eigen::MatrixXd v0; // v at init, for visualizing change in descent and computing energy    
+    Eigen::SparseMatrix<double> Bmat; // maps a 2xF vector of vectors in barycentric coordinates to a 3xF vector of extrinsic tangent vectors
 
     OptVars optVars;
 };
 
-void initOptVars(const Eigen::MatrixXd &v0, OptVars &vars);
+void initOptVars(const MeshData &mesh, const Eigen::MatrixXd &v0, OptVars &vars);
 
 
 void alternatingMinimization(const MeshData &mesh, Weights &w, OptVars &vars);

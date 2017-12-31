@@ -152,20 +152,20 @@ void computeJs(const Eigen::MatrixXi &F, const Eigen::MatrixXd &V, std::vector<E
     }
 }
 
-void initOptVars(const Eigen::MatrixXd &v0,                 
+void initOptVars(const MeshData &mesh, const Eigen::MatrixXd &v0,                 
 	         OptVars &vars)
 {
+    int nfaces = mesh.F.rows();
     vars.V_opt = v0;
     vars.W_opt = v0;
 
     // unroll optimization variables
-    int nfaces = (int)v0.rows();
-    vars.v.resize(3 * nfaces);
-    vars.w.resize(3 * nfaces);
+    vars.vbar.resize(2 * nfaces);
+    vars.wbar.resize(2 * nfaces);
     for (int i = 0; i < nfaces; i++)
     {
-        vars.v.segment<3>(3 * i) = v0.row(i).transpose();
-        vars.w.segment<3>(3 * i) = v0.row(i).transpose();
+        vars.vbar.segment<2>(2 * i) = projectOntoBarycentric(v0.row(i).transpose(), mesh.F, mesh.V, mesh.B, i);
+        vars.wbar.segment<2>(2 * i) = projectOntoBarycentric(v0.row(i).transpose(), mesh.F, mesh.V, mesh.B, i);
     }
     vars.D.resize(9 * nfaces);
     vars.D.setZero();
@@ -257,24 +257,30 @@ MeshData::MeshData(const Eigen::MatrixXd &V,
             }
     }
     C.setFromTriplets(Ccoeffs.begin(), Ccoeffs.end());
+
+    computeBarycentricOperators(F, V, B, Bmat);
 }
 
-double energy(const OptVars &vars, const MeshData &mesh, Weights &w)
+double energy(const OptVars &vars, const MeshData &mesh, Weights &weights)
 {
     double result = 0;
+
+    Eigen::VectorXd v = mesh.Bmat*vars.vbar;
+    Eigen::VectorXd w = mesh.Bmat*vars.wbar;
+
     int nfaces = (int)mesh.F.rows();
     for (int i = 0; i < nfaces; i++)
     {
-        result += 0.5 * w.handleWeights[i] * (mesh.v0.row(i).transpose() - vars.v.segment<3>(3 * i)).squaredNorm();
+        result += 0.5 * weights.handleWeights[i] * (mesh.v0.row(i).transpose() - v.segment<3>(3 * i)).squaredNorm();
         Matrix3d Di;
         for (int j = 0; j < 3; j++)
         {
             Di.row(j) = vars.D.segment<3>(9 * i + 3 * j);
         }
-        Eigen::Vector3d wi = vars.w.segment<3>(3 * i);
-        Eigen::Vector3d vi = vars.v.segment<3>(3 * i);
+        Eigen::Vector3d wi = w.segment<3>(3 * i);
+        Eigen::Vector3d vi = v.segment<3>(3 * i);
         double term = (wi.transpose() * mesh.Js[i].transpose() * Di.transpose() * vi);
-        result += 0.5 * w.lambdaGeodesic * term*term;
+        result += 0.5 * weights.lambdaGeodesic * term*term;
     }
 
     int nedges = (int)mesh.E.rows();
@@ -296,30 +302,32 @@ double energy(const OptVars &vars, const MeshData &mesh, Weights &w)
         }
         Eigen::Vector3d c1 = mesh.Ms.row(2 * i);
         Eigen::Vector3d c2 = mesh.Ms.row(2 * i + 1);
-        Eigen::Vector3d vdiff = vars.v.segment<3>(3 * face2) - vars.v.segment<3>(3 * face1);
-        result += 0.5 * w.lambdaVD * (D1*c1 - vdiff).squaredNorm();
-        result += 0.5 * w.lambdaVD * (D2*c2 - vdiff).squaredNorm();
+        Eigen::Vector3d vdiff = v.segment<3>(3 * face2) - v.segment<3>(3 * face1);
+        result += 0.5 * weights.lambdaVD * (D1*c1 - vdiff).squaredNorm();
+        result += 0.5 * weights.lambdaVD * (D2*c2 - vdiff).squaredNorm();
     }
 
-    result += 0.5 * w.lambdaVW * (vars.v - vars.w).squaredNorm();
-    result += 0.5 * w.lambdaDreg * (vars.D).squaredNorm();
+    result += 0.5 * weights.lambdaVW * (v - w).squaredNorm();
+    result += 0.5 * weights.lambdaDreg * (vars.D).squaredNorm();
     return result;
 }
 
 // computes energy derivative, of the form M * v + b
-void dvEnergy(const OptVars &vars, const MeshData &mesh, Weights &w, Eigen::SparseMatrix<double> &M, Eigen::VectorXd &b)
+void dvEnergy(const OptVars &vars, const MeshData &mesh, Weights &weights, Eigen::SparseMatrix<double> &M, Eigen::VectorXd &b)
 {
     int nfaces = (int)mesh.F.rows();
     M.resize(3 * nfaces, 3 * nfaces);
     M.setIdentity();
-    M *= w.lambdaVW;
+    M *= weights.lambdaVW;
+
+    VectorXd w = mesh.Bmat * vars.wbar;
 
     SparseMatrix<double> handleM(3 * nfaces, 3 * nfaces);
     vector<Triplet<double> > hMcoeffs;
     for (int i = 0; i < nfaces; i++)
     {
         for(int j=0; j<3; j++)
-            hMcoeffs.push_back(Triplet<double>(3 * i + j, 3 * i + j, w.handleWeights[i]));
+            hMcoeffs.push_back(Triplet<double>(3 * i + j, 3 * i + j, weights.handleWeights[i]));
     }
     handleM.setFromTriplets(hMcoeffs.begin(), hMcoeffs.end());
     M += handleM;
@@ -332,7 +340,7 @@ void dvEnergy(const OptVars &vars, const MeshData &mesh, Weights &w, Eigen::Spar
         {
             Di.row(j) = vars.D.segment<3>(9 * i + 3 * j);
         }
-        Vector3d term = Di * mesh.Js[i] * vars.w.segment<3>(3 * i);
+        Vector3d term = Di * mesh.Js[i] * w.segment<3>(3 * i);
         Matrix3d termsq = term * term.transpose();
         for(int j=0; j<3; j++)
             for (int k = 0; k < 3; k++)
@@ -342,9 +350,9 @@ void dvEnergy(const OptVars &vars, const MeshData &mesh, Weights &w, Eigen::Spar
     }
     SparseMatrix<double> lambdaterm(3 * nfaces, 3 * nfaces);
     lambdaterm.setFromTriplets(lambdatermcoeffs.begin(), lambdatermcoeffs.end());
-    M += w.lambdaGeodesic * lambdaterm;
+    M += weights.lambdaGeodesic * lambdaterm;
    
-    M += w.lambdaVD *mesh.H;
+    M += weights.lambdaVD *mesh.H;
 
     b.resize(3 * nfaces);
     b.setZero();
@@ -367,26 +375,29 @@ void dvEnergy(const OptVars &vars, const MeshData &mesh, Weights &w, Eigen::Spar
         }
         Eigen::Vector3d c1 = mesh.Ms.row(2*i);
         Eigen::Vector3d c2 = mesh.Ms.row(2*i+1);
-        b.segment<3>(3 * face2) += w.lambdaVD*D1*c1;
-        b.segment<3>(3 * face1) -= w.lambdaVD*D1*c1;
-        b.segment<3>(3 * face1) -= w.lambdaVD*D2*c2;
-        b.segment<3>(3 * face2) += w.lambdaVD*D2*c2;
+        b.segment<3>(3 * face2) += weights.lambdaVD*D1*c1;
+        b.segment<3>(3 * face1) -= weights.lambdaVD*D1*c1;
+        b.segment<3>(3 * face1) -= weights.lambdaVD*D2*c2;
+        b.segment<3>(3 * face2) += weights.lambdaVD*D2*c2;
     }
 
     for (int i = 0; i < nfaces; i++)
     {
-        b.segment<3>(3 * i) += w.handleWeights[i] * mesh.v0.row(i).transpose();
+        b.segment<3>(3 * i) += weights.handleWeights[i] * mesh.v0.row(i).transpose();
     }
-    b += w.lambdaVW * vars.w;
+    b += weights.lambdaVW * w;
 }
 
 // computes energy derivative, of the form M * w + b
-void dwEnergy(const OptVars &vars, const MeshData &mesh, Weights &w, Eigen::SparseMatrix<double> &M, Eigen::VectorXd &b)
+void dwEnergy(const OptVars &vars, const MeshData &mesh, Weights &weights, Eigen::SparseMatrix<double> &M, Eigen::VectorXd &b)
 {
     int nfaces = (int)mesh.F.rows();
+
+    Eigen::VectorXd v = mesh.Bmat * vars.vbar;
+
     M.resize(3 * nfaces, 3 * nfaces);
     M.setIdentity();
-    M*= w.lambdaVW;
+    M*= weights.lambdaVW;
     
     vector<Triplet<double> > lambdatermcoeffs;
     for (int i = 0; i < nfaces; i++)
@@ -396,7 +407,7 @@ void dwEnergy(const OptVars &vars, const MeshData &mesh, Weights &w, Eigen::Spar
         {
             Di.row(j) = vars.D.segment<3>(9 * i + 3 * j);
         }
-        Vector3d term = mesh.Js[i].transpose() * Di.transpose() * vars.v.segment<3>(3 * i);
+        Vector3d term = mesh.Js[i].transpose() * Di.transpose() * v.segment<3>(3 * i);
         Matrix3d termsq = term * term.transpose();
         for(int j=0; j<3; j++)
             for (int k = 0; k < 3; k++)
@@ -406,27 +417,31 @@ void dwEnergy(const OptVars &vars, const MeshData &mesh, Weights &w, Eigen::Spar
     }
     SparseMatrix<double> lambdaterm(3 * nfaces, 3 * nfaces);
     lambdaterm.setFromTriplets(lambdatermcoeffs.begin(), lambdatermcoeffs.end());
-    M += w.lambdaGeodesic * lambdaterm;
+    M += weights.lambdaGeodesic * lambdaterm;
 
     b.resize(3 * nfaces);
     b.setZero();
 
-    b += w.lambdaVW * vars.v;
+    b += weights.lambdaVW * v;
 }
 
 // computes energy derivative, of the form M * D + b
-void dDEnergy(const OptVars &vars, const MeshData &mesh, Weights &w, Eigen::SparseMatrix<double> &M, Eigen::VectorXd &b)
+void dDEnergy(const OptVars &vars, const MeshData &mesh, Weights &weights, Eigen::SparseMatrix<double> &M, Eigen::VectorXd &b)
 {
     int nfaces = (int)mesh.F.rows();
+
+    Eigen::VectorXd v = mesh.Bmat * vars.vbar;
+    Eigen::VectorXd w = mesh.Bmat * vars.wbar;
+
     M.resize(9 * nfaces, 9 * nfaces);
     M.setIdentity();
-    M *= w.lambdaDreg;
+    M *= weights.lambdaDreg;
     
     vector<Triplet<double> > lambdatermcoeffs;
     for (int i = 0; i < nfaces; i++)
     {
-        Eigen::Vector3d vi = vars.v.segment<3>(3 * i);
-        Eigen::Vector3d wi = vars.w.segment<3>(3 * i);
+        Eigen::Vector3d vi = v.segment<3>(3 * i);
+        Eigen::Vector3d wi = w.segment<3>(3 * i);
         Matrix3d term = vi * (mesh.Js[i] * wi).transpose();
         VectorXd flattened(9);
         for (int j = 0; j < 3; j++)
@@ -442,9 +457,9 @@ void dDEnergy(const OptVars &vars, const MeshData &mesh, Weights &w, Eigen::Spar
     }
     SparseMatrix<double> lambdaterm(9 * nfaces, 9 * nfaces);
     lambdaterm.setFromTriplets(lambdatermcoeffs.begin(), lambdatermcoeffs.end());
-    M += w.lambdaGeodesic * lambdaterm;
+    M += weights.lambdaGeodesic * lambdaterm;
 
-    M += w.lambdaVD * mesh.C;
+    M += weights.lambdaVD * mesh.C;
 
     b.resize(9 * nfaces);
     b.setZero();
@@ -472,9 +487,9 @@ void dDEnergy(const OptVars &vars, const MeshData &mesh, Weights &w, Eigen::Spar
             cmat2(6 + j, 2) = c2[j];
         }
     
-        Eigen::Vector3d vdiff = vars.v.segment<3>(3 * face2) - vars.v.segment<3>(3 * face1);
-        b.segment<9>(9 * face1) += w.lambdaVD * cmat1 * vdiff;
-        b.segment<9>(9 * face2) += w.lambdaVD * cmat2 * vdiff;
+        Eigen::Vector3d vdiff = v.segment<3>(3 * face2) - v.segment<3>(3 * face1);
+        b.segment<9>(9 * face1) += weights.lambdaVD * cmat1 * vdiff;
+        b.segment<9>(9 * face2) += weights.lambdaVD * cmat2 * vdiff;
     }    
 }
 
@@ -482,31 +497,31 @@ void checkFiniteDifferences(const OptVars &vars, const MeshData &mesh, Weights &
 {
     int nfaces = (int)mesh.F.rows();
     OptVars test = vars;
-    VectorXd noise1(3 * nfaces);
+    VectorXd noise1(2 * nfaces);
     noise1.setRandom();
-    test.v += 0.01 * noise1;
-    VectorXd noise2(3 * nfaces);
+    test.vbar += 0.01 * noise1;
+    VectorXd noise2(2 * nfaces);
     noise2.setRandom();
-    test.w += 0.01 * noise2;
+    test.wbar += 0.01 * noise2;
 
     double orige = energy(test, mesh, w);
 
-    int idx = 3;
+    int idx = 2;
     OptVars perturbed = test;
-    perturbed.v[idx] += 1e-6;
+    perturbed.vbar[idx] += 1e-6;
     double newe = energy(perturbed, mesh, w);
     Eigen::SparseMatrix<double> M;
     Eigen::VectorXd b;
     dvEnergy(test, mesh, w, M, b);
-    Eigen::VectorXd deriv = M * test.v - b;
+    Eigen::VectorXd deriv = M * mesh.Bmat*test.vbar - b;
     double findiff = (newe - orige) / 1e-6;
     std::cout << "Finite difference check v " << findiff << " vs " << deriv[idx] << std::endl;
 
     perturbed = test;
-    perturbed.w[idx] += 1e-6;
+    perturbed.wbar[idx] += 1e-6;
     newe = energy(perturbed, mesh, w);
     dwEnergy(test, mesh, w, M, b);
-    deriv = M * test.w - b;
+    deriv = M * mesh.Bmat * test.wbar - b;
     findiff = (newe - orige) / 1e-6;
     std::cout << "Finite difference check w " << findiff << " vs " << deriv[idx] << std::endl;
 
@@ -521,46 +536,52 @@ void checkFiniteDifferences(const OptVars &vars, const MeshData &mesh, Weights &
 }
 
 
-void rollupOptVars(OptVars &vars)
+void rollupOptVars(const MeshData &mesh, OptVars &vars)
 {
     // rollup optimization variables
-    int nfaces = (int)vars.W_opt.rows();
+    int nfaces = (int)mesh.F.rows();
+
+    Eigen::VectorXd v = mesh.Bmat * vars.vbar;
+    Eigen::VectorXd w = mesh.Bmat * vars.wbar;
+
     for (int i = 0; i < nfaces; i++)
     {
        for (int j = 0; j < 3; j++)
        {
-           vars.V_opt(i, j) = vars.v(3*i + j);
-           vars.W_opt(i, j) = vars.w(3*i + j);
+           vars.V_opt(i, j) = v(3*i + j);
+           vars.W_opt(i, j) = w(3*i + j);
        }
- //   	vars.V_opt.row(i) = vars.v.segment<3>(3 * i);//.transpose(); 
- //       vars.W_opt.row(i) = vars.w.segment<3>(3 * i);//.transpose(); 
     }
     
 }
 
 void alternatingMinimization(const MeshData &mesh, Weights &w, OptVars &vars)
 {
-    checkFiniteDifferences(vars, mesh, w);
+    //checkFiniteDifferences(vars, mesh, w);
     
     double orig = energy(vars, mesh, w);
     std::cout << "Original energy: " << orig << std::endl;
-    SparseMatrix<double> M;
+    SparseMatrix<double> Mraw;
     VectorXd b;
-    dvEnergy(vars, mesh, w, M, b);
+    dvEnergy(vars, mesh, w, Mraw, b);
     SimplicialLDLT<SparseMatrix<double> > solver;
+    SparseMatrix<double> BT = mesh.Bmat.transpose();
+    SparseMatrix<double> M = BT*Mraw*mesh.Bmat;
+    VectorXd rhs = mesh.Bmat.transpose() * b;
     solver.compute(M);
-    VectorXd newv = solver.solve(b);
-    std::cout << "Residual: " << (M*newv - b).norm() << std::endl;
-    vars.v = newv;
+    VectorXd newv = solver.solve(rhs);
+    std::cout << "Residual: " << (M*newv - rhs).norm() << std::endl;
+    vars.vbar = newv;
     double newe = energy(vars, mesh, w);
     std::cout << "After v: " << newe << std::endl;
 
-    dwEnergy(vars, mesh, w, M, b);
+    dwEnergy(vars, mesh, w, Mraw, b);
+    M = BT*Mraw*mesh.Bmat;
+    rhs = mesh.Bmat.transpose() * b;
     solver.compute(M);
-    VectorXd neww = solver.solve(b);
-    std::cout << "Residual: " << (M*neww - b).norm() << std::endl;
-    vars.w = neww;
-//    std::cout << neww << std::endl;
+    VectorXd neww = solver.solve(rhs);
+    std::cout << "Residual: " << (M*neww - rhs).norm() << std::endl;
+    vars.wbar = neww;
     newe = energy(vars, mesh, w);
     std::cout << "After w: " << newe << std::endl;
 
@@ -572,5 +593,5 @@ void alternatingMinimization(const MeshData &mesh, Weights &w, OptVars &vars)
     newe = energy(vars, mesh, w);
     std::cout << "After D: " << newe << std::endl;
 
-    rollupOptVars(vars);
+    rollupOptVars(mesh, vars);
 }
