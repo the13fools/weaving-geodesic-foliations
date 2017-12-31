@@ -22,6 +22,7 @@ struct Weights
     double lambdaVW; // weight of v = w constraint
     double lambdaVD; // weight of v, D compatibility constraint
     double lambdaDreg; // weight of regularization term on D
+    double lambdaunit; // weight of v and w unit-length
     Eigen::VectorXd handleWeights; // one weight per face, 1.0 = use the input v0 on this face as a handle, 0.0 = ignore this input v0.
 };
 

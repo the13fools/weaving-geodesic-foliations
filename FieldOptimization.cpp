@@ -281,6 +281,8 @@ double energy(const OptVars &vars, const MeshData &mesh, Weights &weights)
         Eigen::Vector3d vi = v.segment<3>(3 * i);
         double term = (wi.transpose() * mesh.Js[i].transpose() * Di.transpose() * vi);
         result += 0.5 * weights.lambdaGeodesic * term*term;
+
+        result += 0.5 * weights.lambdaunit * (wi.dot(vi) - 1.0)*(wi.dot(vi) - 1.0);
     }
 
     int nedges = (int)mesh.E.rows();
@@ -351,6 +353,22 @@ void dvEnergy(const OptVars &vars, const MeshData &mesh, Weights &weights, Eigen
     SparseMatrix<double> lambdaterm(3 * nfaces, 3 * nfaces);
     lambdaterm.setFromTriplets(lambdatermcoeffs.begin(), lambdatermcoeffs.end());
     M += weights.lambdaGeodesic * lambdaterm;
+
+    vector<Eigen::Triplet<double> > unittermcoeffs;
+    for (int i = 0; i < nfaces; i++)
+    {
+        Eigen::Vector3d wi = w.segment<3>(3 * i);
+        Eigen::Matrix3d wtw = wi * wi.transpose();
+        for(int j=0; j<3; j++)
+            for (int k = 0; k < 3; k++)
+            {
+                unittermcoeffs.push_back(Triplet<double>(3 * i + j, 3 * i + k, wtw(j, k)));
+            }
+    }
+    SparseMatrix<double> unitterm(3 * nfaces, 3 * nfaces);
+    unitterm.setFromTriplets(unittermcoeffs.begin(), unittermcoeffs.end());
+
+    M += weights.lambdaunit * unitterm;
    
     M += weights.lambdaVD *mesh.H;
 
@@ -386,6 +404,7 @@ void dvEnergy(const OptVars &vars, const MeshData &mesh, Weights &weights, Eigen
         b.segment<3>(3 * i) += weights.handleWeights[i] * mesh.v0.row(i).transpose();
     }
     b += weights.lambdaVW * w;
+    b += weights.lambdaunit * w;
 }
 
 // computes energy derivative, of the form M * w + b
@@ -419,10 +438,27 @@ void dwEnergy(const OptVars &vars, const MeshData &mesh, Weights &weights, Eigen
     lambdaterm.setFromTriplets(lambdatermcoeffs.begin(), lambdatermcoeffs.end());
     M += weights.lambdaGeodesic * lambdaterm;
 
+    vector<Eigen::Triplet<double> > unittermcoeffs;
+    for (int i = 0; i < nfaces; i++)
+    {
+        Eigen::Vector3d vi = v.segment<3>(3 * i);
+        Eigen::Matrix3d vtv = vi * vi.transpose();
+        for(int j=0; j<3; j++)
+            for (int k = 0; k < 3; k++)
+            {
+                unittermcoeffs.push_back(Triplet<double>(3 * i + j, 3 * i + k, vtv(j, k)));
+            }
+    }
+    SparseMatrix<double> unitterm(3 * nfaces, 3 * nfaces);
+    unitterm.setFromTriplets(unittermcoeffs.begin(), unittermcoeffs.end());
+
+    M += weights.lambdaunit * unitterm;
+
     b.resize(3 * nfaces);
     b.setZero();
 
     b += weights.lambdaVW * v;
+    b += weights.lambdaunit * v;
 }
 
 // computes energy derivative, of the form M * D + b

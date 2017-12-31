@@ -128,6 +128,7 @@ int main(int argc, char *argv[])
     w.lambdaGeodesic = 1000;
     w.lambdaVD = 1000;
     w.lambdaVW = 1000;
+    w.lambdaunit = 10;
 
     // Plot the mesh  
     viewer = new igl::viewer::Viewer();
@@ -160,6 +161,7 @@ int main(int argc, char *argv[])
         viewer.ngui->addVariable("VW", w.lambdaVW);
         viewer.ngui->addVariable("D Compatibility", w.lambdaVD);
         viewer.ngui->addVariable("D Regularization", w.lambdaDreg);
+        viewer.ngui->addVariable("Unit Length", w.lambdaunit);
 
               // call to generate menu
         viewer.screen->performLayout();
