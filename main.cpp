@@ -144,7 +144,7 @@ int main(int argc, char *argv[])
     if (!igl::readOBJ("../sphere_small.obj", V, F))
         return -1;
     curMesh = new MeshData(V, F);
-    physicsDataFromMesh(*curMesh, phydata);
+  //  physicsDataFromMesh(*curMesh, phydata);
 
     w.handleWeights.resize(F.rows());
     w.handleWeights.setConstant(1.0);
