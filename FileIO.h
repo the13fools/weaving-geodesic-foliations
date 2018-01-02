@@ -6,5 +6,6 @@
 
 Eigen::MatrixXd readMatrix(const char *filename);
 
+void logToFile(const Eigen::MatrixXd W, std::string foldername, std::string filename);
 
 #endif

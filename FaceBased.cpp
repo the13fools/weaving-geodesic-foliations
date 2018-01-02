@@ -1,15 +1,7 @@
 #include "FaceBased.h"
 #include <Eigen/Geometry>
+#include "VectorUtils.h"
 
-Eigen::Vector3d faceNormal(const Eigen::MatrixXi &F, const Eigen::MatrixXd &V, int faceidx)
-{
-    Eigen::Vector3d p0 = V.row(F(faceidx, 0));
-    Eigen::Vector3d p1 = V.row(F(faceidx, 1));
-    Eigen::Vector3d p2 = V.row(F(faceidx, 2));
-    Eigen::Vector3d n = (p1 - p0).cross(p2 - p0);
-    n /= n.norm();
-    return n;
-}
 
 static void oneFaceGradientMatrix(const Eigen::MatrixXi &F, const Eigen::MatrixXd &V, const Eigen::MatrixXi &E, const Eigen::MatrixXi &F_edges, int edgeidx, Eigen::Vector3d &cdiff1, Eigen::Vector3d &cdiff2)
 {

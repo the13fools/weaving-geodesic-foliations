@@ -1,5 +1,10 @@
 #include <Eigen/Core>
 #include <fstream>
+#include <iostream>
+
+// For making directories
+#include <sys/stat.h>
+// #include <direct.h>
 
 using namespace std;
 
@@ -44,3 +49,30 @@ Eigen::MatrixXd readMatrix(const char *filename)
     return result;
 }
 
+
+void logToFile(const Eigen::MatrixXd W, std::string foldername, std::string filename)
+{
+#ifndef WIN32
+    char folderpath[50];
+    sprintf(folderpath, "log/%s", foldername.c_str());
+    mkdir("log", S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+    mkdir(folderpath, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+    char logpath[50];
+    sprintf(logpath, "%s/%s.txt", folderpath, filename.c_str());   
+    std::ofstream myfile (logpath);
+    for(int i = 0; i < W.rows(); i++)
+    {
+        if (myfile.is_open())
+        {
+	    myfile << W.row(i) << "\n";
+	}
+
+	else
+	{
+	    std::cout << "Unable to open file";
+	    break;
+	}
+    } 
+    myfile.close();
+#endif
+}
