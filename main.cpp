@@ -14,7 +14,10 @@
 #include "FaceBased.h"
 #include "FieldOptimization.h"
 #include "RelaxViewer.h"
+#include "Physics.h"
+
 MeshData *curMesh;
+PhysicsData phydata;
 
 igl::viewer::Viewer *viewer;
 Weights w;
@@ -141,6 +144,7 @@ int main(int argc, char *argv[])
     if (!igl::readOBJ("../sphere_small.obj", V, F))
         return -1;
     curMesh = new MeshData(V, F);
+    physicsDataFromMesh(*curMesh, phydata);
 
     w.handleWeights.resize(F.rows());
     w.handleWeights.setConstant(1.0);

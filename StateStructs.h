@@ -39,6 +39,7 @@ struct MeshData
     Eigen::MatrixXi F; // face indices
     Eigen::MatrixXi E; // edge indices
     Eigen::MatrixXi F_edges; // face edge indices
+    Eigen::MatrixXi faceWings; // the three vertices opposite the edges of each face
     std::vector<Eigen::Matrix3d> Js; // rotations by 90 degrees
     Eigen::MatrixXd Ms; // discrete gradient operator vectors
     Eigen::MatrixXd B; // 3*faces x 2 matrix of barycentric bases

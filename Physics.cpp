@@ -168,23 +168,7 @@ void precomputeFundamentalForms(
 void physicsDataFromMesh(const MeshData &mesh, PhysicsData &phys)
 {
     int nfaces = mesh.F.rows();
-    MatrixXi faceWings(nfaces, 3);
-    for (int i = 0; i < nfaces; i++) {
-        for (int j = 0; j < 3; j++) {
-            int result = -1;
-            int p1 = mesh.F(i, (j + 1) % 3);
-            int p2 = mesh.F(i, (j + 2) % 3);
-            for (int k = 0; k < nfaces; k++) {
-                for (int l = 0; l < 3; l++) {
-                    if (mesh.F(k, (l + 1) % 3) == p2 && mesh.F(k, (l + 2) % 3) == p1) {
-                        result = mesh.F(k, l);
-                    }
-                }
-            }
-            faceWings(i, j) = result;
-        }
-    }
-
+    
     phys.as.resize(nfaces);
     phys.bs.resize(nfaces);
     phys.das.resize(nfaces);
@@ -192,6 +176,6 @@ void physicsDataFromMesh(const MeshData &mesh, PhysicsData &phys)
 
     for (int i = 0; i < nfaces; i++)
     {
-        precomputeFundamentalForms(mesh.V, mesh.F.row(i), faceWings.row(i), phys.as[i], phys.bs[i], phys.das[i], phys.dbs[i]);
+        precomputeFundamentalForms(mesh.V, mesh.F.row(i), mesh.faceWings.row(i), phys.as[i], phys.bs[i], phys.das[i], phys.dbs[i]);
     }
 }

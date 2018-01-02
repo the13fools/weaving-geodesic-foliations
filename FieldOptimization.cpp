@@ -197,11 +197,29 @@ MeshData::MeshData(const Eigen::MatrixXd &V,
 {
     buildEdges(F, E);
     buildEdgesPerFace(F, E, F_edges);
+    
+    int nfaces = (int)F.rows();
+    faceWings.resize(nfaces, 3);
+    for (int i = 0; i < nfaces; i++) {
+        for (int j = 0; j < 3; j++) {
+            int result = -1;
+            int p1 = F(i, (j + 1) % 3);
+            int p2 = F(i, (j + 2) % 3);
+            for (int k = 0; k < nfaces; k++) {
+                for (int l = 0; l < 3; l++) {
+                    if (F(k, (l + 1) % 3) == p2 && F(k, (l + 2) % 3) == p1) {
+                        result = F(k, l);
+                    }
+                }
+            }
+            faceWings(i, j) = result;
+        }
+    }
+
     computeJs(F, V, Js);
     computeCentroids(F,V,centroids_F);
     computeGradientMatrices(F, V, E, F_edges, Ms);
 
-    int nfaces = (int)F.rows();
     H.resize(3 * nfaces, 3 * nfaces);
     vector<Triplet<double> > compattermcoeffs;
     int nedges = (int)E.rows();
