@@ -16,24 +16,6 @@ void updateView(const MeshData *curMesh, igl::viewer::Viewer *viewer)
 {
     int nFaces = curMesh->F.rows();
 
-//    logToFile(W, folderName, std::to_string(step));
-
-
-//    if (!is_fd_set)
-//    {
-//        is_fd_set = true;
- //       computeOperatorGradient(Ms, del_W_F, W, Op_Grad_fd);
-//        loadFiniteDifference();
-//      std::cout << Op_Grad_fd.rows() << " " << Op_Grad_fd.cols() << "\n";
-//    }
-
-/*    Eigen::MatrixXd Op_Grad;
-    dvEnergy(*curMesh, W, W, Op_Grad);
-    Eigen::MatrixXd Op_Grad2;
-    dvEnergy(*curMesh, W, W, Op_Grad2);
-    logToFile(Op_Grad, folderName, "op_grad");
-    logToFile(Op_Grad2, folderName, "op_grad2");
-*/
     // Set mesh colors and log operator state
     Eigen::VectorXd Z(nFaces);
     Eigen::Vector3d testDir(1,0,0);
@@ -128,6 +110,8 @@ void updateView(const MeshData *curMesh, igl::viewer::Viewer *viewer)
         viewer->data.add_edges(curMesh->centroids_F + curMesh->optVars.W_opt*avg/2, 
 		    curMesh->centroids_F, blue);
     }
+
+    viewer->data.add_edges(curMesh->centroids_F  + curMesh->optVars.W_opt.normalized()*avg/2, curMesh->centroids_F, red);
 
  //   viewer->data.add_edges(centroids_F  + (Op_Grad)*avg/2*operator_scale, centroids_F, green);
     viewer->data.add_edges(curMesh->centroids_F  + curMesh->v0*avg/2, curMesh->centroids_F, green);
