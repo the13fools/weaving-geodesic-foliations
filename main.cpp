@@ -9,7 +9,7 @@
 #include <sys/stat.h>
 // #include <direct.h>
 
-#include "DataLoad.h"
+#include "InitField.h"
 #include "Covariant.h"
 #include "FaceBased.h"
 #include "FieldOptimization.h"
@@ -27,21 +27,21 @@ char fileName[50] = "0-0-10ksteps";
 std::string folderName = "logging_location";
 std::string fieldName = "field_dt.txt";
 
-int idx0 = 890;
-int idx1 = 4064;
-int idx2 = 4537;
-int idx3 = 9243;
+int idx0 = 0;
+int idx1 = 1;
+int idx2 = 2;
+int idx3 = 3;
 
 double lambda = 10.;
 
-double px0 = 10.;
-double py0 = 0.;
-double px1 = 10.;
-double py1 = 0.;
-double px2 = 0.;
-double py2 = 10.;
-double px3 = 0.;
-double py3 = 10.;
+double pu0 = 1.;
+double pv0 = 1.;
+double pu1 = 1.;
+double pv1 = 1.;
+double pu2 = 1.;
+double pv2 = 1.;
+double pu3 = 1.;
+double pv3 = 1.;
 
 double operator_scale = 1.;
 int opt_step = 0;
@@ -49,17 +49,33 @@ int opt_step = 0;
 
 
 
-int descentStep = 0;
-void takeGradientDescentStep()
+void setHandleWeights(Weights weight)
 {
+    
     int nfaces = curMesh->F.rows();
-  //  Weights w;
     w.handleWeights.resize(nfaces);
-    w.handleWeights.setConstant(1.0);
+    w.handleWeights.setConstant(0.0);
+    w.handleWeights(idx0) = 1.;
+    w.handleWeights(idx1) = 1.;
+    w.handleWeights(idx2) = 1.;
+    w.handleWeights(idx3) = 1.;
+
+
     w.lambdaDreg = 1;
     w.lambdaGeodesic = lambda;
     w.lambdaVD = lambda;
     w.lambdaVW = lambda;
+
+
+}
+
+
+int descentStep = 0;
+void takeGradientDescentStep()
+{
+    int nfaces = curMesh->F.rows();
+    setHandleWeights(w);
+
 
     for (int loops = 0; loops < desc_loops; loops++) {
 
@@ -86,14 +102,13 @@ void showVectorField()
 //    computeWhirlpool(p, centroids_F, W_init);
 //    computeWhirlpool(p, centroids_F, W);
 //    W_init = W;
-/*    W = Eigen::MatrixXd::Zero(W_init.rows(), W_init.cols());
-    for (int i = 0; i < W_init.rows(); i++) 
+    for (int i = 0; i < curMesh->F.rows(); i++) 
     {
         curMesh->v0.row(i) = projectOntoFace(curMesh->v0.row(i), curMesh->F, curMesh->V, i);
     }
       
     initOptVars(*curMesh, curMesh->v0, curMesh->optVars);
-*/
+
     descentStep = 1;
     updateView(curMesh, viewer);
 
@@ -123,7 +138,7 @@ int main(int argc, char *argv[])
 {
     Eigen::MatrixXd V;
     Eigen::MatrixXi F;
-    if (!igl::readOBJ("../sphere.obj", V, F))
+    if (!igl::readOBJ("../sphere_small.obj", V, F))
         return -1;
     curMesh = new MeshData(V, F);
 
@@ -169,21 +184,21 @@ int main(int argc, char *argv[])
         viewer.ngui->addVariable("D Regularization", w.lambdaDreg);
         viewer.ngui->addVariable("Unit Length", w.lambdaunit);
 
-      viewer.ngui->addWindow(Eigen::Vector2i(-10, 400), "Handles");
+      viewer.ngui->addWindow(Eigen::Vector2i(1000, 10), "Handles");
       viewer.ngui->addVariable("Norm Vectors", curMesh->vs.normFaceVectors);
       viewer.ngui->addVariable("lambda", lambda);
       viewer.ngui->addVariable("idx0", idx0);
-      viewer.ngui->addVariable("px",px0);
-      viewer.ngui->addVariable("py",py0);
+      viewer.ngui->addVariable("pu",pu0);
+      viewer.ngui->addVariable("pv",pv0);
       viewer.ngui->addVariable("idx1", idx1);
-      viewer.ngui->addVariable("px",px1);
-      viewer.ngui->addVariable("py",py1);
-      viewer.ngui->addVariable("idx0", idx2);
-      viewer.ngui->addVariable("px",px2);
-      viewer.ngui->addVariable("py",py2);
-      viewer.ngui->addVariable("idx0", idx3);
-      viewer.ngui->addVariable("px",px3);
-      viewer.ngui->addVariable("py",py3);
+      viewer.ngui->addVariable("pu",pu1);
+      viewer.ngui->addVariable("pv",pv1);
+      viewer.ngui->addVariable("idx2", idx2);
+      viewer.ngui->addVariable("pu",pu2);
+      viewer.ngui->addVariable("pv",pv2);
+      viewer.ngui->addVariable("idx3", idx3);
+      viewer.ngui->addVariable("pu",pu3);
+      viewer.ngui->addVariable("pv",pv3);
 
               // call to generate menu
         viewer.screen->performLayout();

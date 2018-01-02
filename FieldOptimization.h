@@ -2,8 +2,6 @@
 #define FIELDOPTIMIZATION_H
 
 #include <Eigen/Core>
-#include <Eigen/Sparse>
-#include <vector>
 #include "StateStructs.h"
 
 void initOptVars(const MeshData &mesh, const Eigen::MatrixXd &v0, OptVars &vars);

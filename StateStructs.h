@@ -2,6 +2,8 @@
 #define STATESTRUCTS_H
 
 #include <Eigen/Core>
+#include <Eigen/Sparse>
+#include <vector>
 
 struct OptVars
 {
