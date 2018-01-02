@@ -15,6 +15,7 @@
 #include "FieldOptimization.h"
 #include "RelaxViewer.h"
 #include "Physics.h"
+#include "VectorUtils.h"
 
 MeshData *curMesh;
 PhysicsData phydata;
@@ -52,24 +53,33 @@ int opt_step = 0;
 
 
 
-void setHandleWeights(Weights weight)
+void setHandleWeights(Weights &weight)
 {
-    
     int nfaces = curMesh->F.rows();
     w.handleWeights.resize(nfaces);
     w.handleWeights.setConstant(0.0);
-    w.handleWeights(idx0) = 1.;
-    w.handleWeights(idx1) = 1.;
-    w.handleWeights(idx2) = 1.;
-    w.handleWeights(idx3) = 1.;
+    
+    int idx[] = {idx0, idx1, idx2, idx3};
+    double pu[] = {pu0, pu1, pu2, pu3};
+    double pv[] = {pv0, pv1, pv2, pv3};
+       
+    for (int i = 0; i < 4; i++) 
+    {
+        w.handleWeights(idx[i]) = 1.;
+	Eigen::Vector3d u = curMesh->V.row(curMesh->F(idx[i], 0)) 
+	                        - curMesh->V.row(curMesh->F(idx[i], 1));
+	Eigen::Vector3d n = faceNormal(curMesh->F,curMesh->V, idx[i]);
+	u.normalize();
+	Eigen::Vector3d v = u.cross(n);
+	curMesh->v0.row(idx[i]) = u * pu[i] + v * pv[i];
+    }
 
+       
 
     w.lambdaDreg = 1;
     w.lambdaGeodesic = lambda;
     w.lambdaVD = lambda;
     w.lambdaVW = lambda;
-
-
 }
 
 
@@ -78,7 +88,6 @@ void takeGradientDescentStep()
 {
     int nfaces = curMesh->F.rows();
     setHandleWeights(w);
-
 
     for (int loops = 0; loops < desc_loops; loops++) {
 
@@ -97,20 +106,25 @@ void takeGradientDescentStep()
 
 void showVectorField()
 {
-    Eigen::Vector3d p(px, py,0);
-    computeDistanceField(p, curMesh->centroids_F, curMesh->v0);
-    initOptVars(*curMesh, curMesh->v0, curMesh->optVars);
+//    Eigen::Vector3d p(px, py,0);
+//    computeDistanceField(p, curMesh->centroids_F, curMesh->v0);
+//    initOptVars(*curMesh, curMesh->v0, curMesh->optVars);
 
 //    computeDistanceField(p, centroids_F, W_init);
 //    computeWhirlpool(p, centroids_F, W_init);
 //    computeWhirlpool(p, centroids_F, W);
 //    W_init = W;
-    for (int i = 0; i < curMesh->F.rows(); i++) 
-    {
-        curMesh->v0.row(i) = projectOntoFace(curMesh->v0.row(i), curMesh->F, curMesh->V, i);
-    }
+//    for (int i = 0; i < curMesh->F.rows(); i++) 
+//    {
+//        curMesh->v0.row(i) = projectOntoFace(curMesh->v0.row(i), curMesh->F, curMesh->V, i);
+//    }
       
+    curMesh->v0 = Eigen::MatrixXd::Zero(curMesh->F.rows(), 3);
+    setHandleWeights(w);
+    propogateField(curMesh->F, curMesh->V, curMesh->E, curMesh->F_edges, curMesh->v0);
     initOptVars(*curMesh, curMesh->v0, curMesh->optVars);
+    
+
 
     descentStep = 1;
     updateView(curMesh, viewer);
@@ -141,7 +155,7 @@ int main(int argc, char *argv[])
 {
     Eigen::MatrixXd V;
     Eigen::MatrixXi F;
-    if (!igl::readOBJ("../sphere_small.obj", V, F))
+    if (!igl::readOBJ("../sphere.obj", V, F))
         return -1;
     curMesh = new MeshData(V, F);
   //  physicsDataFromMesh(*curMesh, phydata);

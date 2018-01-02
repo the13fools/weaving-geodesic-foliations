@@ -63,7 +63,7 @@ void updateView(const MeshData *curMesh, igl::viewer::Viewer *viewer)
 
     //  igl::jet(Z,true,colorField);
 
-    igl::ColorMapType viz_color = igl::COLOR_MAP_TYPE_MAGMA;
+    igl::ColorMapType viz_color = igl::COLOR_MAP_TYPE_INFERNO;
 
     switch (shading_enum_state)
     {
