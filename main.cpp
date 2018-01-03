@@ -124,8 +124,13 @@ void showVectorField()
     physicalForces(*curMesh, phydata, wf, curMesh->optVars.vbar, 1.0, 1.0 / 3.0, forceField);    
 
     // test the force code using finite difference
-    for(int i=0; i<3; i++)
-        testForces(*curMesh, phydata, wf, curMesh->optVars.vbar, 1.0, 1.0 / 3.0, 100, i);
+    for (int i = 0; i < 3; i++)
+    {
+        // test bend force
+        testForces(*curMesh, phydata, wf, curMesh->optVars.vbar, 100.0, 0.0, 100, i);
+        // test twist force
+        testForces(*curMesh, phydata, wf, curMesh->optVars.vbar, 0.0, 100.0, 100, i);
+    }
 
     descentStep = 1;
     updateView(curMesh, viewer);
