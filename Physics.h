@@ -18,4 +18,9 @@ struct PhysicsData
 
 void physicsDataFromMesh(const MeshData &mesh, PhysicsData &phys);
 
+void physicalForces(const MeshData &mesh, const PhysicsData &fundamentalForms, const Eigen::VectorXd &widthFractions, const Eigen::VectorXd &vectorField, double kb, double kt,
+    Eigen::MatrixXd &forceField);
+
+void testForces(const MeshData &mesh, const PhysicsData &fundamentalForms, const Eigen::VectorXd &widthFractions, const Eigen::VectorXd &vectorField, double kb, double kt, int vertex, int coord);
+
 #endif

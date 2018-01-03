@@ -36,6 +36,7 @@ struct VisualizationState
 {
     bool normFaceVectors;
     std::vector<Eigen::Vector3d> curve;
+    double physicsEnergyArrowScale;
 };
 
 // Keep application state in here until it gets annoying.

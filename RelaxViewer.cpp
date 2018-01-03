@@ -112,6 +112,7 @@ void updateView(const MeshData *curMesh, igl::viewer::Viewer *viewer)
 //              Z(i) = (Op_Grad).row(i).norm();
                 break;
             case INIT_MAGNITUDE:
+              //  Z(i) = log( (curMesh->optVars.W_opt).row(i).squaredNorm() );
                 Z(i) = log( (curMesh->optVars.W_opt-curMesh->v0).row(i).squaredNorm() );
 //              Eigen::Vector3d test_vec(-Op_Grad(i,1), Op_Grad(i,0), 0);
 //              Z(i) = (Op_Grad_fd).row(i).normalized()
@@ -132,7 +133,7 @@ void updateView(const MeshData *curMesh, igl::viewer::Viewer *viewer)
 
     //  igl::jet(Z,true,colorField);
 
-    igl::ColorMapType viz_color = igl::COLOR_MAP_TYPE_INFERNO;
+    igl::ColorMapType viz_color = igl::COLOR_MAP_TYPE_JET;
 
     switch (shading_enum_state)
     {
@@ -162,28 +163,33 @@ void updateView(const MeshData *curMesh, igl::viewer::Viewer *viewer)
 
 //    viewer->data.add_edges(centroids_F  + (W - W_init)*avg/2*operator_scale, centroids_F, red);
 //    viewer->data.add_edges(centroids_F  + (Op_Grad*operator_scale - Op_Grad_fd)*avg/2, centroids_F, red);
+    
     if (curMesh->vs.normFaceVectors)
     {
-	Eigen::MatrixXd field;
-	field.resize(nFaces, 3);
-	for (int i = 0; i < nFaces; i++)
-	{
-	    field.row(i) = curMesh->optVars.W_opt.row(i).normalized();
-	}
+        Eigen::MatrixXd field;
+        field.resize(nFaces, 3);
+        for (int i = 0; i < nFaces; i++)
+        {
+            field.row(i) = curMesh->optVars.W_opt.row(i).normalized();
+        }
 
-	viewer->data.add_edges(curMesh->centroids_F + field*avg/2, 
-		    curMesh->centroids_F, blue);
+        viewer->data.add_edges(curMesh->centroids_F + field*avg / 2,
+            curMesh->centroids_F, green);
     }
     else
     {
-        viewer->data.add_edges(curMesh->centroids_F + curMesh->optVars.W_opt*avg/2, 
-		    curMesh->centroids_F, blue);
+        viewer->data.add_edges(curMesh->centroids_F + curMesh->optVars.W_opt*avg / 2,
+            curMesh->centroids_F, green);
     }
 
-    viewer->data.add_edges(curMesh->centroids_F  + curMesh->optVars.W_opt.normalized()*avg/2, curMesh->centroids_F, red);
+//    viewer->data.add_edges(curMesh->centroids_F  + curMesh->optVars.W_opt.normalized()*avg/2 * curMesh->vs.physicsEnergyArrowScale, curMesh->centroids_F, red);
 
  //   viewer->data.add_edges(centroids_F  + (Op_Grad)*avg/2*operator_scale, centroids_F, green);
-    viewer->data.add_edges(curMesh->centroids_F  + curMesh->v0*avg/2, curMesh->centroids_F, green);
+    viewer->data.add_edges(curMesh->centroids_F  + curMesh->v0*avg/2, curMesh->centroids_F, blue);
+
+    extern Eigen::MatrixXd forceField;
+
+    viewer->data.add_edges(curMesh->V  + (forceField) * avg * curMesh->vs.physicsEnergyArrowScale, curMesh->V, red);
 } 
 
 
