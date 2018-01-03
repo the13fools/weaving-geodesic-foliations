@@ -25,9 +25,17 @@ struct Weights
     Eigen::VectorXd handleWeights; // one weight per face, 1.0 = use the input v0 on this face as a handle, 0.0 = ignore this input v0.
 };
 
+
+enum shading_enum {
+    OP_ERROR = 0,
+    INIT_DIRECTION,
+    INIT_MAGNITUDE
+};
+
 struct VisualizationState
 {
     bool normFaceVectors;
+    std::vector<Eigen::Vector3d> curve;
 };
 
 // Keep application state in here until it gets annoying.

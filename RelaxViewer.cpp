@@ -2,7 +2,7 @@
 #include <igl/viewer/Viewer.h>
 
 #include "RelaxViewer.h"
-
+#include "VectorUtils.h"
 
 double energy_OP = 0.;
 //void updateView(const MeshData &curMesh, igl::viewer::Viewer &viewer){}
@@ -11,6 +11,75 @@ double energy_OP = 0.;
 Eigen::MatrixXd colorField;
 
 shading_enum shading_enum_state = INIT_MAGNITUDE;
+
+/*
+// This: Recieves a point on an edge of a triangle
+//       Returns the vertex id opposing that edge in the triangle
+int getOpVId(const MeshData &md, const Eigen::Vector3d prev_point, int faceId)
+{
+    for (int j = 0; j < 3; j++)
+    {
+	Eigen::VectorXi e = md.E.row(md.F_edges(faceId, j));
+	Eigen::Vector3d e_test =  md.V.row( e(0) ) - md.V.row( e(1) );
+	e_test.normalize();
+	if ( e_test.dot( (prev_point - e_test ).normalized() ) > .9 )
+	{
+	    Eigen::VectorXi e_next = md.E.row(md.F_edges(faceId, (j + 1) % 3 ));
+	    if (e_next(0) == e(0) || e_next(0) == e(1) )
+	    {
+                return e_next(1);
+	    }
+	    else 
+	    {
+                return e_next(0);
+	    }
+	} 
+    }
+
+}
+ 
+
+void traceCurve(const MeshData &md, const Eigen::Vector3d dir, int faceId, VisualizationState &vs)
+{
+    vs.curve.clear();
+    vs.curve.push_back(.5 * md.V.row(md.F(faceId, 0)) + .5 * md.V.row(md.F(faceId, 1)) ); 
+    // check that vector is pointing in.  
+    // TODO
+    // find next edge
+    int curr_face_id = faceId;
+    Eigen::Vector3d cur_dir = dir;
+    for (int i = 0; i < 200; i++)
+    {
+        Eigen::Vector3d prev_point = vs.curve.back();
+	int op_v_id = getOpVId(md, prev_point, curr_face_id);
+            
+        Eigen::Vector3d split = prev_point - md.V.row(op_v_id);
+        split.normalize();
+	Eigen::Vector3d n = faceNormal(md.F, md.V, curr_face_id);
+	Eigen::Vector3d perp = split.cross(n);
+
+	int op_edge_id = 0;
+        for (int j = 0; j < 3; j++)
+	{
+	    Eigen::VectorXi e = md.E.row(md.F_edges(faceId, j));
+	    if ( e(0) == op_v_id || e(1) == op_v_id )
+            {
+                Eigen::VectorXd e_test = md.V.row(e(0)) - md.V.row(e(1));
+                if ( e_test.dot(perp) * cur_dir.dot(perp) > 0.) 
+                {
+                    op_edge_id = j;
+                    break;
+                }               
+            }
+        }
+        
+        // Find intersection point.
+        
+
+     }
+}
+*/
+
 
 void updateView(const MeshData *curMesh, igl::viewer::Viewer *viewer)
 {
