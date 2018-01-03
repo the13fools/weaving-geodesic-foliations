@@ -36,8 +36,6 @@ int idx1 = 1;
 int idx2 = 2;
 int idx3 = 3;
 
-double lambda = 10.;
-
 double pu0 = 1.;
 double pv0 = 1.;
 double pu1 = 1.;
@@ -51,7 +49,7 @@ double operator_scale = 1.;
 int opt_step = 0;
 
 
-
+Eigen::MatrixXd forceField; // temp global for now
 
 void setHandleWeights(Weights &weight)
 {
@@ -63,23 +61,16 @@ void setHandleWeights(Weights &weight)
     double pu[] = {pu0, pu1, pu2, pu3};
     double pv[] = {pv0, pv1, pv2, pv3};
        
-    for (int i = 0; i < 4; i++) 
+    for (int i = 0; i < 4; i++)
     {
         w.handleWeights(idx[i]) = 1.;
-	Eigen::Vector3d u = curMesh->V.row(curMesh->F(idx[i], 0)) 
-	                        - curMesh->V.row(curMesh->F(idx[i], 1));
-	Eigen::Vector3d n = faceNormal(curMesh->F,curMesh->V, idx[i]);
-	u.normalize();
-	Eigen::Vector3d v = u.cross(n);
-	curMesh->v0.row(idx[i]) = u * pu[i] + v * pv[i];
+        Eigen::Vector3d u = curMesh->V.row(curMesh->F(idx[i], 0))
+            - curMesh->V.row(curMesh->F(idx[i], 1));
+        Eigen::Vector3d n = faceNormal(curMesh->F, curMesh->V, idx[i]);
+        u.normalize();
+        Eigen::Vector3d v = u.cross(n);
+        curMesh->v0.row(idx[i]) = u * pu[i] + v * pv[i];
     }
-
-       
-
-    w.lambdaDreg = 1;
-    w.lambdaGeodesic = lambda;
-    w.lambdaVD = lambda;
-    w.lambdaVW = lambda;
 }
 
 
@@ -100,8 +91,12 @@ void takeGradientDescentStep()
             alternatingMinimization(*curMesh, w, curMesh->optVars);
     	}
         descentStep++;
-        updateView(curMesh, viewer);
     }
+
+    Eigen::VectorXd wf(curMesh->F.rows());
+    wf.setConstant(1.0);
+    physicalForces(*curMesh, phydata, wf, curMesh->optVars.vbar, 1.0, 1.0 / 3.0, forceField);    
+    updateView(curMesh, viewer);
 }
 
 void showVectorField()
@@ -124,7 +119,13 @@ void showVectorField()
     propogateField(curMesh->F, curMesh->V, curMesh->E, curMesh->F_edges, curMesh->v0);
     initOptVars(*curMesh, curMesh->v0, curMesh->optVars);
     
+    Eigen::VectorXd wf(curMesh->F.rows());
+    wf.setConstant(1.0);
+    physicalForces(*curMesh, phydata, wf, curMesh->optVars.vbar, 1.0, 1.0 / 3.0, forceField);    
 
+    // test the force code using finite difference
+    for(int i=0; i<3; i++)
+        testForces(*curMesh, phydata, wf, curMesh->optVars.vbar, 1.0, 1.0 / 3.0, 100, i);
 
     descentStep = 1;
     updateView(curMesh, viewer);
@@ -147,6 +148,10 @@ void addNoiseToField()
     initOptVars(*curMesh, curMesh->v0, curMesh->optVars);
   
     descentStep = 1;
+    Eigen::VectorXd wf(curMesh->F.rows());
+    wf.setConstant(1.0);
+    physicalForces(*curMesh, phydata, wf, curMesh->optVars.vbar, 1.0, 1.0 / 3.0, forceField);    
+
     updateView(curMesh, viewer);
 }
 
@@ -158,7 +163,7 @@ int main(int argc, char *argv[])
     if (!igl::readOBJ("../sphere.obj", V, F))
         return -1;
     curMesh = new MeshData(V, F);
-  //  physicsDataFromMesh(*curMesh, phydata);
+    physicsDataFromMesh(*curMesh, phydata);
 
     w.handleWeights.resize(F.rows());
     w.handleWeights.setConstant(1.0);
@@ -204,7 +209,6 @@ int main(int argc, char *argv[])
 
       viewer.ngui->addWindow(Eigen::Vector2i(1000, 10), "Handles");
       viewer.ngui->addVariable("Norm Vectors", curMesh->vs.normFaceVectors);
-      viewer.ngui->addVariable("lambda", lambda);
       viewer.ngui->addVariable("idx0", idx0);
       viewer.ngui->addVariable("pu",pu0);
       viewer.ngui->addVariable("pv",pv0);

@@ -1,6 +1,7 @@
 #include "Physics.h"
 #include <iostream>
 #include "FieldOptimization.h"
+#include <Eigen/Dense>
 
 using namespace Eigen;
 
@@ -178,4 +179,120 @@ void physicsDataFromMesh(const MeshData &mesh, PhysicsData &phys)
     {
         precomputeFundamentalForms(mesh.V, mesh.F.row(i), mesh.faceWings.row(i), phys.as[i], phys.bs[i], phys.das[i], phys.dbs[i]);
     }
+}
+
+double physicalEnergy(const MeshData &mesh, const PhysicsData &fundamentalForms, const Eigen::VectorXd &widthFractions, const Eigen::VectorXd &vectorField, double kb, double kt)
+{
+    double result = 0;
+
+    int nfaces = mesh.F.rows();
+    for (int i = 0; i < nfaces; i++)
+    {
+        Matrix2d ainv = fundamentalForms.as[i].inverse();
+        Vector2d v = vectorField.segment<2>(2 * i);
+        Vector2d vperp = (ainv * v) * (v.transpose() * fundamentalForms.as[i] * v) / (v.transpose() * ainv * v);
+        double af = sqrt(fundamentalForms.as[i].determinant()) * 0.5;
+        Vector3i faceverts = mesh.F.row(i);
+        Vector3i flapverts = mesh.faceWings.row(i);
+        double w = widthFractions[i];
+
+        double vTbv = v.transpose() * fundamentalForms.bs[i] * v;
+        double JvTbv = vperp.transpose() * fundamentalForms.bs[i] * v;
+        double vTav = v.transpose() * fundamentalForms.as[i] * v;
+
+        result += af * w * 0.5 * kb * (vTbv * vTbv) / (vTav * vTav);
+        result += af * w * 0.5 * kt * (JvTbv * JvTbv) / (vTav * vTav);
+    }
+    return result;
+}
+
+void physicalForces(const MeshData &mesh, const PhysicsData &fundamentalForms, const Eigen::VectorXd &widthFractions, const Eigen::VectorXd &vectorField, double kb, double kt,
+    Eigen::MatrixXd &forceField)
+{
+    int nfaces = mesh.F.rows();
+    int nverts = mesh.V.rows();
+    forceField.resize(nverts, 3);
+    forceField.setZero();
+    // energy is
+    // \sum_faces A_f w_f kb/2 ( v_f^T b v_f )^2 / (v_f^T a v_f)^2 + \sum_faces A_f w_f kt/2 (Jv_f^T b v_f)^2 / (v_f^T a v_f)^2
+
+    for (int i = 0; i < nfaces; i++)
+    {
+        Matrix2d ainv = fundamentalForms.as[i].inverse();
+        Vector2d v = vectorField.segment<2>(2 * i);
+        Vector2d vperp = (ainv * v) * (v.transpose() * fundamentalForms.as[i] * v) / (v.transpose() * ainv * v);
+        double af = sqrt(fundamentalForms.as[i].determinant()) * 0.5;
+        Vector3i faceverts = mesh.F.row(i);
+        Vector3i flapverts = mesh.faceWings.row(i);
+        double w = widthFractions[i];
+
+        double vTbv = v.transpose() * fundamentalForms.bs[i] * v;
+        double JvTbv = vperp.transpose() * fundamentalForms.bs[i] * v;
+        double vTav = v.transpose() * fundamentalForms.as[i] * v;
+
+        // derivative of b terms
+        double bendcoeff1 = af * w * kb * vTbv / vTav / vTav;
+        for (int j = 0; j < 3; j++)
+        {
+            forceField.row(faceverts[j]) += bendcoeff1 * v[0] * v[0] * fundamentalForms.dbs[i].block<1, 3>(0, 3 * j);
+            forceField.row(faceverts[j]) += bendcoeff1 * v[0] * v[1] * fundamentalForms.dbs[i].block<1, 3>(1, 3 * j);
+            forceField.row(faceverts[j]) += bendcoeff1 * v[1] * v[0] * fundamentalForms.dbs[i].block<1, 3>(1, 3 * j);
+            forceField.row(faceverts[j]) += bendcoeff1 * v[1] * v[1] * fundamentalForms.dbs[i].block<1, 3>(2, 3 * j);
+
+            forceField.row(flapverts[j]) += bendcoeff1 * v[0] * v[0] * fundamentalForms.dbs[i].block<1, 3>(0, 9 + 3 * j);
+            forceField.row(flapverts[j]) += bendcoeff1 * v[0] * v[1] * fundamentalForms.dbs[i].block<1, 3>(1, 9 + 3 * j);
+            forceField.row(flapverts[j]) += bendcoeff1 * v[1] * v[0] * fundamentalForms.dbs[i].block<1, 3>(1, 9 + 3 * j);
+            forceField.row(flapverts[j]) += bendcoeff1 * v[1] * v[1] * fundamentalForms.dbs[i].block<1, 3>(2, 9 + 3 * j);
+        }        
+        double twistcoeff1 = af * w * kt * JvTbv / vTav / vTav;
+        for (int j = 0; j < 3; j++)
+        {
+            forceField.row(faceverts[j]) += twistcoeff1 * vperp[0] * v[0] * fundamentalForms.dbs[i].block<1, 3>(0, 3 * j);
+            forceField.row(faceverts[j]) += twistcoeff1 * vperp[0] * v[1] * fundamentalForms.dbs[i].block<1, 3>(1, 3 * j);
+            forceField.row(faceverts[j]) += twistcoeff1 * vperp[1] * v[0] * fundamentalForms.dbs[i].block<1, 3>(1, 3 * j);
+            forceField.row(faceverts[j]) += twistcoeff1 * vperp[1] * v[1] * fundamentalForms.dbs[i].block<1, 3>(2, 3 * j);
+
+            forceField.row(flapverts[j]) += twistcoeff1 * vperp[0] * v[0] * fundamentalForms.dbs[i].block<1, 3>(0, 9 + 3 * j);
+            forceField.row(flapverts[j]) += twistcoeff1 * vperp[0] * v[1] * fundamentalForms.dbs[i].block<1, 3>(1, 9 + 3 * j);
+            forceField.row(flapverts[j]) += twistcoeff1 * vperp[1] * v[0] * fundamentalForms.dbs[i].block<1, 3>(1, 9 + 3 * j);
+            forceField.row(flapverts[j]) += twistcoeff1 * vperp[1] * v[1] * fundamentalForms.dbs[i].block<1, 3>(2, 9 + 3 * j);
+        }        
+
+        // derivative of a terms
+        double bendcoeff2 = -af * w * kb * vTbv * vTbv / vTav / vTav / vTav;
+        for (int j = 0; j < 3; j++)
+        {
+            forceField.row(faceverts[j]) += bendcoeff2 * v[0] * v[0] * fundamentalForms.das[i].block<1, 3>(0, 3 * j);
+            forceField.row(faceverts[j]) += bendcoeff2 * v[0] * v[1] * fundamentalForms.das[i].block<1, 3>(1, 3 * j);
+            forceField.row(faceverts[j]) += bendcoeff2 * v[1] * v[0] * fundamentalForms.das[i].block<1, 3>(1, 3 * j);
+            forceField.row(faceverts[j]) += bendcoeff2 * v[1] * v[1] * fundamentalForms.das[i].block<1, 3>(2, 3 * j);
+        }
+
+        double twistcoeff2 = -af * w * kb * JvTbv * JvTbv / vTav / vTav / vTav;
+        for (int j = 0; j < 3; j++)
+        {
+            forceField.row(faceverts[j]) += twistcoeff2 * v[0] * v[0] * fundamentalForms.das[i].block<1, 3>(0, 3 * j);
+            forceField.row(faceverts[j]) += twistcoeff2 * v[0] * v[1] * fundamentalForms.das[i].block<1, 3>(1, 3 * j);
+            forceField.row(faceverts[j]) += twistcoeff2 * v[1] * v[0] * fundamentalForms.das[i].block<1, 3>(1, 3 * j);
+            forceField.row(faceverts[j]) += twistcoeff2 * v[1] * v[1] * fundamentalForms.das[i].block<1, 3>(2, 3 * j);
+        }
+    }
+
+    // force is *negative* derivative of energy
+    forceField *= -1.0;
+}
+
+void testForces(const MeshData &mesh, const PhysicsData &fundamentalForms, const Eigen::VectorXd &widthFractions, const Eigen::VectorXd &vectorField, double kb, double kt, int vertex, int coord)
+{
+    double origenergy = physicalEnergy(mesh, fundamentalForms, widthFractions, vectorField, kb, kt);
+    Eigen::MatrixXd forceField;
+    physicalForces(mesh, fundamentalForms, widthFractions, vectorField, kb, kt, forceField);
+
+    MeshData newmesh = mesh;
+    newmesh.V(vertex, coord) += 1e-6;
+    PhysicsData newdata;
+    physicsDataFromMesh(newmesh, newdata);
+    double newenergy = physicalEnergy(newmesh, newdata, widthFractions, vectorField, kb, kt);
+    double findiff = (newenergy - origenergy) / 1e-6;
+    std::cout << findiff << " vs " << forceField(vertex, coord) << std::endl;
 }
