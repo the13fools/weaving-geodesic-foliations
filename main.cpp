@@ -101,19 +101,6 @@ void takeGradientDescentStep()
 
 void showVectorField()
 {
-//    Eigen::Vector3d p(px, py,0);
-//    computeDistanceField(p, curMesh->centroids_F, curMesh->v0);
-//    initOptVars(*curMesh, curMesh->v0, curMesh->optVars);
-
-//    computeDistanceField(p, centroids_F, W_init);
-//    computeWhirlpool(p, centroids_F, W_init);
-//    computeWhirlpool(p, centroids_F, W);
-//    W_init = W;
-//    for (int i = 0; i < curMesh->F.rows(); i++) 
-//    {
-//        curMesh->v0.row(i) = projectOntoFace(curMesh->v0.row(i), curMesh->F, curMesh->V, i);
-//    }
-      
     curMesh->v0 = Eigen::MatrixXd::Zero(curMesh->F.rows(), 3);
     setHandleWeights(w);
     propogateField(curMesh->F, curMesh->V, curMesh->E, curMesh->F_edges, curMesh->v0);
@@ -165,7 +152,7 @@ int main(int argc, char *argv[])
 {
     Eigen::MatrixXd V;
     Eigen::MatrixXi F;
-    if (!igl::readOBJ("../torus.obj", V, F))
+    if (!igl::readOBJ("../models/torus.obj", V, F))
         return -1;
     curMesh = new MeshData(V, F);
     physicsDataFromMesh(*curMesh, phydata);
