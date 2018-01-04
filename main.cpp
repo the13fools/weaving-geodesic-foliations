@@ -88,11 +88,10 @@ void takeGradientDescentStep()
         // Not effecient, but will make it feel more correct to update, then show
         for (int i = 0; i < desc_steps; i++)
         {
-            alternatingMinimization(*curMesh, w, curMesh->optVars);
+            alternatingMinimization(*curMesh, curMesh->vs, w, curMesh->optVars);
     	}
         descentStep++;
     }
-
     Eigen::VectorXd wf(curMesh->F.rows());
     wf.setConstant(1.0);
     physicalForces(*curMesh, phydata, wf, curMesh->optVars.vbar, 1.0, 1.0 / 3.0, forceField);    
@@ -118,6 +117,8 @@ void showVectorField()
         // test twist force
         testForces(*curMesh, phydata, wf, curMesh->optVars.vbar, 0.0, 100.0, 100, i);
     }
+    
+    energy(curMesh->optVars, *curMesh, w, curMesh->vs);
 
     descentStep = 1;
     updateView(curMesh, viewer);

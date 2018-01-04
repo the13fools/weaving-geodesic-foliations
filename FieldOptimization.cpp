@@ -279,14 +279,17 @@ MeshData::MeshData(const Eigen::MatrixXd &V,
     computeBarycentricOperators(F, V, B, Bmat);
 }
 
-double energy(const OptVars &vars, const MeshData &mesh, Weights &weights)
+double energy(const OptVars &vars, const MeshData &mesh, Weights &weights, VisualizationState &vs)
 {
     double result = 0;
 
     Eigen::VectorXd v = mesh.Bmat*vars.vbar;
     Eigen::VectorXd w = mesh.Bmat*vars.wbar;
 
+    double prev_result = 0;
+
     int nfaces = (int)mesh.F.rows();
+    vs.energy = Eigen::VectorXd::Zero(nfaces);
     for (int i = 0; i < nfaces; i++)
     {
         result += 0.5 * weights.handleWeights[i] * (mesh.v0.row(i).transpose() - v.segment<3>(3 * i)).squaredNorm();
@@ -301,6 +304,9 @@ double energy(const OptVars &vars, const MeshData &mesh, Weights &weights)
         result += 0.5 * weights.lambdaGeodesic * term*term;
 
         result += 0.5 * weights.lambdaunit * (wi.dot(vi) - 1.0)*(wi.dot(vi) - 1.0);
+        
+        vs.energy(i) = result - prev_result;
+        prev_result = result;	
     }
 
     int nedges = (int)mesh.E.rows();
@@ -547,7 +553,7 @@ void dDEnergy(const OptVars &vars, const MeshData &mesh, Weights &weights, Eigen
     }    
 }
 
-void checkFiniteDifferences(const OptVars &vars, const MeshData &mesh, Weights &w)
+void checkFiniteDifferences(const OptVars &vars, const MeshData &mesh, Weights &w, VisualizationState &vs)
 {
     int nfaces = (int)mesh.F.rows();
     OptVars test = vars;
@@ -558,12 +564,12 @@ void checkFiniteDifferences(const OptVars &vars, const MeshData &mesh, Weights &
     noise2.setRandom();
     test.wbar += 0.01 * noise2;
 
-    double orige = energy(test, mesh, w);
+    double orige = energy(test, mesh, w, vs);
 
     int idx = 2;
     OptVars perturbed = test;
     perturbed.vbar[idx] += 1e-6;
-    double newe = energy(perturbed, mesh, w);
+    double newe = energy(perturbed, mesh, w, vs);
     Eigen::SparseMatrix<double> M;
     Eigen::VectorXd b;
     dvEnergy(test, mesh, w, M, b);
@@ -573,7 +579,7 @@ void checkFiniteDifferences(const OptVars &vars, const MeshData &mesh, Weights &
 
     perturbed = test;
     perturbed.wbar[idx] += 1e-6;
-    newe = energy(perturbed, mesh, w);
+    newe = energy(perturbed, mesh, w, vs);
     dwEnergy(test, mesh, w, M, b);
     deriv = M * mesh.Bmat * test.wbar - b;
     findiff = (newe - orige) / 1e-6;
@@ -581,7 +587,7 @@ void checkFiniteDifferences(const OptVars &vars, const MeshData &mesh, Weights &
 
     perturbed = test;
     perturbed.D[idx] += 1e-6;
-    newe = energy(perturbed, mesh, w);
+    newe = energy(perturbed, mesh, w, vs);
     dDEnergy(test, mesh, w, M, b);
     deriv = M * test.D - b;
     findiff = (newe - orige) / 1e-6;
@@ -609,11 +615,11 @@ void rollupOptVars(const MeshData &mesh, OptVars &vars)
     
 }
 
-void alternatingMinimization(const MeshData &mesh, Weights &w, OptVars &vars)
+void alternatingMinimization(const MeshData &mesh, VisualizationState &vs, Weights &w, OptVars &vars)
 {
     //checkFiniteDifferences(vars, mesh, w);
     
-    double orig = energy(vars, mesh, w);
+    double orig = energy(vars, mesh, w, vs);
     std::cout << "Original energy: " << orig << std::endl;
     SparseMatrix<double> Mraw;
     VectorXd b;
@@ -626,7 +632,7 @@ void alternatingMinimization(const MeshData &mesh, Weights &w, OptVars &vars)
     VectorXd newv = solver.solve(rhs);
     std::cout << "Residual: " << (M*newv - rhs).norm() << std::endl;
     vars.vbar = newv;
-    double newe = energy(vars, mesh, w);
+    double newe = energy(vars, mesh, w, vs);
     std::cout << "After v: " << newe << std::endl;
 
     dwEnergy(vars, mesh, w, Mraw, b);
@@ -636,7 +642,7 @@ void alternatingMinimization(const MeshData &mesh, Weights &w, OptVars &vars)
     VectorXd neww = solver.solve(rhs);
     std::cout << "Residual: " << (M*neww - rhs).norm() << std::endl;
     vars.wbar = neww;
-    newe = energy(vars, mesh, w);
+    newe = energy(vars, mesh, w, vs);
     std::cout << "After w: " << newe << std::endl;
 
     dDEnergy(vars, mesh, w, M, b);
@@ -644,7 +650,7 @@ void alternatingMinimization(const MeshData &mesh, Weights &w, OptVars &vars)
     VectorXd newD = solver.solve(b);
     std::cout << "Residual: " << (M*newD - b).norm() << std::endl;
     vars.D = newD;
-    newe = energy(vars, mesh, w);
+    newe = energy(vars, mesh, w, vs);
     std::cout << "After D: " << newe << std::endl;
 
     rollupOptVars(mesh, vars);
