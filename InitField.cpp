@@ -32,22 +32,11 @@ void propogateField(const Eigen::MatrixXi &F, const Eigen::MatrixXd &V, const Ei
 	  int edgeIdx  = F_edges(i, e);
 	  int neighbor = E( edgeIdx, 2 );
 	  if (neighbor == i) { neighbor = E( edgeIdx, 3 ); }
-	  if (field.row(neighbor).norm() < .01)
+	  if (neighbor != -1 && field.row(neighbor).norm() < .01)
 	  {
 	      toProp.push(neighbor);
-
-	      Eigen::Vector3d n1 = faceNormal(F, V, i);
-	      Eigen::Vector3d n2 = faceNormal(F, V, neighbor);
-	      Eigen::Vector3d commone = V.row( E(edgeIdx, 0) ) - V.row( E(edgeIdx, 1) );
-	      commone.normalize();
-
-	      Eigen::Vector3d t1 = n1.cross(commone);
-	      Eigen::Vector3d t2 = n2.cross(commone);
-
-	      double alpha = commone.dot( field.row(i) );
-	      double beta  = t1.dot( field.row(i) );
-
-	      field.row(neighbor) = alpha * commone + beta * t2;
+	      field.row(neighbor) = mapVectorToAdjacentFace(F, V, E, 
+		                        edgeIdx, i, neighbor, field.row(i));
 	  } 
       }
   }

@@ -94,7 +94,7 @@ void takeGradientDescentStep()
     }
     Eigen::VectorXd wf(curMesh->F.rows());
     wf.setConstant(1.0);
-    physicalForces(*curMesh, phydata, wf, curMesh->optVars.vbar, 1.0, 1.0 / 3.0, forceField);    
+  //  physicalForces(*curMesh, phydata, wf, curMesh->optVars.vbar, 1.0, 1.0 / 3.0, forceField);    
     updateView(curMesh, viewer);
 }
 
@@ -107,18 +107,22 @@ void showVectorField()
     
     Eigen::VectorXd wf(curMesh->F.rows());
     wf.setConstant(1.0);
-    physicalForces(*curMesh, phydata, wf, curMesh->optVars.vbar, 1.0, 1.0 / 3.0, forceField);    
+ //   physicalForces(*curMesh, phydata, wf, curMesh->optVars.vbar, 1.0, 1.0 / 3.0, forceField);    
 
     // test the force code using finite difference
     for (int i = 0; i < 3; i++)
     {
         // test bend force
-        testForces(*curMesh, phydata, wf, curMesh->optVars.vbar, 100.0, 0.0, 100, i);
+//        testForces(*curMesh, phydata, wf, curMesh->optVars.vbar, 100.0, 0.0, 100, i);
         // test twist force
-        testForces(*curMesh, phydata, wf, curMesh->optVars.vbar, 0.0, 100.0, 100, i);
+//        testForces(*curMesh, phydata, wf, curMesh->optVars.vbar, 0.0, 100.0, 100, i);
     }
     
-    energy(curMesh->optVars, *curMesh, w, curMesh->vs);
+    energy(curMesh->optVars, *curMesh, w, curMesh->vs); 
+
+   Eigen::Vector3d V_start = curMesh->V.row(curMesh->F(idx0, 1)) 
+	                      - curMesh->V.row(curMesh->F(idx0,2));
+    traceCurve(*curMesh, V_start, idx0, curMesh->vs);
 
     descentStep = 1;
     updateView(curMesh, viewer);
@@ -153,10 +157,10 @@ int main(int argc, char *argv[])
 {
     Eigen::MatrixXd V;
     Eigen::MatrixXi F;
-    if (!igl::readOBJ("../models/torus.obj", V, F))
+    if (!igl::readOBJ("../models/circ.obj", V, F))
         return -1;
     curMesh = new MeshData(V, F);
-    physicsDataFromMesh(*curMesh, phydata);
+ //   physicsDataFromMesh(*curMesh, phydata);
 
     w.handleWeights.resize(F.rows());
     w.handleWeights.setConstant(1.0);

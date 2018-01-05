@@ -170,6 +170,8 @@ class Distance
   q0bary = 1.0-t;
   q1bary = t;
 
+  std::cout << p0bary << " " << p1bary << " " << q0bary << " " << q1bary << std::endl;
+
   return c2-c1;
   }
 

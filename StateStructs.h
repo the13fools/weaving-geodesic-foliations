@@ -39,6 +39,8 @@ struct VisualizationState
     Eigen::VectorXd energy;
 
     std::vector<Eigen::Vector3d> curve;
+    Eigen::MatrixXd curve_dirs;
+    
     double physicsEnergyArrowScale;
 };
 
