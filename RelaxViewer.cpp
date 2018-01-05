@@ -118,7 +118,7 @@ void traceCurve(const MeshData &md, const Eigen::Vector3d dir, int faceId, Visua
 	    if ( e(0) == op_v_id || e(1) == op_v_id )
             {
                 Eigen::VectorXd e_test = md.V.row(e(0)) - md.V.row(e(1));
-                if ( e_test.dot(perp) * curr_dir.dot(perp) < 0.) 
+                if ( e_test.dot(perp) * curr_dir.dot(perp) > 0.) 
                 {
                     op_edge_id = j;
 		    break;
