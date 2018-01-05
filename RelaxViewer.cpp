@@ -26,11 +26,12 @@ int getCurrEdge(const MeshData &md, const Eigen::Vector3d prev_point, int faceId
         Eigen::Vector3d point_test = md.V.row( e(0) );
         point_test = ( prev_point - point_test );
 	point_test.normalize();
-	if ( e_test.dot( point_test ) > .99 )
+	if ( std::abs( e_test.dot( point_test )) > .9 )
 	{
 	    return md.F_edges(faceId, j);
 	} 
     }
+    assert(false);
     return -1;
 }
 
@@ -73,7 +74,8 @@ int getOpVId_PrevEdge(const MeshData &md, int curr_edge, int faceId)
             return md.F(faceId, i);
 	}
     }
-
+    assert(false);
+    return -1;
 }
 
 
@@ -85,7 +87,7 @@ void traceCurve(const MeshData &md, const Eigen::Vector3d dir, int faceId, Visua
     // TODO
     // find next edge
     int curr_face_id = faceId;
-    Eigen::Vector3d curr_dir = dir;
+    Eigen::Vector3d curr_dir = -dir;
     
     std::cout << curr_dir << "\n";
     int steps = 20;
@@ -94,7 +96,7 @@ void traceCurve(const MeshData &md, const Eigen::Vector3d dir, int faceId, Visua
     int curr_edge_id  = getCurrEdge(md, vs.curve.back(), curr_face_id);
     for (int i = 0; i < steps; i++)
     {
-	vs.curve_dirs.row(i) = dir;
+	vs.curve_dirs.row(i) = curr_dir;
 
         Eigen::Vector3d prev_point = vs.curve.back();
 	int op_v_id = getOpVId_PrevEdge(md, curr_edge_id, curr_face_id);
@@ -116,7 +118,7 @@ void traceCurve(const MeshData &md, const Eigen::Vector3d dir, int faceId, Visua
 	    if ( e(0) == op_v_id || e(1) == op_v_id )
             {
                 Eigen::VectorXd e_test = md.V.row(e(0)) - md.V.row(e(1));
-                if ( e_test.dot(perp) * dir.dot(perp) > 0.) 
+                if ( e_test.dot(perp) * curr_dir.dot(perp) < 0.) 
                 {
                     op_edge_id = j;
 		    break;
@@ -132,7 +134,7 @@ void traceCurve(const MeshData &md, const Eigen::Vector3d dir, int faceId, Visua
 
 	double p0bary, p1bary, q0bary, q1bary;
 	Eigen::Vector3d dist = Distance::edgeEdgeDistance(prev_point, 
-		                                          prev_point + dir * split_len,
+		                                          prev_point + curr_dir * split_len,
                                                           op_v1, op_v2,
 							  p0bary, p1bary, q0bary, q1bary);
   //      std::cout << dist.norm() << " <- dist norm \n  " << prev_point << " <-- prev point " << std::endl;
@@ -146,11 +148,11 @@ void traceCurve(const MeshData &md, const Eigen::Vector3d dir, int faceId, Visua
 	}
         if ( next_face_id == -1) { break; }	
 	
-    std::cout << curr_dir << "\n";
+//    std::cout << curr_dir << "\n";
 
   //      std::cout << next_edge_id << " " << curr_face_id << " " << next_face_id << "edge face face\n";
-//	curr_dir = mapVectorToAdjacentFace(md.F, md.V, md.E, 
-//		      next_edge_id, curr_face_id, next_face_id, curr_dir);
+	curr_dir = mapVectorToAdjacentFace(md.F, md.V, md.E, 
+		      next_edge_id, curr_face_id, next_face_id, curr_dir);
         curr_face_id = next_face_id;
 	curr_edge_id = next_edge_id;
     }
@@ -245,13 +247,15 @@ void updateView(const MeshData *curMesh, igl::viewer::Viewer *viewer)
 //    viewer->data.add_edges(centroids_F  + (Op_Grad*operator_scale - Op_Grad_fd)*avg/2, centroids_F, red);
    
 
-  //  Eigen::MatrixXd curveStarts = Eigen::MatrixXd::Zero(curMesh->vs.curve.size() - 1, 3);
-    Eigen::MatrixXd curveStarts = Eigen::MatrixXd::Zero(19, 3);
+    Eigen::MatrixXd curveStarts = Eigen::MatrixXd::Zero(curMesh->vs.curve.size() - 1, 3);
+    Eigen::MatrixXd curveDirs = Eigen::MatrixXd::Zero(curMesh->vs.curve.size() - 1, 3);
+//    Eigen::MatrixXd curveStarts = Eigen::MatrixXd::Zero(19, 3);
     Eigen::MatrixXd curveStarts_all = Eigen::MatrixXd::Zero(curMesh->vs.curve.size(), 3);
     Eigen::MatrixXd curveEnds = Eigen::MatrixXd::Zero(curMesh->vs.curve.size() - 1, 3);
     for(std::vector<Eigen::VectorXd>::size_type i = 0; i != curMesh->vs.curve.size() - 1; i++) {
       //  viewer->data.add_edges( curMesh->vs.curve[i], curMesh->vs.curve[i + 1].transpose(), red);
 	curveStarts.row(i) = curMesh->vs.curve[i];
+	curveDirs.row(i) = curMesh->vs.curve_dirs.row(i);
         curveStarts_all.row(i) = curMesh->vs.curve[i];
 	curveEnds.row(i)  =  curMesh->vs.curve[i + 1];
 //        std::cout << curMesh->vs.curve[i] << std::endl;
@@ -260,10 +264,10 @@ void updateView(const MeshData *curMesh, igl::viewer::Viewer *viewer)
     viewer->data.add_edges( curveStarts, curveEnds, red);
     viewer->data.add_points( curveStarts ,green);
     
-    viewer->data.add_edges( curveStarts, curveStarts +  curMesh->vs.curve_dirs, blue);
-    std::cout << curMesh->vs.curve_dirs << std::endl << std::endl;
-    std::cout << curveStarts << std::endl <<  std::endl;
-    std::cout << curveStarts + curMesh->vs.curve_dirs << std::endl;
+    viewer->data.add_edges( curveStarts, curveStarts + curveDirs, blue);
+//    std::cout << curMesh->vs.curve_dirs << std::endl << std::endl;
+//    std::cout << curveStarts << std::endl <<  std::endl;
+//    std::cout << curveStarts + curMesh->vs.curve_dirs << std::endl;
 
     if (curMesh->vs.normFaceVectors)
     {
