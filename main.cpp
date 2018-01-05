@@ -157,7 +157,7 @@ int main(int argc, char *argv[])
 {
     Eigen::MatrixXd V;
     Eigen::MatrixXi F;
-    if (!igl::readOBJ("../models/circ.obj", V, F))
+    if (!igl::readOBJ("../models/torus.obj", V, F))
         return -1;
     curMesh = new MeshData(V, F);
  //   physicsDataFromMesh(*curMesh, phydata);

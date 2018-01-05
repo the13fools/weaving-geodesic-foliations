@@ -40,7 +40,12 @@ struct VisualizationState
 
     std::vector<Eigen::Vector3d> curve;
     Eigen::MatrixXd curve_dirs;
-    
+    Eigen::MatrixXd split_edges;
+    Eigen::MatrixXd perp_edges;
+    Eigen::MatrixXd line_starts;
+    Eigen::MatrixXd line_ends;
+
+
     double physicsEnergyArrowScale;
 };
 
