@@ -3,6 +3,7 @@
 
 #include "RelaxViewer.h"
 #include "VectorUtils.h"
+#include "Distance.h"
 
 double energy_OP = 0.;
 //void updateView(const MeshData &curMesh, igl::viewer::Viewer &viewer){}
@@ -12,7 +13,7 @@ Eigen::MatrixXd colorField;
 
 shading_enum shading_enum_state = INIT_MAGNITUDE;
 
-/*
+
 // This: Recieves a point on an edge of a triangle
 //       Returns the vertex id opposing that edge in the triangle
 int getOpVId(const MeshData &md, const Eigen::Vector3d prev_point, int faceId)
@@ -52,8 +53,9 @@ void traceCurve(const MeshData &md, const Eigen::Vector3d dir, int faceId, Visua
     {
         Eigen::Vector3d prev_point = vs.curve.back();
 	int op_v_id = getOpVId(md, prev_point, curr_face_id);
-            
-        Eigen::Vector3d split = prev_point - md.V.row(op_v_id);
+        
+        Eigen::Vector3d op_vertex = md.V.row(op_v_id);	
+        Eigen::Vector3d split = prev_point - op_vertex;
         split.normalize();
 	Eigen::Vector3d n = faceNormal(md.F, md.V, curr_face_id);
 	Eigen::Vector3d perp = split.cross(n);
@@ -78,7 +80,7 @@ void traceCurve(const MeshData &md, const Eigen::Vector3d dir, int faceId, Visua
 
      }
 }
-*/
+
 
 
 void updateView(const MeshData *curMesh, igl::viewer::Viewer *viewer)
@@ -113,7 +115,9 @@ void updateView(const MeshData *curMesh, igl::viewer::Viewer *viewer)
                 break;
             case INIT_MAGNITUDE:
               //  Z(i) = log( (curMesh->optVars.W_opt).row(i).squaredNorm() );
-                Z(i) = log( (curMesh->optVars.W_opt-curMesh->v0).row(i).squaredNorm() );
+             //   Z(i) = log( (curMesh->optVars.W_opt-curMesh->v0).row(i).squaredNorm() );
+                Z(i) = curMesh->vs.energy(i);
+//                std::cout << curMesh->vs.energy;
 //              Eigen::Vector3d test_vec(-Op_Grad(i,1), Op_Grad(i,0), 0);
 //              Z(i) = (Op_Grad_fd).row(i).normalized()
 //                         .dot(test_vec.normalized()) + .000005;

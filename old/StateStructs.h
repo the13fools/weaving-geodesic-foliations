@@ -35,6 +35,9 @@ enum shading_enum {
 struct VisualizationState
 {
     bool normFaceVectors;
+ 
+    Eigen::VectorXd energy;
+
     std::vector<Eigen::Vector3d> curve;
     double physicsEnergyArrowScale;
 };
