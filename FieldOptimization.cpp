@@ -3,6 +3,8 @@
 #include <iostream>
 #include "FaceBased.h"
 
+#include <Eigen/StdVector>
+
 #include <Eigen/Geometry>
 
 using namespace std;
@@ -135,15 +137,17 @@ void buildEdgesPerFace(const Eigen::MatrixXi &F, const Eigen::MatrixXi &E, Eigen
     }
 }
 
-void computeJs(const Eigen::MatrixXi &F, const Eigen::MatrixXd &V, std::vector<Eigen::Matrix3d> &Js)
+void computeJs(const Eigen::MatrixXi &F, const Eigen::MatrixXd &V, 
+       std::vector<Eigen::Matrix3d,Eigen::aligned_allocator<Eigen::Matrix3d> >	&Js)
 {
     int nfaces = (int)F.rows();
     Js.resize(nfaces);
     for (int i = 0; i < nfaces; i++)
     {
+
         Eigen::Vector3d v0 = V.row(F(i, 0));
-        Eigen::Vector3d v1 = V.row(F(i, 1));
-        Eigen::Vector3d v2 = V.row(F(i, 2));
+	Eigen::Vector3d v1 = V.row(F(i, 1));
+	Eigen::Vector3d v2 = V.row(F(i, 2));
         Eigen::Vector3d n = (v1 - v0).cross(v2 - v0);
         n /= n.norm();
         Js[i] << 0, -n[2], n[1],
@@ -197,7 +201,6 @@ MeshData::MeshData(const Eigen::MatrixXd &V,
 {
     buildEdges(F, E);
     buildEdgesPerFace(F, E, F_edges);
-    
     int nfaces = (int)F.rows();
     faceWings.resize(nfaces, 3);
     for (int i = 0; i < nfaces; i++) {
@@ -215,11 +218,9 @@ MeshData::MeshData(const Eigen::MatrixXd &V,
             faceWings(i, j) = result;
         }
     }
-
     computeJs(F, V, Js);
     computeCentroids(F,V,centroids_F);
     computeGradientMatrices(F, V, E, F_edges, Ms);
-
     H.resize(3 * nfaces, 3 * nfaces);
     vector<Triplet<double> > compattermcoeffs;
     int nedges = (int)E.rows();
@@ -239,7 +240,6 @@ MeshData::MeshData(const Eigen::MatrixXd &V,
         }
     }
     H.setFromTriplets(compattermcoeffs.begin(), compattermcoeffs.end());
-
     C.resize(9 * nfaces, 9 * nfaces);
     std::vector<Eigen::Triplet<double> > Ccoeffs;
     for (int i = 0; i < nedges; i++)
@@ -275,7 +275,6 @@ MeshData::MeshData(const Eigen::MatrixXd &V,
             }
     }
     C.setFromTriplets(Ccoeffs.begin(), Ccoeffs.end());
-
     computeBarycentricOperators(F, V, B, Bmat);
 }
 

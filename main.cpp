@@ -4,6 +4,7 @@
 #include <math.h>
 #include <iostream>
 #include <fstream>
+#include <vector>
 
 // For making directories
 #include <sys/stat.h>
@@ -13,6 +14,7 @@
 #include "Covariant.h"
 #include "FaceBased.h"
 #include "FieldOptimization.h"
+#include "FileIO.h"
 #include "RelaxViewer.h"
 #include "Physics.h"
 #include "VectorUtils.h"
@@ -73,6 +75,36 @@ void setHandleWeights(Weights &weight)
     }
 }
 
+void traceCurves(VisualizationState &vs)
+{
+    int idx[] = {idx0, idx1, idx2};
+    double pu[] = {pu0, pu1, pu2};
+    double pv[] = {pv0, pv1, pv2};
+    std::vector<Eigen::Vector3d> c[] = {vs.c0, vs.c1, vs.c2};
+    std::vector<Eigen::Vector3d> nor[] = {vs.n0, vs.n1, vs.n2};
+
+    for (int i = 0; i < 3; i++) 
+    {
+        Eigen::Vector3d u = curMesh->V.row(curMesh->F(idx[i], 0))
+            - curMesh->V.row(curMesh->F(idx[i], 1));
+        Eigen::Vector3d n = faceNormal(curMesh->F, curMesh->V, idx[i]);
+        u.normalize();
+        Eigen::Vector3d v = u.cross(n);
+	Eigen::Vector3d dir = u * pu[i] + v * pv[i];
+        traceCurve(*curMesh, dir, idx[i], c[i], nor[i]);
+    }
+    vs.c0 = c[0];
+    vs.c1 = c[1];
+    vs.c2 = c[2];
+
+    vs.n0 = nor[0];
+    vs.n1 = nor[1];
+    vs.n2 = nor[2];
+
+    logRibbonsToFile(vs, "try1", "ribbon");
+        std::cout << vs.c0.size() << "c0" << curMesh->vs.c1.size() << "c1" << curMesh->vs.c2.size() << "c2";
+    
+}
 
 int descentStep = 0;
 void takeGradientDescentStep()
@@ -120,9 +152,10 @@ void showVectorField()
     
     energy(curMesh->optVars, *curMesh, w, curMesh->vs); 
 
-   Eigen::Vector3d V_start = curMesh->V.row(curMesh->F(idx0, 1)) 
-	                      - curMesh->V.row(curMesh->F(idx0,2));
-    traceCurve(*curMesh, V_start, idx0, curMesh->vs);
+    Eigen::Vector3d V_start = curMesh->V.row(curMesh->F(idx0, 2)) 
+	                      - curMesh->V.row(curMesh->F(idx0,0));
+ //   traceCurve(*curMesh, V_start, idx0, curMesh->vs);
+    traceCurves(curMesh->vs);
 
     descentStep = 1;
     updateView(curMesh, viewer);
@@ -157,9 +190,18 @@ int main(int argc, char *argv[])
 {
     Eigen::MatrixXd V;
     Eigen::MatrixXi F;
-    if (!igl::readOBJ("../models/torus.obj", V, F))
+    if (!igl::readOBJ("../models/sphere.obj", V, F))
         return -1;
+    
+    if (V.cols() != 3) 
+    {
+        std::cout << "This model is doing something weird!!!" << std::endl;
+	V = V.block(0,0, V.rows(), 3);
+    }
+    
     curMesh = new MeshData(V, F);
+
+    std::cout << "after md\n";
  //   physicsDataFromMesh(*curMesh, phydata);
 
     w.handleWeights.resize(F.rows());

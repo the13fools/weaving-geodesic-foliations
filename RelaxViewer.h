@@ -9,7 +9,10 @@
 #include "StateStructs.h"
 
 
-void traceCurve(const MeshData &md, const Eigen::Vector3d dir, int faceId, VisualizationState &vs);
+void traceCurve(const MeshData &md, 
+	        const Eigen::Vector3d dir, int faceId, 
+		std::vector<Eigen::Vector3d> &curve,
+		std::vector<Eigen::Vector3d> &normal);
 
 void updateView(const MeshData *mdata, igl::viewer::Viewer *viewer); 
 

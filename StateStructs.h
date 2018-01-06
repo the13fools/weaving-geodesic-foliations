@@ -5,6 +5,8 @@
 #include <Eigen/Sparse>
 #include <vector>
 
+#include<Eigen/StdVector>
+
 struct OptVars
 {
     Eigen::VectorXd vbar; //2F
@@ -38,13 +40,19 @@ struct VisualizationState
  
     Eigen::VectorXd energy;
 
-    std::vector<Eigen::Vector3d> curve;
-    Eigen::MatrixXd curve_dirs;
+    std::vector<Eigen::Vector3d> c0;
+    std::vector<Eigen::Vector3d> c1;
+    std::vector<Eigen::Vector3d> c2;
+ 
+    std::vector<Eigen::Vector3d> n0;
+    std::vector<Eigen::Vector3d> n1;
+    std::vector<Eigen::Vector3d> n2;
+/*    Eigen::MatrixXd curve_dirs;
     Eigen::MatrixXd split_edges;
     Eigen::MatrixXd perp_edges;
     Eigen::MatrixXd line_starts;
     Eigen::MatrixXd line_ends;
-
+*/
 
     double physicsEnergyArrowScale;
 };
@@ -59,7 +67,10 @@ struct MeshData
     Eigen::MatrixXi E; // edge indices
     Eigen::MatrixXi F_edges; // face edge indices
     Eigen::MatrixXi faceWings; // the three vertices opposite the edges of each face
-    std::vector<Eigen::Matrix3d> Js; // rotations by 90 degrees
+  //  std::vector<Eigen::Matrix3d> Js; // rotations by 90 degrees
+    std::vector<Eigen::Matrix3d,Eigen::aligned_allocator<Eigen::Matrix3d> > Js;     
+   
+//	std::vector<Eigen::Matrix3d> Js; // rotations by 90 degrees
     Eigen::MatrixXd Ms; // discrete gradient operator vectors
     Eigen::MatrixXd B; // 3*faces x 2 matrix of barycentric bases
 

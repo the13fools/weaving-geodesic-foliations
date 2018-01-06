@@ -64,7 +64,7 @@ int getOpVId(const MeshData &md, const Eigen::Vector3d prev_point, int faceId)
     return -1;
 }
 
-int getOpVId_PrevEdge(const MeshData &md, int curr_edge, int faceId)
+int getOpVIdFromEdge(const MeshData &md, int curr_edge, int faceId)
 {
     Eigen::VectorXi e = md.E.row(curr_edge);   
     for (int i = 0; i < 3; i++) 
@@ -79,49 +79,43 @@ int getOpVId_PrevEdge(const MeshData &md, int curr_edge, int faceId)
 }
 
 
-void traceCurve(const MeshData &md, const Eigen::Vector3d dir, int faceId, VisualizationState &vs)
+void traceCurve(const MeshData &md,
+        	const Eigen::Vector3d dir, int faceId, 
+		std::vector<Eigen::Vector3d> &curve,
+		std::vector<Eigen::Vector3d> &normal)
 {
-    vs.curve.clear();
-    vs.curve.push_back(.5 * md.V.row(md.F(faceId, 0)) + .5 * md.V.row(md.F(faceId, 1)) ); 
+    curve.clear();
+    normal.clear();
+    // This is hacky, make it possible to shoot from point in bary-centric coordinates
+    curve.push_back( .5 * md.V.row(md.F(faceId, 0)) + .5 * md.V.row(md.F(faceId, 1)) ); 
     // check that vector is pointing in.  
     // TODO
     // find next edge
     int curr_face_id = faceId;
     Eigen::Vector3d curr_dir = -dir;
     
-    std::cout << curr_dir << "\n";
     int steps = 100;
-    vs.curve_dirs = Eigen::MatrixXd::Zero(steps, 3);
-    vs.split_edges = Eigen::MatrixXd::Zero(steps, 3);
-    vs.perp_edges = Eigen::MatrixXd::Zero(steps, 3);
 
-    vs.line_starts = Eigen::MatrixXd::Zero(steps * 2, 3);
-    vs.line_ends = Eigen::MatrixXd::Zero(steps * 2, 3);
-
-    int curr_edge_id  = getCurrEdge(md, vs.curve.back(), curr_face_id);
+    int curr_edge_id = getCurrEdge(md, curve.back(), curr_face_id);
     for (int i = 0; i < steps; i++)
     {
-	vs.curve_dirs.row(i) = curr_dir;
-
-        Eigen::Vector3d prev_point = vs.curve.back();
-	int op_v_id = getOpVId_PrevEdge(md, curr_edge_id, curr_face_id);
+        Eigen::Vector3d prev_point = curve.back();
+	int op_v_id = getOpVIdFromEdge(md, curr_edge_id, curr_face_id);
         
         Eigen::Vector3d op_vertex = md.V.row(op_v_id);	
         Eigen::Vector3d split = op_vertex - prev_point;
-        vs.split_edges.row(i) = split; 
+	
 	double split_len = split.norm();
 	split = split / split_len;
 	Eigen::Vector3d n = faceNormal(md.F, md.V, curr_face_id);
 	Eigen::Vector3d perp = split.cross(n);
-        
-        vs.perp_edges.row(i) = perp; 
-    //    std::cout << "Iteration i: " << i << " "  <<  split_len << " split len" << "\n";
+        normal.push_back(-n);
 
 	int op_edge_id = 0;
         for (int j = 0; j < 3; j++)
 	{
 	    Eigen::VectorXi e = md.E.row(md.F_edges(curr_face_id, j));
-//	    std::cout << e << " " << j  << " edge \n";
+	    
 	    if ( e(0) == op_v_id || e(1) == op_v_id )
             {
                 Eigen::VectorXd e_test = (md.V.row(e(0)) + md.V.row(e(1))) * .5;
@@ -133,28 +127,20 @@ void traceCurve(const MeshData &md, const Eigen::Vector3d dir, int faceId, Visua
                 }               
             }
         }
-    //    std::cout << op_edge_id << "op edge id"  << std::endl << std::endl; 
-        // Find intersection point.
+        
+	// Find intersection point.
         int next_edge_id = md.F_edges(curr_face_id, op_edge_id);
     	Eigen::Vector3d op_v1 = md.V.row(md.E(next_edge_id, 0));
         Eigen::Vector3d op_v2 = md.V.row(md.E(next_edge_id, 1));
-    //    std::cout << op_v1 << "op_v1"<< std::endl << op_v2 << "<-- op_v2"<<  std::endl;    
 
-        vs.line_starts.row(2*i) = prev_point - curr_dir * split_len;
-        vs.line_starts.row(2*i + 1) = op_v1;
-
-        vs.line_ends.row(2*i) = prev_point + curr_dir * split_len;
-        vs.line_ends.row(2*i + 1) = op_v2;
-
+	// This 100 is hacky, figure out the appropriate scaling...
 	double p0bary, p1bary, q0bary, q1bary;
 	Eigen::Vector3d dist = Distance::edgeEdgeDistance(prev_point - curr_dir * split_len * 100, 
 		                                          prev_point + curr_dir * split_len * 100,
                                                           op_v1, op_v2,
 							  p0bary, p1bary, q0bary, q1bary);
-  //      std::cout << dist.norm() << " <- dist norm \n  " << prev_point << " <-- prev point " << std::endl;
 	
-//	std::cout <<  p0bary << " " <<   p1bary << " " << q0bary << " " << q1bary << " barys\n";
-	vs.curve.push_back( op_v1 * q0bary + op_v2 * q1bary);
+	curve.push_back( op_v1 * q0bary + op_v2 * q1bary);
         int next_face_id = md.E(next_edge_id, 2);
         if ( next_face_id == curr_face_id )
 	{
@@ -162,9 +148,6 @@ void traceCurve(const MeshData &md, const Eigen::Vector3d dir, int faceId, Visua
 	}
         if ( next_face_id == -1) { break; }	
 	
-//    std::cout << curr_dir << "\n";
-
-  //      std::cout << next_edge_id << " " << curr_face_id << " " << next_face_id << "edge face face\n";
 	curr_dir = mapVectorToAdjacentFace(md.F, md.V, md.E, 
 		      next_edge_id, curr_face_id, next_face_id, curr_dir);
         curr_face_id = next_face_id;
@@ -261,34 +244,32 @@ void updateView(const MeshData *curMesh, igl::viewer::Viewer *viewer)
 //    viewer->data.add_edges(centroids_F  + (Op_Grad*operator_scale - Op_Grad_fd)*avg/2, centroids_F, red);
    
 
-    Eigen::MatrixXd curveStarts = Eigen::MatrixXd::Zero(curMesh->vs.curve.size() - 1, 3);
-    Eigen::MatrixXd curveDirs = Eigen::MatrixXd::Zero(curMesh->vs.curve.size() - 1, 3);
-    Eigen::MatrixXd splitEdges = Eigen::MatrixXd::Zero(curMesh->vs.curve.size() - 1, 3);
-    Eigen::MatrixXd perpEdges = Eigen::MatrixXd::Zero(curMesh->vs.curve.size() - 1, 3);
-//    Eigen::MatrixXd curveStarts = Eigen::MatrixXd::Zero(19, 3);
-    Eigen::MatrixXd curveStarts_all = Eigen::MatrixXd::Zero(curMesh->vs.curve.size(), 3);
-    Eigen::MatrixXd curveEnds = Eigen::MatrixXd::Zero(curMesh->vs.curve.size() - 1, 3);
-    for(std::vector<Eigen::VectorXd>::size_type i = 0; i != curMesh->vs.curve.size() - 1; i++) {
-      //  viewer->data.add_edges( curMesh->vs.curve[i], curMesh->vs.curve[i + 1].transpose(), red);
-	curveStarts.row(i) = curMesh->vs.curve[i];
-	curveDirs.row(i) = curMesh->vs.curve_dirs.row(i);
-	splitEdges.row(i) = curMesh->vs.split_edges.row(i);
-	perpEdges.row(i) = curMesh->vs.perp_edges.row(i);
-        curveStarts_all.row(i) = curMesh->vs.curve[i];
-	curveEnds.row(i)  =  curMesh->vs.curve[i + 1];
-//        std::cout << curMesh->vs.curve[i] << std::endl;
+    Eigen::MatrixXd c0_start = Eigen::MatrixXd::Zero(curMesh->vs.c0.size() - 1, 3);
+    Eigen::MatrixXd c0_end = Eigen::MatrixXd::Zero(curMesh->vs.c0.size() - 1, 3); 
+    Eigen::MatrixXd c1_start = Eigen::MatrixXd::Zero(curMesh->vs.c1.size() - 1, 3);
+    Eigen::MatrixXd c1_end = Eigen::MatrixXd::Zero(curMesh->vs.c1.size() - 1, 3);
+    Eigen::MatrixXd c2_start = Eigen::MatrixXd::Zero(curMesh->vs.c2.size() - 1, 3);
+    Eigen::MatrixXd c2_end = Eigen::MatrixXd::Zero(curMesh->vs.c2.size() - 1, 3);
+    
+    
+    for(std::vector<Eigen::VectorXd>::size_type i = 0; i != curMesh->vs.c0.size() - 1; i++) {
+        c0_start.row(i) = curMesh->vs.c0[i];
+        c0_end.row(i) = curMesh->vs.c0[i + 1];
+    }
+    for(std::vector<Eigen::VectorXd>::size_type i = 0; i != curMesh->vs.c1.size() - 1; i++) {
+        c1_start.row(i) = curMesh->vs.c1[i];
+        c1_end.row(i) = curMesh->vs.c1[i + 1];
+    }
+    for(std::vector<Eigen::VectorXd>::size_type i = 0; i != curMesh->vs.c2.size() - 1; i++) {
+        c2_start.row(i) = curMesh->vs.c2[i];
+        c2_end.row(i) = curMesh->vs.c2[i + 1];
     }
 
-    viewer->data.add_edges( curveStarts, curveEnds, red);
-    viewer->data.add_points( curveStarts ,green);
-    
-    viewer->data.add_edges( curveStarts, curveStarts + curveDirs, blue);
-//    viewer->data.add_edges( curveStarts, curveStarts + splitEdges, green);
-    viewer->data.add_edges( curMesh->vs.line_starts, curMesh->vs.line_ends, green);
-    viewer->data.add_edges( curveStarts, curveStarts + perpEdges * .1, black);
-//    std::cout << curMesh->vs.curve_dirs << std::endl << std::endl;
-//    std::cout << curveStarts << std::endl <<  std::endl;
-//    std::cout << curveStarts + curMesh->vs.curve_dirs << std::endl;
+    viewer->data.add_edges( c0_start, c0_end, red);
+    viewer->data.add_edges( c1_start, c1_end, red);
+    viewer->data.add_edges( c2_start, c2_end, red);
+  
+ //   viewer->data.add_points( curveStarts ,green);
 
     if (curMesh->vs.normFaceVectors)
     {
@@ -299,13 +280,13 @@ void updateView(const MeshData *curMesh, igl::viewer::Viewer *viewer)
             field.row(i) = curMesh->optVars.W_opt.row(i).normalized();
         }
 
-  //      viewer->data.add_edges(curMesh->centroids_F + field*avg / 2,
-  //          curMesh->centroids_F, green);
+        viewer->data.add_edges(curMesh->centroids_F + field*avg / 2,
+            curMesh->centroids_F, green);
     }
     else
     {
-//        viewer->data.add_edges(curMesh->centroids_F + curMesh->optVars.W_opt*avg / 2,
-//            curMesh->centroids_F, green);
+        viewer->data.add_edges(curMesh->centroids_F + curMesh->optVars.W_opt*avg / 2,
+            curMesh->centroids_F, green);
     }
 
 //    viewer->data.add_edges(curMesh->centroids_F  + curMesh->optVars.W_opt.normalized()*avg/2 * curMesh->vs.physicsEnergyArrowScale, curMesh->centroids_F, red);
