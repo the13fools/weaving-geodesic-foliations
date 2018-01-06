@@ -94,7 +94,7 @@ void traceCurve(const MeshData &md,
     int curr_face_id = faceId;
     Eigen::Vector3d curr_dir = -dir;
     
-    int steps = 100;
+    int steps = 1000;
 
     int curr_edge_id = getCurrEdge(md, curve.back(), curr_face_id);
     for (int i = 0; i < steps; i++)

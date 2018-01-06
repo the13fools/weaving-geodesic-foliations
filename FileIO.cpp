@@ -8,6 +8,8 @@
 #include <sys/stat.h>
 // #include <direct.h>
 
+#include <Eigen/Geometry>
+
 using namespace std;
 
 #define MAXBUFSIZE  ((int) 1e6)
@@ -69,27 +71,62 @@ void logRibbonsToFile(const VisualizationState &vs, std::string foldername, std:
 	return;
     }
 
+    double max_length = 0.;
+    for (int i = 0; i < vs.c0.size() - 1; i++)
+    {
+        double seg_length = ( vs.c0[i] - vs.c0[i+1] ).norm(); 
+	if (seg_length > max_length) 
+	{
+            max_length = seg_length;
+	}
+    }
+
+    std::vector<Eigen::Vector3d> cnew;
+    cnew.push_back(vs.c0[0]);
+    int seg_counter = 0;
+    Eigen::Vector3d prev_point = cnew.back();
+    for (int i = 1; i < vs.c0.size(); i++)
+    {
+        double seg_length = ( prev_point - vs.c0[i] ).norm(); 	
+	if (seg_length > max_length) 
+	{
+            cnew.push_back(vs.c0[i]);
+	    prev_point = cnew.back();
+	}
+    }
+
+    std::vector<Eigen::Vector3d> nnew (cnew.size() - 1, Eigen::Vector3d::Zero());
+    for (int i = 0; i < cnew.size() - 2; i++) 
+    {
+        Eigen::Vector3d v1 = cnew[i+1] - cnew[i];
+        Eigen::Vector3d v2 = cnew[i+2] - cnew[i+1];
+	Eigen::Vector3d perp = v1.cross(v2);
+	nnew[i] = v1.cross(perp);
+	nnew[i+1] = perp.cross(v2);
+    }
+
+
     myfile << "1\n";
     myfile << "0\n";
     myfile << "0.0001\n";
     myfile << "1e+08\n"; 
     myfile << "1\n\n\n";
     
-    myfile << vs.c0.size() << "\n";
-    myfile << "1\n";
-    for(int i = 0; i < vs.c0.size(); i++)
+    myfile << cnew.size() << "\n";
+    myfile << "0\n";
+    for(int i = 0; i < cnew.size(); i++)
     {
-	    myfile << vs.c0[i](0) << " " << vs.c0[i](1) << " " << vs.c0[i](2) << " ";
+	    myfile << cnew[i](0) << " " << cnew[i](1) << " " << cnew[i](2) << " ";
     }
     myfile << "\n";
      
-    for(int i = 0; i < vs.n0.size(); i++)
+    for(int i = 0; i < nnew.size(); i++)
     {
-	    myfile << vs.n0[i](0) << " " << vs.n0[i](1) << " " << vs.n0[i](2) << " ";
+	    myfile << nnew[i](0) << " " << nnew[i](1) << " " << nnew[i](2) << " ";
     } 
     myfile << "\n";
 
-    for(int i = 0; i < vs.n0.size(); i++)
+    for(int i = 0; i < nnew.size(); i++)
     {
 	    myfile << " .1 .1 .1";
     } 
