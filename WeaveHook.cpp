@@ -4,26 +4,32 @@
 
 using namespace std;
 
+void WeaveHook::renderRenderGeometry(igl::viewer::Viewer &viewer)
+{
+    viewer.data.clear();
+    viewer.data.set_mesh(renderQ, renderF);
+    int edges = edgeSegs.rows();
+    Eigen::MatrixXd renderPts(2 * edges, 3);
+    for (int i = 0; i < edges; i++)
+    {
+        Eigen::Vector3d vec = edgeVecs.row(i);
+        if (normalizeVectors)
+        {
+            if(vec.norm() != 0.0)
+                vec *= baseLength / vec.norm() * sqrt(3.0) / 6.0;
+        }
+        renderPts.row(2 * i) = edgePts.row(i);
+        renderPts.row(2 * i + 1) = edgePts.row(i) + vectorScale*vec.transpose();
+    }
+    viewer.data.set_edges(renderPts, edgeSegs, edgeColors);      
+    viewer.data.set_colors(faceColors);
+}
+
 bool WeaveHook::simulateOneStep()
 {
-    SolverParams params;
-    params.lambdacompat = 100.0;
     //GNtestFiniteDifferences(*weave, params);
     //exit(-1);
-    std::cout << "original energy: " << energy(*weave, params) << std::endl;;
-    Eigen::VectorXd r;
-    Eigen::SparseMatrix<double> J;
-    GNEnergy(*weave, params, r);
-    GNGradient(*weave, params, J);
-    Eigen::SparseMatrix<double> M = J.transpose() * J;
-    Eigen::SparseMatrix<double> I(weave->vectorFields.size(), weave->vectorFields.size());
-    I.setIdentity();
-    M += 1e-3 * I;
-    Eigen::SimplicialLDLT<Eigen::SparseMatrix<double> > solver;
-    solver.compute(M);
-    Eigen::VectorXd rhs = J.transpose() * r;
-    Eigen::VectorXd update = solver.solve(rhs);
-    weave->vectorFields -= update;
-    std::cout << "new energy: " << energy(*weave, params) << std::endl;;
+
+    oneStep(*weave, params);
     return false;
 }

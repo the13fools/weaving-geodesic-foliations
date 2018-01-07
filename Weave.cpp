@@ -2,6 +2,7 @@
 #include <igl/read_triangle_mesh.h>
 #include <map>
 #include <Eigen/Dense>
+#include "Colors.h"
 
 Weave::Weave(const std::string &objname, int m)
 {
@@ -30,10 +31,7 @@ Weave::Weave(const std::string &objname, int m)
     nFields_ = m;
     vectorFields.resize(5*F.rows()*m);
     vectorFields.setZero();
-    for (int i = 0; i < nFaces(); i++)
-    {
-        vectorFields[2 * i*m] = 1.0;
-    }
+    vectorFields.segment(0, 2 * F.rows()*m).setRandom();
 
     // initialize permutation matrices
     int nedges = nEdges();
@@ -143,6 +141,9 @@ void Weave::buildGeometricStructures()
     int nfaces = nFaces();
     Bs.resize(nfaces);
     Js.resize(2 * nfaces, 2);
+
+    averageEdgeLength = 0;
+
     for (int i = 0; i < nfaces; i++)
     {
         Eigen::Vector3d v0 = V.row(F(i, 0));
@@ -150,6 +151,10 @@ void Weave::buildGeometricStructures()
         Eigen::Vector3d v2 = V.row(F(i, 2));
         Bs[i].col(0) = v1 - v0;
         Bs[i].col(1) = v2 - v0;
+
+        averageEdgeLength += (v2 - v1).norm();
+        averageEdgeLength += (v2 - v0).norm();
+        averageEdgeLength += (v1 - v0).norm();
 
         Eigen::Vector3d n = (v1 - v0).cross(v2 - v0);
         n /= n.norm();
@@ -160,6 +165,8 @@ void Weave::buildGeometricStructures()
         ncrossB.col(1) = n.cross(v2 - v0);
         Js.block<2, 2>(2 * i, 0) = BTB.inverse() * Bs[i].transpose() * ncrossB;
     }
+
+    averageEdgeLength /= (3.0 * nfaces);
 
     // compute cDiffs and transition matrices
     int nedges = nEdges();
@@ -276,13 +283,16 @@ void Weave::createVisualizationEdges(Eigen::MatrixXd &edgePts, Eigen::MatrixXd &
 {
     int nfaces = nFaces();
     int m = nFields();
-    edgePts.resize(2*m*nfaces, 3);
-    edgeVecs.resize(2*m*nfaces, 3);
+    int nhandles = nHandles();
+    edgePts.resize(m*nfaces + nhandles, 3);
+    edgeVecs.resize(m*nfaces + nhandles, 3);
     edgeVecs.setZero();
-    edgeSegs.resize(m*nfaces, 2);
-    colors.resize(m*nfaces, 3);
-    colors.setZero();
-    colors.col(0).setConstant(1.0);
+    edgeSegs.resize(m*nfaces + nhandles, 2);
+    colors.resize(m*nfaces + nhandles, 3);
+    
+    Eigen::MatrixXd fcolors(m, 3);
+    for (int i = 0; i < m; i++)
+        fcolors.row(i) = heatmap(double(i), 0.0, double(m-1));
 
     for (int i = 0; i < nfaces; i++)
     {
@@ -294,11 +304,41 @@ void Weave::createVisualizationEdges(Eigen::MatrixXd &edgePts, Eigen::MatrixXd &
 
         for (int j = 0; j < m; j++)
         {
-            edgePts.row(2 * (m*i + j)) = centroid;
-            edgePts.row(2 * (m*i + j) + 1) = centroid;
-            edgeVecs.row(2 * (m*i + j) + 1) = Bs[i] * v(i, j);
+            edgePts.row(m*i + j) = centroid;
+            edgeVecs.row(m*i + j) = Bs[i] * v(i, j);
             edgeSegs(m*i + j, 0) = 2 * (m*i + j);
             edgeSegs(m*i + j, 1) = 2 * (m*i + j) + 1;
+            colors.row(m*i + j) = fcolors.row(j);
         }
     }
+
+    for (int i = 0; i < nhandles; i++)
+    {
+        Eigen::Vector3d centroid;
+        centroid.setZero();
+        for (int j = 0; j < 3; j++)
+            centroid += V.row(F(handles[i].face, j));
+        centroid /= 3.0;
+
+        Eigen::Vector3d white(1, 1, 1);
+        edgePts.row(m*nfaces + i) = centroid;
+        edgeVecs.row(m*nfaces + i) = Bs[handles[i].face] * handles[i].dir;
+        edgeSegs(m*nfaces + i, 0) = 2 * m*nfaces + 2 * i;
+        edgeSegs(m*nfaces + i, 1) = 2 * m*nfaces + 2 * i + 1;
+        colors.row(m*nfaces + i).setConstant(1.0);
+    }
+}
+
+bool Weave::addHandle(Handle h)
+{
+    if (h.face < 0 || h.face > nFaces())
+        return false;
+    if(h.field < 0 || h.field > nFields())
+        return false;
+
+    Eigen::Vector3d extrinsic = Bs[h.face] * h.dir;
+    double mag = extrinsic.norm();
+    h.dir /= mag;
+    handles.push_back(h);
+    return true;
 }

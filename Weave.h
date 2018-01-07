@@ -40,6 +40,8 @@ public:
     Eigen::MatrixXd Ts;     // Transition matrices. Ts.block<2,2>(2*i,0) maps vectors from barycentric coordinates of face E(i,0) to barycentric coordinates of E(i,1). Ts.block<2,2>(2*i, 2) is opposite.
     Eigen::MatrixXd Js;     // Js.block<2,2>(2*i,0) rotates vectors on face i (in face i's barycentric coordinates) to the perpendicular vector (as measured in ambient space)
 
+    double averageEdgeLength; // exactly what it says on the tin
+
     ////////////////////////
     // Design Variables
     ////////////////////////
@@ -49,8 +51,10 @@ public:
                                      // first 2m|F| entries: first vector on face 1, second vector on face 1, third vector on face 1, ..., last vector on face m
                                      // next 2m|F| entries: first beta vector on face 1, ...
                                      // next m|F| entries: first alpha on face 1, ...
-    std::vector<Eigen::MatrixXd> Ps; // for each edge i, maps indices from triangle E(i,0) to indices in triangle E(i,1), with sign
+    std::vector<Eigen::MatrixXi> Ps; // for each edge i, maps indices from triangle E(i,0) to indices in triangle E(i,1), with sign
     std::vector<Handle> handles; // handles on the vector fields
+
+    bool addHandle(Handle h);  // this method will add a handle, also taking care to normalize the handle vector length
 
     int nVerts() const { return V.rows(); }
     int nFaces() const { return F.rows(); }

@@ -9,14 +9,13 @@ class Weave;
 struct SolverParams
 {
     double lambdacompat; // weight of compatibility term
+    double lambdareg;    // Tilhonov regularization
 };
-
-double energy(const Weave &weave, SolverParams params);
-void trueGradient(const Weave &weave, SolverParams params, Eigen::VectorXd &dE);
 
 void GNEnergy(const Weave &weave, SolverParams params, Eigen::VectorXd &E);
 void GNGradient(const Weave &weave, SolverParams params, Eigen::SparseMatrix<double> &J);
 
-void testFiniteDifferences(Weave &weave, SolverParams params);
 void GNtestFiniteDifferences(Weave &weave, SolverParams params);
+
+void oneStep(Weave &weave, SolverParams params);
 #endif
