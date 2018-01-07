@@ -92,6 +92,7 @@ void traceCurves(VisualizationState &vs)
         Eigen::Vector3d v = u.cross(n);
 	Eigen::Vector3d dir = u * pu[i] + v * pv[i];
         traceCurve(*curMesh, dir, idx[i], c[i], nor[i]);
+        computeSelfIntersections(c[i], i, vs.collisions);
     }
     vs.c0 = c[0];
     vs.c1 = c[1];
@@ -101,7 +102,7 @@ void traceCurves(VisualizationState &vs)
     vs.n1 = nor[1];
     vs.n2 = nor[2];
 
-    logRibbonsToFile(vs, "try1", "ribbon");
+    logRibbonsToFile(vs, "try1", "example");
         std::cout << vs.c0.size() << "c0" << curMesh->vs.c1.size() << "c1" << curMesh->vs.c2.size() << "c2";
     
 }

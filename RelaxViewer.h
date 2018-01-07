@@ -9,6 +9,8 @@
 #include "StateStructs.h"
 
 
+void computeSelfIntersections(const std::vector<Eigen::Vector3d> &curve, int idx, std::vector<Collision> &collisions);
+
 void traceCurve(const MeshData &md, 
 	        const Eigen::Vector3d dir, int faceId, 
 		std::vector<Eigen::Vector3d> &curve,

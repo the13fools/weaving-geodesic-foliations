@@ -34,6 +34,14 @@ enum shading_enum {
     INIT_MAGNITUDE
 };
 
+struct Collision {
+    Collision(int rod1, int rod2, int seg1, int seg2);
+    int rod1;
+    int rod2; // can be the same rod 
+    int seg1; 
+    int seg2;
+};
+
 struct VisualizationState
 {
     bool normFaceVectors;
@@ -43,7 +51,9 @@ struct VisualizationState
     std::vector<Eigen::Vector3d> c0;
     std::vector<Eigen::Vector3d> c1;
     std::vector<Eigen::Vector3d> c2;
- 
+
+    std::vector<Collision> collisions;
+
     std::vector<Eigen::Vector3d> n0;
     std::vector<Eigen::Vector3d> n1;
     std::vector<Eigen::Vector3d> n2;

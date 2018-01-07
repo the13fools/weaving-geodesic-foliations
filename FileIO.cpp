@@ -54,6 +54,19 @@ Eigen::MatrixXd readMatrix(const char *filename)
 }
 
 
+Eigen::Vector3d parallelTransport(const Eigen::Vector3d &v, const Eigen::Vector3d &e1, const Eigen::Vector3d &e2)
+{
+    Eigen::Vector3d t1 = e1 / e1.norm();
+    Eigen::Vector3d t2 = e2 / e2.norm();
+    Eigen::Vector3d n = t1.cross(t2);
+    if (n.norm() < 1e-8)
+        return v;
+    n /= n.norm();
+    Eigen::Vector3d p1 = n.cross(t1);
+    Eigen::Vector3d p2 = n.cross(t2);
+    return v.dot(n)*n + v.dot(t1)*t2 + v.dot(p1)*p2;
+}
+
 void logRibbonsToFile(const VisualizationState &vs, std::string foldername, std::string filename)
 {
 #ifndef WIN32
@@ -62,7 +75,7 @@ void logRibbonsToFile(const VisualizationState &vs, std::string foldername, std:
     mkdir("log", S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
     mkdir(folderpath, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
     char logpath[50];
-    sprintf(logpath, "%s/%s.txt", folderpath, filename.c_str());   
+    sprintf(logpath, "%s/%s.rod", folderpath, filename.c_str());   
     std::ofstream myfile (logpath);
     
     if (!myfile.is_open())
@@ -70,6 +83,7 @@ void logRibbonsToFile(const VisualizationState &vs, std::string foldername, std:
 	std::cout << "Unable to open file";
 	return;
     }
+
 
     double max_length = 0.;
     for (int i = 0; i < vs.c0.size() - 1; i++)
@@ -81,9 +95,10 @@ void logRibbonsToFile(const VisualizationState &vs, std::string foldername, std:
 	}
     }
 
+    // Decimate 
     std::vector<Eigen::Vector3d> cnew;
-    cnew.push_back(vs.c0[0]);
-    int seg_counter = 0;
+    cnew.push_back(vs.c0[1]);
+    int seg_counter = 1;
     Eigen::Vector3d prev_point = cnew.back();
     for (int i = 1; i < vs.c0.size(); i++)
     {
@@ -92,19 +107,33 @@ void logRibbonsToFile(const VisualizationState &vs, std::string foldername, std:
 	{
             cnew.push_back(vs.c0[i]);
 	    prev_point = cnew.back();
+	    seg_counter++;
 	}
     }
+    cnew.pop_back();
+    cnew.push_back(vs.c0[ vs.c0.size() - 1 ]);
 
+    // Find new normal vector - could be improved by using old normals.
     std::vector<Eigen::Vector3d> nnew (cnew.size() - 1, Eigen::Vector3d::Zero());
+    Eigen::Vector3d v1 = cnew[1] - cnew[0];
+    Eigen::Vector3d v2 = cnew[2] - cnew[1];
+    Eigen::Vector3d perp = v1.cross(v2);
+
+    nnew[0] = v1.cross(perp).normalized();
+    Eigen::Vector3d prev_norm = nnew[0];
     for (int i = 0; i < cnew.size() - 2; i++) 
     {
         Eigen::Vector3d v1 = cnew[i+1] - cnew[i];
         Eigen::Vector3d v2 = cnew[i+2] - cnew[i+1];
-	Eigen::Vector3d perp = v1.cross(v2);
-	nnew[i] = v1.cross(perp);
-	nnew[i+1] = perp.cross(v2);
-    }
+	Eigen::Vector3d new_normal = parallelTransport(prev_norm, v1, v2);
+        
+	nnew[i+1] = new_normal;
+	prev_norm = new_normal;
+	std::cout << nnew[i].dot(cnew[i] - cnew[i+1]) << " ";
+	std::cout << nnew[i+1].dot(cnew[i+2] - cnew[i+1]) << "\n";
 
+    }
+//    nnew[0] = vs.n0[0];
 
     myfile << "1\n";
     myfile << "0\n";
@@ -128,8 +157,11 @@ void logRibbonsToFile(const VisualizationState &vs, std::string foldername, std:
 
     for(int i = 0; i < nnew.size(); i++)
     {
+	double c = .2;
 	    myfile << " .1 .1 .1";
+    //        myfile << (double) i * .1  + c<< " " << (double) i * .1 + c << " " << (double) i * .1 +c << " ";
     } 
+    myfile << "\n";
 
     myfile.close();
 #endif

@@ -78,6 +78,40 @@ int getOpVIdFromEdge(const MeshData &md, int curr_edge, int faceId)
     return -1;
 }
 
+void computeSelfIntersections(const std::vector<Eigen::Vector3d> &curve, int idx, std::vector<Collision> &collisions)
+{
+    double minSegmentLength = (curve[0] - curve[1]).norm();
+    for (int i = 0; i < curve.size() - 1; i++)
+    {
+	double segLength = (curve[i] - curve[i + 1]).norm();
+        if ( minSegmentLength > segLength )
+	{
+            minSegmentLength = segLength;
+	}
+    }
+
+
+    for (int i = 0; i < curve.size() - 2; i++) 
+    {
+        for (int j = i + 2; j < curve.size(); j++)
+	{
+         
+	    double p0bary, p1bary, q0bary, q1bary;
+	    Eigen::Vector3d dist = Distance::edgeEdgeDistance(curve[i], 
+		                                              curve[i + 1],
+                                                              curve[j],
+							      curve[j + 1],
+							      p0bary, p1bary, q0bary, q1bary);
+	    if ( dist.norm() < minSegmentLength / 2. )
+	    {
+             //   Collision* c = new Collision(idx, idx, i, j);
+		collisions.push_back( Collision(idx, idx, i, j)  );
+		std::cout << i << " " << j << "\n";
+	    }
+	} 
+    }
+}
+
 
 void traceCurve(const MeshData &md,
         	const Eigen::Vector3d dir, int faceId, 
@@ -94,7 +128,7 @@ void traceCurve(const MeshData &md,
     int curr_face_id = faceId;
     Eigen::Vector3d curr_dir = -dir;
     
-    int steps = 1000;
+    int steps = 100;
 
     int curr_edge_id = getCurrEdge(md, curve.back(), curr_face_id);
     for (int i = 0; i < steps; i++)

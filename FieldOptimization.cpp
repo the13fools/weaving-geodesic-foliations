@@ -196,6 +196,11 @@ void computeCentroids(const Eigen::MatrixXi &F,const Eigen::MatrixXd &V, Eigen::
     }
 }
 
+Collision::Collision(int rod1, int rod2, int seg1, int seg2) : rod1(rod1), rod2(rod2), 
+                                                               seg1(seg1), seg2(seg2)
+{
+}    
+
 MeshData::MeshData(const Eigen::MatrixXd &V, 
 	           const Eigen::MatrixXi &F) : V(V), F(F)
 {
