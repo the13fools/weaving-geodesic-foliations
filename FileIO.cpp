@@ -97,10 +97,11 @@ void logRibbonsToFile(const VisualizationState &vs, std::string foldername, std:
 
     // Decimate 
     std::vector<Eigen::Vector3d> cnew;
-    cnew.push_back(vs.c0[1]);
-    int seg_counter = 1;
+    cnew.push_back(vs.c0[0]);
+    int seg_counter = 0;
+    Eigen::VectorXd desc_mapping = Eigen::VectorXd::Zero(vs.c0.size());
     Eigen::Vector3d prev_point = cnew.back();
-    for (int i = 1; i < vs.c0.size(); i++)
+    for (int i = 0; i < vs.c0.size(); i++)
     {
         double seg_length = ( prev_point - vs.c0[i] ).norm(); 	
 	if (seg_length > max_length) 
@@ -109,6 +110,7 @@ void logRibbonsToFile(const VisualizationState &vs, std::string foldername, std:
 	    prev_point = cnew.back();
 	    seg_counter++;
 	}
+	desc_mapping(i) = seg_counter;
     }
     cnew.pop_back();
     cnew.push_back(vs.c0[ vs.c0.size() - 1 ]);
@@ -126,11 +128,17 @@ void logRibbonsToFile(const VisualizationState &vs, std::string foldername, std:
         Eigen::Vector3d v1 = cnew[i+1] - cnew[i];
         Eigen::Vector3d v2 = cnew[i+2] - cnew[i+1];
 	Eigen::Vector3d new_normal = parallelTransport(prev_norm, v1, v2);
-        
-	nnew[i+1] = new_normal;
+   
+/*	Eigen::Vector3d v1 = cnew[i + 1] - cnew[i];
+	Eigen::Vector3d v2 = cnew[i + 2] - cnew[i + 1];
+	Eigen::Vector3d perp = v1.cross(v2);
+
+	nnew[i + 1] = v2.cross(perp).normalized();
+        if (nnew[i+1].dot(nnew[i]) < 0) { nnew[i+1] *= -1.; }
+*/	nnew[i+1] = new_normal;
 	prev_norm = new_normal;
-	std::cout << nnew[i].dot(cnew[i] - cnew[i+1]) << " ";
-	std::cout << nnew[i+1].dot(cnew[i+2] - cnew[i+1]) << "\n";
+//	std::cout << nnew[i].dot(cnew[i] - cnew[i+1]) << " ";
+//	std::cout << nnew[i+1].dot(cnew[i+2] - cnew[i+1]) << "\n";
 
     }
 //    nnew[0] = vs.n0[0];
@@ -158,7 +166,7 @@ void logRibbonsToFile(const VisualizationState &vs, std::string foldername, std:
     for(int i = 0; i < nnew.size(); i++)
     {
 	double c = .2;
-	    myfile << " .1 .1 .1";
+	    myfile << " .1";
     //        myfile << (double) i * .1  + c<< " " << (double) i * .1 + c << " " << (double) i * .1 +c << " ";
     } 
     myfile << "\n";

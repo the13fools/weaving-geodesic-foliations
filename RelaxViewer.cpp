@@ -84,16 +84,16 @@ void computeSelfIntersections(const std::vector<Eigen::Vector3d> &curve, int idx
     for (int i = 0; i < curve.size() - 1; i++)
     {
 	double segLength = (curve[i] - curve[i + 1]).norm();
-        if ( minSegmentLength > segLength )
+        if ( minSegmentLength > segLength && segLength > 0.)
 	{
             minSegmentLength = segLength;
 	}
     }
-
-
-    for (int i = 0; i < curve.size() - 2; i++) 
+    minSegmentLength = minSegmentLength / 2.;
+    std::cout << minSegmentLength << "\n";
+    for (int i = 0; i < curve.size() - 3; i++) 
     {
-        for (int j = i + 2; j < curve.size(); j++)
+        for (int j = i + 3; j < curve.size(); j++)
 	{
          
 	    double p0bary, p1bary, q0bary, q1bary;
@@ -102,11 +102,11 @@ void computeSelfIntersections(const std::vector<Eigen::Vector3d> &curve, int idx
                                                               curve[j],
 							      curve[j + 1],
 							      p0bary, p1bary, q0bary, q1bary);
-	    if ( dist.norm() < minSegmentLength / 2. )
+	    if ( dist.norm() < minSegmentLength )
 	    {
              //   Collision* c = new Collision(idx, idx, i, j);
 		collisions.push_back( Collision(idx, idx, i, j)  );
-		std::cout << i << " " << j << "\n";
+		std::cout << idx << " " << i << " " << j << " "  << dist.norm() << "\n";
 	    }
 	} 
     }
@@ -128,7 +128,7 @@ void traceCurve(const MeshData &md,
     int curr_face_id = faceId;
     Eigen::Vector3d curr_dir = -dir;
     
-    int steps = 100;
+    int steps = 1000;
 
     int curr_edge_id = getCurrEdge(md, curve.back(), curr_face_id);
     for (int i = 0; i < steps; i++)
