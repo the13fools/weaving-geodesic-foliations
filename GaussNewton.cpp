@@ -2,8 +2,87 @@
 #include "Weave.h"
 #include <iostream>
 #include <fstream>
+#include <Eigen/CholmodSupport>
 
 using namespace Eigen;
+
+void faceEnergies(const Weave &weave, SolverParams params, Eigen::MatrixXd &E)
+{
+    int nhandles = weave.nHandles();
+    int nedges = weave.nEdges();
+    int m = weave.nFields();
+    int nfaces = weave.nFaces();
+    E.resize(nfaces, m);
+    E.setZero();
+
+    Eigen::VectorXd r;
+    GNEnergy(weave, params, r);
+    int term = 2 * nhandles;
+
+    for (int e = 0; e < nedges; e++)
+    {
+        for (int i = 0; i < m; i++)
+        {
+            for (int side = 0; side < 2; side++)
+            {
+                int f = (side == 0 ? weave.E(e, 0) : weave.E(e, 1));
+
+                Eigen::Vector2d termr = r.segment<2>(term);
+                E(f, i) += termr.transpose() * weave.Bs[f].transpose() * weave.Bs[f] * termr;
+
+                term += 2;
+            }
+        }
+    }
+}
+
+void GNmetric(const Weave &weave, Eigen::SparseMatrix<double> &M)
+{
+    int nhandles = weave.nHandles();
+    int nedges = weave.nEdges();
+    int m = weave.nFields();
+
+    M.resize(2 * nhandles + 4 * nedges*m, 2 * nhandles + 4 * nedges*m);
+
+    std::vector<Eigen::Triplet<double> > Mcoeffs;
+
+    for (int i = 0; i < nhandles; i++)
+    {
+        int face = weave.handles[i].face;
+        Eigen::Matrix2d BTB = weave.Bs[face].transpose() * weave.Bs[face];
+        for (int j = 0; j < 2; j++)
+        {
+            for (int k = 0; k < 2; k++)
+            {
+                Mcoeffs.push_back(Triplet<double>(2 * i + j, 2 * i + k, BTB(j, k)));
+            }
+        }
+    }
+
+    int term = 2 * nhandles;
+
+    for (int e = 0; e < nedges; e++)
+    {
+        for (int i = 0; i < m; i++)
+        {
+            for (int side = 0; side < 2; side++)
+            {
+                int f = (side == 0 ? weave.E(e, 0) : weave.E(e, 1));
+                
+                Eigen::Matrix2d BTB = weave.Bs[f].transpose() * weave.Bs[f];
+                for (int j = 0; j < 2; j++)
+                {
+                    for (int k = 0; k < 2; k++)
+                    {
+                        Mcoeffs.push_back(Triplet<double>(term + j, term + k, BTB(j, k)));
+                    }
+                }
+                term += 2;
+            }
+        }
+    }
+    M.setFromTriplets(Mcoeffs.begin(), Mcoeffs.end());
+}
 
 void GNEnergy(const Weave &weave, SolverParams params, Eigen::VectorXd &E)
 {
@@ -11,7 +90,7 @@ void GNEnergy(const Weave &weave, SolverParams params, Eigen::VectorXd &E)
     int nedges = weave.nEdges();
     int m = weave.nFields();
 
-    int nterms = 3 * nhandles + 6 * nedges*m;
+    int nterms = 2 * nhandles + 4 * nedges*m;
     E.resize(nterms);
     E.setZero();
 
@@ -20,11 +99,11 @@ void GNEnergy(const Weave &weave, SolverParams params, Eigen::VectorXd &E)
         int field = weave.handles[i].field;
         int face = weave.handles[i].face;
         Vector2d dir = weave.handles[i].dir;
-        for (int k = 0; k < 3; k++)
-            E[3 * i + k] = (weave.Bs[face] * (weave.v(face, field) - dir))[k];
+        for (int coeff = 0; coeff < 2; coeff++)
+            E[2 * i + coeff] = (weave.v(face, field) - dir)[coeff];
     }
 
-    int term = 3*nhandles;
+    int term = 2*nhandles;
 
     // compatibility constraint
     for (int e = 0; e < nedges; e++)
@@ -48,9 +127,9 @@ void GNEnergy(const Weave &weave, SolverParams params, Eigen::VectorXd &E)
                     vpermut += permut(i, field) * weave.v(g, field);
                 }
                 Eigen::Matrix2d Tgf = weave.Ts.block<2, 2>(2 * e, 2 - 2 * side);
-                for (int k = 0; k < 3; k++)
+                for (int k = 0; k < 2; k++)
                 {
-                    E[term] = sqrt(params.lambdacompat) * (weave.Bs[f] * (Dif*cdiff - (Tgf*vpermut - vif)))[k];
+                    E[term] = sqrt(params.lambdacompat) * (Dif*cdiff - (Tgf*vpermut - vif))[k];
                     term++;
                 }
             }
@@ -64,7 +143,7 @@ void GNGradient(const Weave &weave, SolverParams params, Eigen::SparseMatrix<dou
     int nedges = weave.nEdges();
     int m = weave.nFields();
 
-    int nterms = 3 * nhandles + 6 * nedges*m;
+    int nterms = 2 * nhandles + 4 * nedges*m;
     J.resize(nterms, weave.vectorFields.size());
 
     std::vector<Eigen::Triplet<double> > Jcoeffs;
@@ -73,16 +152,13 @@ void GNGradient(const Weave &weave, SolverParams params, Eigen::SparseMatrix<dou
     { 
         int field = weave.handles[i].field;
         int face = weave.handles[i].face;
-        for (int coeff = 0; coeff < 3; coeff++)
+        for (int coeff = 0; coeff < 2; coeff++)
         {
-            for (int k = 0; k < 2; k++)
-            {
-                Jcoeffs.push_back(Triplet<double>(3 * i + coeff, weave.vidx(face, field) + k, weave.Bs[face](coeff,k)));
-            }
+            Jcoeffs.push_back(Triplet<double>(2 * i + coeff, weave.vidx(face, field) + coeff, 1.0));
         }
     }
 
-    int term = 3 * nhandles;
+    int term = 2 * nhandles;
 
     // compatibility constraint
     for (int e = 0; e < nedges; e++)
@@ -107,10 +183,10 @@ void GNGradient(const Weave &weave, SolverParams params, Eigen::SparseMatrix<dou
                 }
                 Eigen::Matrix2d Tgf = weave.Ts.block<2, 2>(2 * e, 2 - 2 * side);
 
-                for (int coeff = 0; coeff < 3; coeff++)
+                for (int coeff = 0; coeff < 2; coeff++)
                 {
                     Eigen::Vector2d innervec(0, 0);
-                    innervec = weave.Bs[f].row(coeff).transpose() * sqrt(params.lambdacompat);
+                    innervec[coeff] = sqrt(params.lambdacompat);
                     Vector2d dE = Jf.transpose()*cdiff * weave.beta(f, i).dot(innervec);
                     dE += cdiff.dot(vif) * weave.alpha(f, i) * innervec;
                     dE += cdiff * weave.alpha(f, i) * vif.dot(innervec);
@@ -167,25 +243,31 @@ void GNtestFiniteDifferences(Weave &weave, SolverParams params)
 
 void oneStep(Weave &weave, SolverParams params)
 {
+    int nvars = weave.vectorFields.size();
     Eigen::VectorXd r;
     GNEnergy(weave, params, r);
+    Eigen::SparseMatrix<double> M;
+    GNmetric(weave, M);
 
-
-    std::cout << "original energy: " << r.squaredNorm() << std::endl;;
-
+    std::cout << "original energy: " << r.transpose() * M * r << std::endl;
+    std::cout << "Building matrix" << std::endl;
     Eigen::SparseMatrix<double> J;
     GNGradient(weave, params, J);
-    Eigen::SparseMatrix<double> M = J.transpose() * J;
-    Eigen::SparseMatrix<double> I(weave.vectorFields.size(), weave.vectorFields.size());
-    I.setIdentity();
-    M += params.lambdareg * I;
-
-    Eigen::SimplicialLDLT<Eigen::SparseMatrix<double> > solver;
-    solver.compute(M);
-    Eigen::VectorXd rhs = J.transpose() * r;
+    Eigen::SparseMatrix<double> optMat(nvars, nvars);
+    optMat.setIdentity();
+    optMat *= params.lambdareg;
+    optMat += J.transpose() * M * J;
+    std::cout << "Done, " << optMat.nonZeros() << " nonzeros" << std::endl;
+    optMat.makeCompressed();
+    Eigen::CholmodSimplicialLDLT<Eigen::SparseMatrix<double> > solver;
+    std::cout << "Analyzing" << std::endl;
+    solver.analyzePattern(optMat);
+    Eigen::VectorXd rhs = J.transpose() * M * r;
+    std::cout << "Solving" << std::endl;
+    solver.factorize(optMat);
     Eigen::VectorXd update = solver.solve(rhs);
     weave.vectorFields -= update;
 
     GNEnergy(weave, params, r);
-    std::cout << "new energy: " << r.squaredNorm() << std::endl;;
+    std::cout << "Done, new energy: " << r.transpose()*M*r << std::endl;
 }

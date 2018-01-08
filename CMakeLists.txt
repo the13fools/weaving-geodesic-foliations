@@ -24,8 +24,11 @@ option(LIBIGL_WITH_VIEWER           "Use OpenGL viewer"  ON)
 option(LIBIGL_WITH_XML              "Use XML"            OFF)
 
 find_package(LIBIGL REQUIRED QUIET)
+find_package(BLAS REQUIRED)
+find_package(Cholmod REQUIRED QUIET)
 
 # Add your project files
 file(GLOB SRCFILES *.cpp)
 add_executable(${PROJECT_NAME}_bin ${SRCFILES})
-target_link_libraries(${PROJECT_NAME}_bin igl::core igl::viewer)
+target_include_directories(${PROJECT_NAME}_bin PUBLIC ${CHOLMOD_INCLUDES})
+target_link_libraries(${PROJECT_NAME}_bin igl::core igl::viewer ${CHOLMOD_LIBRARIES} ${BLAS_LIBRARIES})
