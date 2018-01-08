@@ -4,7 +4,16 @@
 #include "PhysicsHook.h"
 #include "Weave.h"
 #include "GaussNewton.h"
+#include "Trace.h"
 #include <string>
+
+enum Shading_Enum {
+    NONE = 0,
+    F1_ENERGY,
+    F2_ENERGY,
+    F3_ENERGY,
+    TOT_ENERGY
+};
 
 class WeaveHook : public PhysicsHook
 {
@@ -25,6 +34,14 @@ public:
         viewer.ngui->addGroup("Solver Parameters");
         viewer.ngui->addVariable("Compatilibity Lambda", params.lambdacompat);
         viewer.ngui->addVariable("Tikhonov Reg", params.lambdareg);
+        
+        viewer.ngui->addVariable("Shading", shading_state, true)
+                   ->setItems({"None", "F1 Energy", "F2 Energy", "F3 Energy", "Total Energy"});
+        
+	// NOT HOOKED IN YET
+	viewer.ngui->addVariable("Trace Field", isTraceField);
+//	viewer.ngui->addVariable("Trace Field", isTraceField);
+        
     }
 
     virtual void initSimulation()
@@ -53,23 +70,28 @@ public:
         renderF = weave->F;        
         weave->createVisualizationEdges(edgePts, edgeVecs, edgeSegs, edgeColors);
         faceColors.resize(weave->nFaces(), 3);
-        faceColors.setConstant(0.5);
+        faceColors.setConstant(0.3);
         baseLength = weave->averageEdgeLength;
+        curFaceEnergies = tempFaceEnergies;
     }
 
     virtual bool simulateOneStep();    
 
     virtual void renderRenderGeometry(igl::viewer::Viewer &viewer);    
 
+    void setFaceColors(igl::viewer::Viewer &viewer);
 private:
     std::string meshName;
     Weave *weave;
     SolverParams params;
+    Trace trace;
 
     double vectorScale;
     double baseLength;
 
     Eigen::MatrixXd faceColors;
+    Eigen::MatrixXd curFaceEnergies;
+    Eigen::MatrixXd tempFaceEnergies;
     Eigen::MatrixXd renderQ;
     Eigen::MatrixXi renderF;
     Eigen::MatrixXd edgePts;
@@ -77,6 +99,10 @@ private:
     Eigen::MatrixXi edgeSegs;
     Eigen::MatrixXd edgeColors;    
     bool normalizeVectors;
+
+    Shading_Enum shading_state = Shading_Enum::NONE;
+
+    bool isTraceField;
 };
 
 #endif
