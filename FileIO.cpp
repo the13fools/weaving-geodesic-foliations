@@ -97,18 +97,22 @@ void logRibbonsToFile(const VisualizationState &vs, std::string foldername, std:
 
     // Decimate 
     std::vector<Eigen::Vector3d> cnew;
+    std::vector<Eigen::Vector3d> nnew;
     cnew.push_back(vs.c0[0]);
     int seg_counter = 0;
     Eigen::VectorXd desc_mapping = Eigen::VectorXd::Zero(vs.c0.size());
     Eigen::Vector3d prev_point = cnew.back();
-    for (int i = 0; i < vs.c0.size(); i++)
+    for (int i = 1; i < vs.c0.size(); i++)
     {
         double seg_length = ( prev_point - vs.c0[i] ).norm(); 	
 	if (seg_length > max_length) 
 	{
-            cnew.push_back(vs.c0[i]);
-	    prev_point = cnew.back();
 	    seg_counter++;
+            cnew.push_back(vs.c0[i]);
+	    Eigen::Vector3d currEdge = vs.c0[i] - vs.c0[i-1];
+	    Eigen::Vector3d targEdge = cnew[seg_counter] - cnew[seg_counter-1];
+	    nnew.push_back(parallelTransport(vs.n0[i-1], currEdge, targEdge));
+	    prev_point = cnew.back();
 	}
 	desc_mapping(i) = seg_counter;
     }
@@ -116,36 +120,38 @@ void logRibbonsToFile(const VisualizationState &vs, std::string foldername, std:
     cnew.push_back(vs.c0[ vs.c0.size() - 1 ]);
 
     // Find new normal vector - could be improved by using old normals.
-    std::vector<Eigen::Vector3d> nnew (cnew.size() - 1, Eigen::Vector3d::Zero());
-    Eigen::Vector3d v1 = cnew[1] - cnew[0];
-    Eigen::Vector3d v2 = cnew[2] - cnew[1];
-    Eigen::Vector3d perp = v1.cross(v2);
+    std::vector<Eigen::Vector3d> perps (cnew.size() - 1, Eigen::Vector3d::Zero());
+ //   Eigen::Vector3d v1 = cnew[1] - cnew[0];
+ //   Eigen::Vector3d v2 = cnew[2] - cnew[1];
+ //   perps[0] = v1.cross(v2);
 
-    nnew[0] = v1.cross(perp).normalized();
-    Eigen::Vector3d prev_norm = nnew[0];
-    for (int i = 0; i < cnew.size() - 2; i++) 
-    {
-        Eigen::Vector3d v1 = cnew[i+1] - cnew[i];
-        Eigen::Vector3d v2 = cnew[i+2] - cnew[i+1];
-	Eigen::Vector3d new_normal = parallelTransport(prev_norm, v1, v2);
+ //   nnew[0] = v1.cross(perps[0]).normalized();
+  //  nnew[1] = v2.cross(perp).normalized();
+ //   Eigen::Vector3d prev_norm = nnew[1];
+ //   for (int i = 1; i < cnew.size() - 1; i++) 
+  //  {
+    //    Eigen::Vector3d v1 = cnew[i] - cnew[i-1];
+   //     Eigen::Vector3d v2 = cnew[i+1] - cnew[i];
+//	Eigen::Vector3d new_perp = parallelTransport(prev_norm, v1, v2);
+  //      nnew[i] = parallelTransport(n_map[i], v1, v2);
    
-/*	Eigen::Vector3d v1 = cnew[i + 1] - cnew[i];
+/*	Eigen::Vector2d v1 = cnew[i + 1] - cnew[i];
 	Eigen::Vector3d v2 = cnew[i + 2] - cnew[i + 1];
 	Eigen::Vector3d perp = v1.cross(v2);
 
 	nnew[i + 1] = v2.cross(perp).normalized();
         if (nnew[i+1].dot(nnew[i]) < 0) { nnew[i+1] *= -1.; }
-*/	nnew[i+1] = new_normal;
-	prev_norm = new_normal;
+*///	nnew[i+1] = new_perp;
+//	prev_norm = new_perp;
 //	std::cout << nnew[i].dot(cnew[i] - cnew[i+1]) << " ";
 //	std::cout << nnew[i+1].dot(cnew[i+2] - cnew[i+1]) << "\n";
 
-    }
+//    }
 //    nnew[0] = vs.n0[0];
 
     myfile << "1\n";
     myfile << "0\n";
-    myfile << "0.0001\n";
+    myfile << "0.001\n";
     myfile << "1e+08\n"; 
     myfile << "1\n\n\n";
     
