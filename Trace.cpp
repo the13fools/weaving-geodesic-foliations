@@ -113,8 +113,9 @@ void Trace::traceCurve(const Weave &wv,
     int curr_face_id = faceId; 
    
     // Project backwards to initialize.  Kinda hacky.
-    int min_dist = wv.averageEdgeLength * 1000.;
+    double min_dist = wv.averageEdgeLength * 1000.;
     Eigen::Vector3d prev_point;
+    Eigen::Vector3d centroid = curve.row(0);
     int curr_edge_id = -1;
     for (int i = 0; i < 3; i++) 
     {
@@ -123,8 +124,8 @@ void Trace::traceCurve(const Weave &wv,
         Eigen::Vector3d op_v2 = wv.V.row(wv.edgeVerts(next_edge_id, 1));
 
 	double p0bary, p1bary, q0bary, q1bary;
-	Eigen::Vector3d dist = Distance::edgeEdgeDistance(prev_point, 
-	   					          prev_point - curr_dir,
+	Eigen::Vector3d dist = Distance::edgeEdgeDistance(centroid, 
+	   					          centroid + curr_dir,
                                                           op_v1, op_v2,
                                                           p0bary, p1bary, q0bary, q1bary);
         if (dist.norm() < min_dist)
@@ -134,7 +135,18 @@ void Trace::traceCurve(const Weave &wv,
             curr_edge_id = i;
 	}
     }
-    std::cout << min_dist << std::endl;
+/*    prev_point = 1./2. * wv.V.row(wv.F(faceId, 0)) + 1./2. * wv.V.row(wv.F(faceId, 1));
+    for (int i = 0; i < 3; i++) 
+    {
+        if (( wv.edgeVerts(wv.faceEdges(faceId, i), 0) == wv.F(faceId, 0) || 
+		wv.edgeVerts(wv.faceEdges(faceId, i), 0) == wv.F(faceId, 1)) &&
+( wv.edgeVerts(wv.faceEdges(faceId, i), 1) == wv.F(faceId, 0) ||
+                  wv.edgeVerts(wv.faceEdges(faceId, i), 1) == wv.F(faceId, 1)))
+	{
+            curr_edge_id = i;
+	}
+    }
+    std::cout << min_dist << std::endl; */
     assert(curr_edge_id > -1);
     int op_v_id = getOpVIdFromEdge(wv, curr_edge_id, curr_face_id);
 
