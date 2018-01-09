@@ -34,15 +34,20 @@ public:
         viewer.ngui->addGroup("Solver Parameters");
         viewer.ngui->addVariable("Compatilibity Lambda", params.lambdacompat);
         viewer.ngui->addVariable("Tikhonov Reg", params.lambdareg);
-        
+
         viewer.ngui->addVariable("Shading", shading_state, true)
-                   ->setItems({"None", "F1 Energy", "F2 Energy", "F3 Energy", "Total Energy"});
-        
-	// NOT HOOKED IN YET
-	viewer.ngui->addVariable("Trace Field", isTraceField);
-//	viewer.ngui->addVariable("Trace Field", isTraceField);
-        
+            ->setItems({ "None", "F1 Energy", "F2 Energy", "F3 Energy", "Total Energy" });
+
+        // NOT HOOKED IN YET
+        viewer.ngui->addVariable("Trace Field", isTraceField);
+        //	viewer.ngui->addVariable("Trace Field", isTraceField);
+
+        viewer.ngui->addButton("Normalize Fields", std::bind(&WeaveHook::normalizeFields, this));
+
     }
+
+    void reassignPermutations();
+    void normalizeFields();
 
     virtual void initSimulation()
     {

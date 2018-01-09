@@ -51,7 +51,7 @@ public:
                                      // first 2m|F| entries: first vector on face 1, second vector on face 1, third vector on face 1, ..., last vector on face m
                                      // next 2m|F| entries: first beta vector on face 1, ...
                                      // next m|F| entries: first alpha on face 1, ...
-    std::vector<Eigen::MatrixXi> Ps; // for each edge i, maps indices from triangle E(i,0) to indices in triangle E(i,1), with sign
+    std::vector<Eigen::MatrixXi> Ps; // for each edge i, maps indices from triangle E(i,1) to indices in triangle E(i,0), with sign. I.e. the vector on E(i,1) corresponding to vector j on E(i,0) is \sum_k Ps(j,k) v(E(i,1),k)
     std::vector<Handle> handles; // handles on the vector fields
 
     bool addHandle(Handle h);  // this method will add a handle, also taking care to normalize the handle vector length
@@ -70,7 +70,7 @@ public:
     double alpha(int face, int field) const;
 
     Eigen::Vector3d faceNormal(int face);
-
+    void normalizeFields(); // make all vectors unit-length
     void createVisualizationEdges(Eigen::MatrixXd &edgePts, Eigen::MatrixXd &edgeVecs, Eigen::MatrixXi &edgeSegs, Eigen::MatrixXd &colors);
 
 private:

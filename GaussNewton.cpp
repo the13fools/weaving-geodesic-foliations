@@ -242,7 +242,7 @@ void GNtestFiniteDifferences(Weave &weave, SolverParams params)
 }
 
 void oneStep(Weave &weave, SolverParams params)
-{
+{    
     int nvars = weave.vectorFields.size();
     Eigen::VectorXd r;
     GNEnergy(weave, params, r);
@@ -254,8 +254,12 @@ void oneStep(Weave &weave, SolverParams params)
     Eigen::SparseMatrix<double> J;
     GNGradient(weave, params, J);
     Eigen::SparseMatrix<double> optMat(nvars, nvars);
-    optMat.setIdentity();
-    optMat *= params.lambdareg;
+    std::vector<Eigen::Triplet<double> > coeffs;
+    int nfaces = weave.nFaces();
+    int m = weave.nFields();
+    for (int i = 2 * nfaces*m; i < 5 * nfaces*m; i++)
+        coeffs.push_back(Eigen::Triplet<double>(i, i, params.lambdareg));
+    optMat.setFromTriplets(coeffs.begin(), coeffs.end());
     optMat += J.transpose() * M * J;
     std::cout << "Done, " << optMat.nonZeros() << " nonzeros" << std::endl;
     optMat.makeCompressed();

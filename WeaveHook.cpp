@@ -1,6 +1,7 @@
 #include "WeaveHook.h"
 #include "GaussNewton.h"
 #include <iostream>
+#include "Permutations.h"
 
 using namespace std;
 
@@ -22,7 +23,6 @@ void WeaveHook::setFaceColors(igl::viewer::Viewer &viewer)
 		Z(i) = .7;
 		break;
 	    case F1_ENERGY:
-		std::cout << curFaceEnergies(i,0) << std::endl;
 		Z(i) = log(curFaceEnergies(i,0));
 	        break;	
 	    case F2_ENERGY:
@@ -61,9 +61,9 @@ void WeaveHook::renderRenderGeometry(igl::viewer::Viewer &viewer)
         if (normalizeVectors)
         {
             if(vec.norm() != 0.0)
-                vec *= baseLength / vec.norm() * sqrt(3.0) / 6.0;
+                vec *= baseLength / vec.norm() * sqrt(3.0) / 6.0 * 0.75;
         }
-        renderPts.row(2 * i) = edgePts.row(i);
+        renderPts.row(2 * i) = edgePts.row(i) - vectorScale*vec.transpose();
         renderPts.row(2 * i + 1) = edgePts.row(i) + vectorScale*vec.transpose();
     }
     viewer.data.set_edges(renderPts, edgeSegs, edgeColors);      
@@ -74,8 +74,20 @@ bool WeaveHook::simulateOneStep()
 {
     //GNtestFiniteDifferences(*weave, params);
     //exit(-1);
-
+    reassignPermutations();
     oneStep(*weave, params);
     faceEnergies(*weave, params, tempFaceEnergies);
     return false;
+}
+
+void WeaveHook::reassignPermutations()
+{
+    int flipped = ::reassignPermutations(*weave);
+    std::cout << flipped << " permutations changed" << std::endl;
+}
+
+void WeaveHook::normalizeFields()
+{
+    weave->normalizeFields();
+    updateRenderGeometry();
 }
