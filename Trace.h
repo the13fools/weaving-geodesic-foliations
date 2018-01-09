@@ -6,12 +6,26 @@
 
 class Weave;
 
+struct Collision {
+    Collision(int rod1, int rod2, int seg1, int seg2);
+    int rod1;
+    int rod2; // can be the same rod 
+    int seg1; 
+    int seg2;
+};
+
 class Trace
 {
-    void traceCurve(const Weave &md,
-                const Eigen::Vector3d dir, int faceId, 
-                std::vector<Eigen::Vector3d> &curve,
-                std::vector<Eigen::Vector3d> &normal);
+public:
+    Trace();
+    ~Trace();
+
+    // eeeeeew
+    std::vector< Eigen::MatrixXd > curves;
+    std::vector< Eigen::MatrixXd > normals;
+        
+    void traceCurve(const Weave &vw, const Eigen::Vector3d dir, int faceId, int steps);
+    void popLastCurve();
 };
 
 

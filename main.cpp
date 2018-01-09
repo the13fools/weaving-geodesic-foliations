@@ -42,6 +42,16 @@ bool keyCallback(igl::viewer::Viewer& viewer, unsigned int key, int modifiers)
     return false;
 }
 
+void drawTrace()
+{
+    hook->isDrawTrace = true;
+}
+
+void deleteLastTrace()
+{
+    hook->isDeleteLastTrace = true;
+}
+
 bool initGUI(igl::viewer::Viewer &viewer)
 {
     viewer.ngui->window()->setVisible(false);
@@ -49,6 +59,8 @@ bool initGUI(igl::viewer::Viewer &viewer)
     viewer.ngui->addButton("Run/Pause Sim", toggleSimulation);
     viewer.ngui->addButton("Reset Sim", resetSimulation);
     hook->initGUI(viewer);
+    viewer.ngui->addButton("Draw Trace", drawTrace);
+    viewer.ngui->addButton("Delete Last Trace", deleteLastTrace);
     viewer.screen->performLayout();
     return false;
 }

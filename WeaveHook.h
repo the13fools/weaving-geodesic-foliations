@@ -23,6 +23,18 @@ public:
         meshName = "meshes/torus.obj";
         params.lambdacompat = 100;
         params.lambdareg = 1e-3;
+
+	traceU = 1;
+	traceV = 0; 
+	traceW = 0;
+	traceSteps = 1000;
+	traceFaceId = 0;
+	isDrawTrace = false;
+        
+        hideVectors = false;
+
+	trace = new Trace();
+
     }
 
     virtual void initGUI(igl::viewer::Viewer &viewer)
@@ -31,19 +43,24 @@ public:
         viewer.ngui->addGroup("Visualization");
         viewer.ngui->addVariable("Vector Scale", vectorScale);
         viewer.ngui->addVariable("Normalize Vectors", normalizeVectors);
+        viewer.ngui->addVariable("Hide Vectors", hideVectors);
+        viewer.ngui->addVariable("Shading", shading_state, true)
+                   ->setItems({"None", "F1 Energy", "F2 Energy", "F3 Energy", "Total Energy"});
+        
         viewer.ngui->addGroup("Solver Parameters");
         viewer.ngui->addVariable("Compatilibity Lambda", params.lambdacompat);
         viewer.ngui->addVariable("Tikhonov Reg", params.lambdareg);
-
-        viewer.ngui->addVariable("Shading", shading_state, true)
-            ->setItems({ "None", "F1 Energy", "F2 Energy", "F3 Energy", "Total Energy" });
-
-        // NOT HOOKED IN YET
-        viewer.ngui->addVariable("Trace Field", isTraceField);
-        //	viewer.ngui->addVariable("Trace Field", isTraceField);
-
-        viewer.ngui->addButton("Normalize Fields", std::bind(&WeaveHook::normalizeFields, this));
-
+        
+//	viewer.ngui->addVariable("Trace Field/Geo", isTraceField);
+	
+        viewer.ngui->addGroup("Tracing Controls");
+        viewer.ngui->addVariable("Trace Face", traceFaceId);	
+        viewer.ngui->addVariable("Trace Steps", traceSteps);	
+        viewer.ngui->addVariable("U magnitude", traceU);	
+        viewer.ngui->addVariable("V magnitude", traceV);	
+        viewer.ngui->addVariable("W magnitude", traceW);	
+//	viewer.ngui->addVariable("Trace Field", isTraceField);
+        
     }
 
     void reassignPermutations();
@@ -67,6 +84,7 @@ public:
         h.dir << 1, -1;
         h.field = 0;
         weave->addHandle(h);
+	curFaceEnergies = Eigen::MatrixXd::Zero(3,3);
     }
 
     virtual void updateRenderGeometry()
@@ -85,11 +103,13 @@ public:
     virtual void renderRenderGeometry(igl::viewer::Viewer &viewer);    
 
     void setFaceColors(igl::viewer::Viewer &viewer);
+ 
+    void drawTraceCenterlines(igl::viewer::Viewer &viewer);
 private:
     std::string meshName;
     Weave *weave;
     SolverParams params;
-    Trace trace;
+    Trace *trace;
 
     double vectorScale;
     double baseLength;
@@ -104,10 +124,17 @@ private:
     Eigen::MatrixXi edgeSegs;
     Eigen::MatrixXd edgeColors;    
     bool normalizeVectors;
+    bool hideVectors;
 
     Shading_Enum shading_state = Shading_Enum::NONE;
 
-    bool isTraceField;
+    bool isTraceField; // this controls if we trace a geodesic or the field
+
+    double traceU;
+    double traceV;
+    double traceW;
+    int traceFaceId;
+    int traceSteps;
 };
 
 #endif
