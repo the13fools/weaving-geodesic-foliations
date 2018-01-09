@@ -64,6 +64,11 @@ void WeaveHook::drawTraceCenterlines(igl::viewer::Viewer &viewer)
         trace->traceCurve(*weave, udir + vdir + wdir, traceFaceId, traceSteps);
         isDrawTrace = false;
     }
+    if (isSaveTrace)
+    {
+        trace->logRibbonsToFile( "rods", "example" );
+        isSaveTrace = false;	
+    }
 
     Eigen::RowVector3d red(0.9, .1, .1);
     for (int i = 0; i < trace->curves.size(); i++)

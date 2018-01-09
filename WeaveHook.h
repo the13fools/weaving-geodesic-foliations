@@ -20,14 +20,14 @@ class WeaveHook : public PhysicsHook
 public:
     WeaveHook() : PhysicsHook(), weave(NULL), vectorScale(1.0), normalizeVectors(true)
     {
-        meshName = "meshes/tet.obj";
+        meshName = "meshes/torus.obj";
         params.lambdacompat = 100;
         params.lambdareg = 1e-3;
 
 	traceU = 1;
 	traceV = 0; 
 	traceW = 0;
-	traceSteps = 1000;
+	traceSteps = 100;
 	traceFaceId = 0;
 	isDrawTrace = false;
         

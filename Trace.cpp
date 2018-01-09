@@ -3,7 +3,12 @@
 #include "Distance.h"
 #include "Weave.h"
 
+#include <fstream>
 #include <iostream>
+
+// For making directories
+#include <sys/stat.h>
+ // #include <direct.h>
 
 Collision::Collision(int rod1, int rod2, int seg1, int seg2) : rod1(rod1), rod2(rod2), 
                                                                seg1(seg1), seg2(seg2)
@@ -21,6 +26,112 @@ void Trace::popLastCurve()
 	normals.pop_back();
     }
 }
+
+Eigen::Vector3d parallelTransport(const Eigen::Vector3d &v, const Eigen::Vector3d &e1, const Eigen::Vector3d &e2)
+{
+    Eigen::Vector3d t1 = e1 / e1.norm();
+    Eigen::Vector3d t2 = e2 / e2.norm();
+    Eigen::Vector3d n = t1.cross(t2);
+    if (n.norm() < 1e-8)
+        return v;
+    n /= n.norm();
+    Eigen::Vector3d p1 = n.cross(t1);
+    Eigen::Vector3d p2 = n.cross(t2);
+    return v.dot(n)*n + v.dot(t1)*t2 + v.dot(p1)*p2;
+}
+
+void Trace::logRibbonsToFile(std::string foldername, std::string filename)
+{
+#ifndef WIN32
+    char folderpath[50];
+    sprintf(folderpath, "log/%s", foldername.c_str());
+    mkdir("log", S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+    mkdir(folderpath, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+    char logpath[50];
+    sprintf(logpath, "%s/%s.rod", folderpath, filename.c_str());   
+    std::ofstream myfile (logpath);
+    
+    if (!myfile.is_open())
+    {
+        std::cout << "Unable to open file";
+        return;
+    }
+// Write Header 
+
+    myfile << curves.size() << "\n";
+    myfile << "0\n";
+    myfile << "0.001\n";
+    myfile << "1e+08\n"; 
+    myfile << "1\n\n\n";
+
+
+    for (int curveId = 0; curveId < curves.size(); curveId++)
+    {
+        Eigen::MatrixXd curve = curves[curveId];
+        Eigen::MatrixXd curveNormals = normals[curveId];
+
+        double max_length = 0.;
+	for (int i = 0; i < curve.rows() - 1; i++)
+	{
+	    double seg_length = ( curve.row(i) - curve.row(i+1) ).norm(); 
+	    if (seg_length > max_length) 
+	    {
+		max_length = seg_length;
+	    }
+	}
+
+	// Decimate 
+	std::vector<Eigen::Vector3d> cnew;
+	std::vector<Eigen::Vector3d> nnew;
+        std::vector<double> widths;
+	cnew.push_back( curve.row(0) );
+	int seg_counter = 0;
+	Eigen::VectorXd desc_mapping = Eigen::VectorXd::Zero(curve.rows());
+	Eigen::Vector3d prev_point = cnew.back();
+	for (int i = 1; i < curve.rows(); i++)
+	{
+	    Eigen::Vector3d curr_point = curve.row(i);
+	    double seg_length = ( prev_point - curr_point ).norm();     
+	    if (seg_length > max_length) 
+	    {
+		seg_counter++;
+		cnew.push_back( curve.row(i) );
+		Eigen::Vector3d currEdge = curve.row(i) - curve.row(i-1);
+		Eigen::Vector3d targEdge = cnew[seg_counter] - cnew[seg_counter-1];
+		nnew.push_back(parallelTransport( curveNormals.row(i), currEdge, targEdge));
+		widths.push_back(.1);
+		prev_point = cnew.back();
+	    }
+	    desc_mapping(i) = seg_counter;
+	}
+	cnew.pop_back();
+	cnew.push_back( curve.row(curve.rows() - 1) );
+	
+	myfile << cnew.size() << "\n";
+	myfile << "0\n";
+	for(int i = 0; i < cnew.size(); i++)
+	{
+	    myfile << cnew[i](0) << " " << cnew[i](1) << " " << cnew[i](2) << " ";
+	}
+	myfile << "\n";
+	 
+	for(int i = 0; i < nnew.size(); i++)
+	{
+	    myfile << nnew[i](0) << " " << nnew[i](1) << " " << nnew[i](2) << " ";
+	} 
+	myfile << "\n";
+
+	for(int i = 0; i < widths.size(); i++)
+	{
+	    myfile << " " << widths[i];
+	} 
+	myfile << "\n";
+
+    }
+	myfile.close();
+#endif
+}
+
 
 // This: Recieves a point on an edge of a triangle
 //       Returns the vertex id opposing that edge in the triangle

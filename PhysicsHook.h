@@ -102,8 +102,10 @@ public:
     }
    
 
+    // Button Variables for weave hook because of silly inheritance issues
     bool isDrawTrace;
     bool isDeleteLastTrace;
+    bool isSaveTrace;
 
 protected:
     void runSimThread()

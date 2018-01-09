@@ -52,6 +52,11 @@ void deleteLastTrace()
     hook->isDeleteLastTrace = true;
 }
 
+void saveTraces()
+{
+    hook->isSaveTrace = true;
+}
+
 bool initGUI(igl::viewer::Viewer &viewer)
 {
     viewer.ngui->window()->setVisible(false);
@@ -61,6 +66,7 @@ bool initGUI(igl::viewer::Viewer &viewer)
     hook->initGUI(viewer);
     viewer.ngui->addButton("Draw Trace", drawTrace);
     viewer.ngui->addButton("Delete Last Trace", deleteLastTrace);
+    viewer.ngui->addButton("Save Traces to Rod", saveTraces);
     viewer.screen->performLayout();
     return false;
 }
