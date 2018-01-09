@@ -62,6 +62,7 @@ public:
         h.dir << 1, -1;
         h.field = 0;
         weave->addHandle(h);
+	curFaceEnergies = Eigen::MatrixXd::Zero(3,3);
     }
 
     virtual void updateRenderGeometry()
