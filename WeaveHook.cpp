@@ -49,6 +49,19 @@ void WeaveHook::setFaceColors(igl::viewer::Viewer &viewer)
     viewer.data.set_colors(faceColors);
 }
 
+void WeaveHook::drawTraceCenterlines(igl::viewer::Viewer &viewer)
+{
+    Eigen::RowVector3d red(0.9,.1,.1);
+    for (int i = 0; i < trace->curves.size(); i++)
+    {
+	int rows = trace->curves[i].rows();
+	Eigen::MatrixXd s1 = trace->curves[i].block(0,0,rows-1, 3);
+        Eigen::MatrixXd s2 = trace->curves[i].block(1,0,rows-1, 3);
+
+        viewer.data.add_edges(s1, s2, red); 
+    }	
+}
+
 void WeaveHook::renderRenderGeometry(igl::viewer::Viewer &viewer)
 {
     viewer.data.clear();
@@ -66,8 +79,12 @@ void WeaveHook::renderRenderGeometry(igl::viewer::Viewer &viewer)
         renderPts.row(2 * i) = edgePts.row(i);
         renderPts.row(2 * i + 1) = edgePts.row(i) + vectorScale*vec.transpose();
     }
-    viewer.data.set_edges(renderPts, edgeSegs, edgeColors);      
-    setFaceColors(viewer);   
+    if ( !hideVectors )
+    {
+	viewer.data.set_edges(renderPts, edgeSegs, edgeColors);      
+    }
+    setFaceColors(viewer);  
+    drawTraceCenterlines(viewer); 
 }
 
 bool WeaveHook::simulateOneStep()

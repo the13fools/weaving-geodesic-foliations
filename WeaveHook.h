@@ -31,6 +31,8 @@ public:
 	traceFaceId = 0;
 	isDrawTrace = false;
 
+	trace = new Trace();
+
     }
 
     virtual void initGUI(igl::viewer::Viewer &viewer)
@@ -39,6 +41,7 @@ public:
         viewer.ngui->addGroup("Visualization");
         viewer.ngui->addVariable("Vector Scale", vectorScale);
         viewer.ngui->addVariable("Normalize Vectors", normalizeVectors);
+        viewer.ngui->addVariable("Hide Vectors", hideVectors);
         viewer.ngui->addVariable("Shading", shading_state, true)
                    ->setItems({"None", "F1 Energy", "F2 Energy", "F3 Energy", "Total Energy"});
         
@@ -90,15 +93,18 @@ public:
         curFaceEnergies = tempFaceEnergies;
         if ( isDeleteLastTrace )
 	{
-            trace.popLastCurve();
+            trace->popLastCurve();
 	    isDeleteLastTrace = false;
 	}
 	if ( isDrawTrace )
 	{
-	    Eigen::Vector3d udir = traceU * weave->vectorFields.segment(3, traceFaceId * 3);
-	    Eigen::Vector3d vdir = traceV * weave->vectorFields.segment(3, traceFaceId * 3 + 3);
-	    Eigen::Vector3d wdir = traceW * weave->vectorFields.segment(3, traceFaceId * 3 + 6);
-            trace.traceCurve(*weave, udir + vdir + wdir, traceFaceId, traceSteps);
+	    Eigen::Vector3d udir = traceU * 
+		weave->vectorFields.segment(3, traceFaceId * weave->nFields());
+	    Eigen::Vector3d vdir = traceV * 
+		weave->vectorFields.segment(3, (traceFaceId + 1) * weave->nFields());
+	    Eigen::Vector3d wdir = traceW * 
+		weave->vectorFields.segment(3, (traceFaceId + 2) * weave->nFields());
+            trace->traceCurve(*weave, udir + vdir + wdir, traceFaceId, traceSteps);
             isDrawTrace = false;
 	}
     }
@@ -109,11 +115,12 @@ public:
 
     void setFaceColors(igl::viewer::Viewer &viewer);
  
+    void drawTraceCenterlines(igl::viewer::Viewer &viewer);
 private:
     std::string meshName;
     Weave *weave;
     SolverParams params;
-    Trace trace;
+    Trace *trace;
 
     double vectorScale;
     double baseLength;
@@ -128,6 +135,7 @@ private:
     Eigen::MatrixXi edgeSegs;
     Eigen::MatrixXd edgeColors;    
     bool normalizeVectors;
+    bool hideVectors;
 
     Shading_Enum shading_state = Shading_Enum::NONE;
 
