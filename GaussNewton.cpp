@@ -28,7 +28,7 @@ void faceEnergies(const Weave &weave, SolverParams params, Eigen::MatrixXd &E)
                 int f = (side == 0 ? weave.E(e, 0) : weave.E(e, 1));
 
                 Eigen::Vector2d termr = r.segment<2>(term);
-                E(f, i) += termr.transpose() * weave.Bs[f].transpose() * weave.Bs[f] * termr;
+                E(f, i) += 0.5 * termr.transpose() * weave.Bs[f].transpose() * weave.Bs[f] * termr;
 
                 term += 2;
             }
@@ -249,7 +249,7 @@ void oneStep(Weave &weave, SolverParams params)
     Eigen::SparseMatrix<double> M;
     GNmetric(weave, M);
 
-    std::cout << "original energy: " << r.transpose() * M * r << std::endl;
+    std::cout << "original energy: " << 0.5 * r.transpose() * M * r << std::endl;
     std::cout << "Building matrix" << std::endl;
     Eigen::SparseMatrix<double> J;
     GNGradient(weave, params, J);
@@ -270,8 +270,75 @@ void oneStep(Weave &weave, SolverParams params)
     std::cout << "Solving" << std::endl;
     solver.factorize(optMat);
     Eigen::VectorXd update = solver.solve(rhs);
-    weave.vectorFields -= update;
-
+    lineSearch(weave, params, update);
+    
     GNEnergy(weave, params, r);
-    std::cout << "Done, new energy: " << r.transpose()*M*r << std::endl;
+    std::cout << "Done, new energy: " << 0.5 * r.transpose()*M*r << std::endl;
+}
+
+double lineSearch(Weave &weave, SolverParams params, const Eigen::VectorXd &update)
+{
+    double t = 1.0;
+    double c1 = 0.1;
+    double c2 = 0.9;
+    double alpha = 0;
+    double infinity = 1e6;
+    double beta = infinity;
+
+    int nvars = weave.vectorFields.size();
+    Eigen::VectorXd r;
+    GNEnergy(weave, params, r);
+    Eigen::SparseMatrix<double> M;
+    GNmetric(weave, M);
+    Eigen::SparseMatrix<double> J;
+    GNGradient(weave, params, J);
+
+    VectorXd dE;
+    VectorXd newdE;
+    VectorXd startVF = weave.vectorFields;
+    
+    double orig = 0.5 * r.transpose() * M * r;
+    dE = J.transpose() * M * r;
+    double deriv = -dE.dot(update);
+    assert(deriv < 0);
+    
+    std::cout << "Starting line search, original energy " << orig << ", descent magnitude " << deriv << std::endl;
+
+    while (true)
+    {
+        weave.vectorFields = startVF - t * update;
+        GNEnergy(weave, params, r);
+        double newenergy = 0.5 * r.transpose() * M * r;
+        GNGradient(weave, params, J);
+        newdE = J.transpose() * M * r;
+
+        std::cout << "Trying t = " << t << ", energy now " << newenergy << std::endl;
+        
+        if (isnan(newenergy) || newenergy > orig + t*deriv*c1)
+        {
+            beta = t;
+            t = 0.5*(alpha + beta);
+        }
+        else if (-newdE.dot(update) < c2*deriv)
+        {
+            alpha = t;
+            if (beta == infinity)
+            {
+                t = 2 * alpha;
+            }
+            else
+            {
+                t = 0.5*(alpha + beta);
+            }
+
+            if (beta - alpha < 1e-8)
+            {
+                return t;
+            }
+        }
+        else
+        {
+            return t;
+        }
+    }
 }
