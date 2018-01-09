@@ -50,33 +50,30 @@ void WeaveHook::setFaceColors(igl::viewer::Viewer &viewer)
 }
 
 void WeaveHook::drawTraceCenterlines(igl::viewer::Viewer &viewer)
-{    
-    if ( isDeleteLastTrace )
+{
+    if (isDeleteLastTrace)
     {
-	trace->popLastCurve();
-	isDeleteLastTrace = false;
+        trace->popLastCurve();
+        isDeleteLastTrace = false;
     }
-    if ( isDrawTrace )
+    if (isDrawTrace)
     {
-	Eigen::Vector3d udir = traceU * 
-	    weave->vectorFields.segment(3, traceFaceId * weave->nFields());
-	Eigen::Vector3d vdir = traceV * 
-	    weave->vectorFields.segment(3, (traceFaceId + 1) * weave->nFields());
-	Eigen::Vector3d wdir = traceW * 
-	    weave->vectorFields.segment(3, (traceFaceId + 2) * weave->nFields());
-	trace->traceCurve(*weave, udir + vdir + wdir, traceFaceId, traceSteps);
-	isDrawTrace = false;
+        Eigen::Vector3d udir = traceU * weave->Bs[traceFaceId] * weave->v(traceFaceId, 0);
+        Eigen::Vector3d vdir = traceV * weave->Bs[traceFaceId] * weave->v(traceFaceId, 1);
+        Eigen::Vector3d wdir = traceW * weave->Bs[traceFaceId] * weave->v(traceFaceId, 2);
+        trace->traceCurve(*weave, udir + vdir + wdir, traceFaceId, traceSteps);
+        isDrawTrace = false;
     }
- 
-    Eigen::RowVector3d red(0.9,.1,.1);
+
+    Eigen::RowVector3d red(0.9, .1, .1);
     for (int i = 0; i < trace->curves.size(); i++)
     {
-	int rows = trace->curves[i].rows();
-	Eigen::MatrixXd s1 = trace->curves[i].block(0,0,rows-1, 3);
-        Eigen::MatrixXd s2 = trace->curves[i].block(1,0,rows-1, 3);
+        int rows = trace->curves[i].rows();
+        Eigen::MatrixXd s1 = trace->curves[i].block(0, 0, rows - 1, 3);
+        Eigen::MatrixXd s2 = trace->curves[i].block(1, 0, rows - 1, 3);
 
-        viewer.data.add_edges(s1, s2, red); 
-    }	
+        viewer.data.add_edges(s1, s2, red);
+    }
 }
 
 void WeaveHook::renderRenderGeometry(igl::viewer::Viewer &viewer)
