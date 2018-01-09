@@ -50,7 +50,24 @@ void WeaveHook::setFaceColors(igl::viewer::Viewer &viewer)
 }
 
 void WeaveHook::drawTraceCenterlines(igl::viewer::Viewer &viewer)
-{
+{    
+    if ( isDeleteLastTrace )
+    {
+	trace->popLastCurve();
+	isDeleteLastTrace = false;
+    }
+    if ( isDrawTrace )
+    {
+	Eigen::Vector3d udir = traceU * 
+	    weave->vectorFields.segment(3, traceFaceId * weave->nFields());
+	Eigen::Vector3d vdir = traceV * 
+	    weave->vectorFields.segment(3, (traceFaceId + 1) * weave->nFields());
+	Eigen::Vector3d wdir = traceW * 
+	    weave->vectorFields.segment(3, (traceFaceId + 2) * weave->nFields());
+	trace->traceCurve(*weave, udir + vdir + wdir, traceFaceId, traceSteps);
+	isDrawTrace = false;
+    }
+ 
     Eigen::RowVector3d red(0.9,.1,.1);
     for (int i = 0; i < trace->curves.size(); i++)
     {

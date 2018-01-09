@@ -30,6 +30,8 @@ public:
 	traceSteps = 1000;
 	traceFaceId = 0;
 	isDrawTrace = false;
+        
+        hideVectors = false;
 
 	trace = new Trace();
 
@@ -94,22 +96,6 @@ public:
         faceColors.setConstant(0.3);
         baseLength = weave->averageEdgeLength;
         curFaceEnergies = tempFaceEnergies;
-        if ( isDeleteLastTrace )
-	{
-            trace->popLastCurve();
-	    isDeleteLastTrace = false;
-	}
-	if ( isDrawTrace )
-	{
-	    Eigen::Vector3d udir = traceU * 
-		weave->vectorFields.segment(3, traceFaceId * weave->nFields());
-	    Eigen::Vector3d vdir = traceV * 
-		weave->vectorFields.segment(3, (traceFaceId + 1) * weave->nFields());
-	    Eigen::Vector3d wdir = traceW * 
-		weave->vectorFields.segment(3, (traceFaceId + 2) * weave->nFields());
-            trace->traceCurve(*weave, udir + vdir + wdir, traceFaceId, traceSteps);
-            isDrawTrace = false;
-	}
     }
 
     virtual bool simulateOneStep();    
