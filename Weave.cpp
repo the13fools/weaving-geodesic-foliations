@@ -32,6 +32,7 @@ Weave::Weave(const std::string &objname, int m)
     vectorFields.resize(5*F.rows()*m);
     vectorFields.setZero();
     vectorFields.segment(0, 2 * F.rows()*m).setRandom();
+    normalizeFields();
 
     // initialize permutation matrices
     int nedges = nEdges();
@@ -292,7 +293,7 @@ void Weave::createVisualizationEdges(Eigen::MatrixXd &edgePts, Eigen::MatrixXd &
     
     Eigen::MatrixXd fcolors(m, 3);
     for (int i = 0; i < m; i++)
-        fcolors.row(i) = heatmap(double(i), 0.0, double(m-1));
+        fcolors.row(i).setZero();//heatmap(double(i), 0.0, double(m-1));
 
     for (int i = 0; i < nfaces; i++)
     {
@@ -341,4 +342,19 @@ bool Weave::addHandle(Handle h)
     h.dir /= mag;
     handles.push_back(h);
     return true;
+}
+
+void Weave::normalizeFields()
+{
+    int nfaces = nFaces();
+    int m = nFields();
+    for (int i = 0; i < nfaces; i++)
+    {
+        for (int j = 0; j < m; j++)
+        {
+            Eigen::Vector2d vif = v(i, j);
+            double norm = sqrt(vif.transpose() * Bs[i].transpose() * Bs[i] * vif);
+            vectorFields.segment<2>(vidx(i, j)) /= norm;
+        }
+    }
 }

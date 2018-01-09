@@ -61,6 +61,9 @@ public:
         
     }
 
+    void reassignPermutations();
+    void normalizeFields();
+
     virtual void initSimulation()
     {
         if (weave)
