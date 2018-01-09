@@ -134,6 +134,7 @@ void Trace::traceCurve(const Weave &wv,
             curr_edge_id = i;
 	}
     }
+    std::cout << min_dist << std::endl;
     assert(curr_edge_id > -1);
     int op_v_id = getOpVIdFromEdge(wv, curr_edge_id, curr_face_id);
 
@@ -184,7 +185,7 @@ void Trace::traceCurve(const Weave &wv,
         }
         if ( next_face_id == -1) { break; }    
     
-        curr_dir = mapVectorToAdjacentFace(wv.F, wv.V, wv.E, 
+        curr_dir = mapVectorToAdjacentFace(wv.F, wv.V, wv.edgeVerts, 
                                            next_edge_id, curr_face_id, next_face_id, curr_dir);
         curr_face_id = next_face_id;
         curr_edge_id = next_edge_id;

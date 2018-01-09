@@ -20,7 +20,7 @@ class WeaveHook : public PhysicsHook
 public:
     WeaveHook() : PhysicsHook(), weave(NULL), vectorScale(1.0), normalizeVectors(true)
     {
-        meshName = "meshes/torus.obj";
+        meshName = "meshes/tet.obj";
         params.lambdacompat = 100;
         params.lambdareg = 1e-3;
 
