@@ -13,6 +13,15 @@ Collision::Collision(int rod1, int rod2, int seg1, int seg2) : rod1(rod1), rod2(
 Trace::Trace(){}
 Trace::~Trace(){}
 
+void Trace::popLastCurve()
+{
+    if (curves.size() > 0) 
+    {
+        curves.pop_back();
+	normals.pop_back();
+    }
+}
+
 // This: Recieves a point on an edge of a triangle
 //       Returns the vertex id opposing that edge in the triangle
 int getOpVId(const Weave &wv, const Eigen::Vector3d prev_point, int faceId)

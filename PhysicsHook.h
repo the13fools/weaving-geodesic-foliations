@@ -100,7 +100,11 @@ public:
         renderRenderGeometry(viewer);
         render_mutex.unlock();
     }
-    
+   
+
+    bool isDrawTrace;
+    bool isDeleteLastTrace;
+
 protected:
     void runSimThread()
     {
