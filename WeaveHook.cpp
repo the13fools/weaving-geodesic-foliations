@@ -126,8 +126,8 @@ bool WeaveHook::simulateOneStep()
 
 void WeaveHook::reassignPermutations()
 {
-    int flipped = ::reassignPermutations(*weave);
-    std::cout << flipped << " permutations changed" << std::endl;
+//    int flipped = ::reassignPermutations(*weave);
+//    std::cout << flipped << " permutations changed" << std::endl;
 }
 
 void WeaveHook::normalizeFields()
