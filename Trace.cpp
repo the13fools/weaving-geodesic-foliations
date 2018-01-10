@@ -56,15 +56,26 @@ void Trace::logRibbonsToFile(std::string foldername, std::string filename)
         std::cout << "Unable to open file";
         return;
     }
-// Write Header 
-
+    // Write Header 
     myfile << curves.size() << "\n";
     myfile << "0\n";
     myfile << "0.001\n";
     myfile << "1e+08\n"; 
     myfile << "1\n\n\n";
 
+    // Find collisions between rods
+    std::vector<Collision> collisions; 
+    for (int i = 0; i < curves.size(); i++) 
+    {
+        for (int j = i; j < curves.size(); j++)
+	{
+            computeIntersections(i, j, collisions);	
+	}
+    }
 
+    // Descimate and log rods
+    std::vector<Eigen::VectorXd> desc_maps;
+    std::vector< std::vector<Eigen::Vector3d> > desc_curves; //eeew
     for (int curveId = 0; curveId < curves.size(); curveId++)
     {
         Eigen::MatrixXd curve = curves[curveId];
@@ -98,7 +109,7 @@ void Trace::logRibbonsToFile(std::string foldername, std::string filename)
 		cnew.push_back( curve.row(i) );
 		Eigen::Vector3d currEdge = curve.row(i) - curve.row(i-1);
 		Eigen::Vector3d targEdge = cnew[seg_counter] - cnew[seg_counter-1];
-		nnew.push_back(parallelTransport( curveNormals.row(i), currEdge, targEdge));
+		nnew.push_back(parallelTransport(curveNormals.row(i), currEdge, targEdge));
 		widths.push_back(.1);
 		prev_point = cnew.back();
 	    }
@@ -106,7 +117,9 @@ void Trace::logRibbonsToFile(std::string foldername, std::string filename)
 	}
 	cnew.pop_back();
 	cnew.push_back( curve.row(curve.rows() - 1) );
-	
+	desc_maps.push_back( desc_mapping );
+	desc_curves.push_back( cnew );
+
 	myfile << cnew.size() << "\n";
 	myfile << "0\n";
 	for(int i = 0; i < cnew.size(); i++)
@@ -128,7 +141,29 @@ void Trace::logRibbonsToFile(std::string foldername, std::string filename)
 	myfile << "\n";
 
     }
-	myfile.close();
+    for (int i = 0; i < collisions.size(); i++)
+    {
+        Collision col = collisions[i]; 
+	std::vector<Eigen::Vector3d> c1 = desc_curves[col.rod1];
+	std::vector<Eigen::Vector3d> c2 = desc_curves[col.rod2];
+	int idx1 = desc_maps[col.rod1](col.seg1); 
+	int idx2 = desc_maps[col.rod2](col.seg2);
+
+//	std::cout << "r1 " << col.rod1 << "r2 " << col.rod2 << "idx1 " << idx1 << "idx2 " << idx2 <<"\n";
+	double p0bary, p1bary, q0bary, q1bary;
+	Eigen::Vector3d dist = Distance::edgeEdgeDistance(c1[idx1], 
+							  c1[idx1 + 1],
+							  c2[idx2],
+							  c2[idx2 + 1],
+							  p0bary, p1bary, q0bary, q1bary);
+//	std::cout << "dist " << dist.norm() << "idx1" << idx1 << "idx2" << idx2;
+        myfile << col.rod1 << " " << col.rod2 << " " << idx1 << " " << idx2 
+	       << " " << p1bary << " " << q1bary << " " << 1000. << "\n";
+    
+    }
+
+
+    myfile.close();
 #endif
 }
 
@@ -176,34 +211,45 @@ int getOpVIdFromEdge(const Weave &wv, int curr_edge, int faceId)
     return -1;
 }
 
-void computeSelfIntersections(const std::vector<Eigen::Vector3d> &curve, int idx, std::vector<Collision> &collisions)
+void Trace::computeIntersections(int curveIdx1, int curveIdx2, std::vector<Collision> &collisions)
 {
-    double minSegmentLength = (curve[0] - curve[1]).norm();
-    for (int i = 0; i < curve.size() - 1; i++)
+    Eigen::MatrixXd c1 = curves[curveIdx1];
+    Eigen::MatrixXd c2 = curves[curveIdx2];
+
+    double minSegmentLength = ( c1.row(0) - c1.row(1) ).norm();
+    for (int i = 0; i < curves.size() - 1; i++)
     {
-        double segLength = (curve[i] - curve[i + 1]).norm();
-        if ( minSegmentLength > segLength && segLength > 0.)
+        double seg1 = (c1.row(i) - c1.row(i + 1)).norm();
+        double seg2 = (c2.row(i) - c2.row(i + 1)).norm();
+	double seg = seg1 < seg2 ? seg1 : seg2;
+        if ( minSegmentLength > seg && seg > 0.)
 	{
-		minSegmentLength = segLength;
+		minSegmentLength = seg;
 	}
     }
-    minSegmentLength = minSegmentLength / 2.;
-    std::cout << minSegmentLength << "\n";
-    for (int i = 0; i < curve.size() - 3; i++) 
+    minSegmentLength = minSegmentLength * 10e-8;
+//    std::cout << minSegmentLength << "\n";
+    for (int i = 0; i < c1.size() - 1; i++) 
     {
-        for (int j = i + 3; j < curve.size(); j++)
+        for (int j = 0; j < c2.size() - 1; j++)
 	{     
-	    double p0bary, p1bary, q0bary, q1bary;
-	    Eigen::Vector3d dist = Distance::edgeEdgeDistance(curve[i], 
-                                                              curve[i + 1],
-						              curve[j],
-				                              curve[j + 1],
-				                              p0bary, p1bary, q0bary, q1bary);
-	    if ( dist.norm() < minSegmentLength )
+            if ( curveIdx1 == curveIdx2 && abs(i - j) < 2 ) { continue; }
+	    else 
 	    {
-		 //   Collision* c = new Collision(idx, idx, i, j);
-		 collisions.push_back( Collision(idx, idx, i, j)  );
-	         std::cout << idx << " " << i << " " << j << " "  << dist.norm() << "\n";
+		double p0bary, p1bary, q0bary, q1bary;
+		Eigen::Vector3d dist = Distance::edgeEdgeDistance(c1.row(i), 
+								  c1.row(i + 1),
+								  c2.row(j),
+								  c2.row(j + 1),
+								  p0bary, p1bary, q0bary, q1bary);
+		if ( dist.norm() < minSegmentLength )
+		{
+		     collisions.push_back( Collision(curveIdx1, curveIdx2, i, j)  );
+//		     std::cout << "Collisions" << curveIdx1 << " " << curveIdx2 << " " << i << " " << j << " "  << dist.norm() << "\n";
+//		     std::cout << c1.row(i) << " " << c1.row(i + 1) << " " << c2.row(j) << " " << c2.row(j + 1) << "\n";
+
+
+		}
 	    }
 	} 
     }
