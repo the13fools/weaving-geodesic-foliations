@@ -59,7 +59,8 @@ public:
         viewer.ngui->addVariable("U magnitude", traceU);	
         viewer.ngui->addVariable("V magnitude", traceV);	
         viewer.ngui->addVariable("W magnitude", traceW);	
-//	viewer.ngui->addVariable("Trace Field", isTraceField);
+        viewer.ngui->addVariable("Trace Mode", trace_state, true)
+                   ->setItems({"Geodesic", "Field"});
         
     }
 
@@ -127,6 +128,7 @@ private:
     bool hideVectors;
 
     Shading_Enum shading_state = Shading_Enum::NONE;
+    Trace_Mode trace_state = Trace_Mode::GEODESIC;
 
     bool isTraceField; // this controls if we trace a geodesic or the field
 

@@ -61,7 +61,7 @@ void WeaveHook::drawTraceCenterlines(igl::viewer::Viewer &viewer)
         Eigen::Vector3d udir = traceU * weave->Bs[traceFaceId] * weave->v(traceFaceId, 0);
         Eigen::Vector3d vdir = traceV * weave->Bs[traceFaceId] * weave->v(traceFaceId, 1);
         Eigen::Vector3d wdir = traceW * weave->Bs[traceFaceId] * weave->v(traceFaceId, 2);
-        trace->traceCurve(*weave, udir + vdir + wdir, traceFaceId, traceSteps);
+        trace->traceCurve(*weave, trace_state, udir + vdir + wdir, traceFaceId, traceSteps);
         isDrawTrace = false;
     }
     if (isSaveTrace)
@@ -70,14 +70,22 @@ void WeaveHook::drawTraceCenterlines(igl::viewer::Viewer &viewer)
         isSaveTrace = false;	
     }
 
-    Eigen::RowVector3d red(0.9, .1, .1);
+    Eigen::RowVector3d red(0.9, .1, .1), green(.1, .9, .1);
     for (int i = 0; i < trace->curves.size(); i++)
     {
         int rows = trace->curves[i].rows();
         Eigen::MatrixXd s1 = trace->curves[i].block(0, 0, rows - 1, 3);
         Eigen::MatrixXd s2 = trace->curves[i].block(1, 0, rows - 1, 3);
-
-        viewer.data.add_edges(s1, s2, red);
+         
+	switch (trace->modes[i])
+	{
+	    case GEODESIC:
+                viewer.data.add_edges(s1, s2, red);
+		break;
+	    case FIELD:
+		viewer.data.add_edges(s1, s2, green);
+		break;
+	}
     }
 }
 

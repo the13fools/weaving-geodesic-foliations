@@ -24,6 +24,7 @@ void Trace::popLastCurve()
     {
         curves.pop_back();
 	normals.pop_back();
+	modes.pop_back();
     }
 }
 
@@ -256,7 +257,7 @@ void Trace::computeIntersections(int curveIdx1, int curveIdx2, std::vector<Colli
 }
 
 
-void Trace::traceCurve(const Weave &wv,
+void Trace::traceCurve(const Weave &wv, const Trace_Mode trace_state,
     const Eigen::Vector3d dir, int faceId, int steps)
 {
     Eigen::MatrixXd curve = Eigen::MatrixXd::Zero(steps, 3);
@@ -361,6 +362,7 @@ void Trace::traceCurve(const Weave &wv,
     }
     curves.push_back(curve);
     normals.push_back(normal);
+    modes.push_back(trace_state);
     return;
 }
 
