@@ -297,13 +297,13 @@ void Trace::traceCurve(const Weave &wv,
         {
             min_dist = dist.norm();
             prev_point = op_v1 * q0bary + op_v2 * q1bary;
-            curr_edge_id = i;
+            curr_edge_id = next_edge_id;
         }
     }
-    
+
     assert(curr_edge_id > -1);
     int op_v_id = getOpVIdFromEdge(wv, curr_edge_id, curr_face_id);
-    
+
     for (int i = 1; i < steps; i++)
     {
         Eigen::Vector3d op_vertex = wv.V.row(op_v_id);
@@ -322,7 +322,7 @@ void Trace::traceCurve(const Weave &wv,
 
             if (e(0) == op_v_id || e(1) == op_v_id)
             {
-                Eigen::VectorXd e_test = (wv.V.row(e(0)) + wv.V.row(e(1))) * .5;
+                Eigen::Vector3d e_test = (wv.V.row(e(0)) + wv.V.row(e(1))) * .5;
                 e_test -= prev_point;
                 if (e_test.dot(perp) * curr_dir.dot(perp) > 0.)
                 {
@@ -331,7 +331,6 @@ void Trace::traceCurve(const Weave &wv,
                 }
             }
         }
-
         assert(op_edge_id != -1);
 
         // Find intersection point.
