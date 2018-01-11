@@ -3,6 +3,7 @@
 #include <vector>
 #include <Eigen/Core>
 #include <Eigen/Geometry>
+#include <iostream>
 
 double angle(const Eigen::Vector3d &v1, const Eigen::Vector3d &v2, const Eigen::Vector3d axis)
 {
@@ -62,7 +63,8 @@ void reassignOnePermutation(Weave &weave, int edge, Eigen::MatrixXi &P)
 
     for (int i = 0; i < m; i++)
     {
-        P(i, bestperm[i]) = (bestsigns & (1 << i)) ? -1 : 1;
+        int sign = (bestsigns & (1 << i)) ? -1 : 1;        
+        P(i, bestperm[i]) = sign;
     }
 }
 

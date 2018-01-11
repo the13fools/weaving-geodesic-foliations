@@ -24,17 +24,15 @@ public:
         params.lambdacompat = 100;
         params.lambdareg = 1e-3;
 
-	traceU = 1;
-	traceV = 0; 
-	traceW = 0;
-	traceSteps = 100;
-	traceFaceId = 0;
-	isDrawTrace = false;
-        
+        traceIdx = 0;
+        traceSign = 1;
+        traceSteps = 100;
+        traceFaceId = 0;
+        isDrawTrace = false;
+
         hideVectors = false;
 
-	trace = new Trace();
-
+        trace = new Trace();
     }
 
     virtual void initGUI(igl::viewer::Viewer &viewer)
@@ -50,15 +48,15 @@ public:
         viewer.ngui->addGroup("Solver Parameters");
         viewer.ngui->addVariable("Compatilibity Lambda", params.lambdacompat);
         viewer.ngui->addVariable("Tikhonov Reg", params.lambdareg);
+        viewer.ngui->addButton("Reassign Permutations", std::bind(&WeaveHook::reassignPermutations, this));
         
 //	viewer.ngui->addVariable("Trace Field/Geo", isTraceField);
 	
         viewer.ngui->addGroup("Tracing Controls");
         viewer.ngui->addVariable("Trace Face", traceFaceId);	
         viewer.ngui->addVariable("Trace Steps", traceSteps);	
-        viewer.ngui->addVariable("U magnitude", traceU);	
-        viewer.ngui->addVariable("V magnitude", traceV);	
-        viewer.ngui->addVariable("W magnitude", traceW);	
+        viewer.ngui->addVariable("Trace Field", traceIdx);
+        viewer.ngui->addVariable("Trace Sign", traceSign);
         viewer.ngui->addVariable("Trace Mode", trace_state, true)
                    ->setItems({"Geodesic", "Field"});
         
@@ -132,9 +130,8 @@ private:
 
     bool isTraceField; // this controls if we trace a geodesic or the field
 
-    double traceU;
-    double traceV;
-    double traceW;
+    int traceIdx;
+    int traceSign;
     int traceFaceId;
     int traceSteps;
 };

@@ -58,10 +58,7 @@ void WeaveHook::drawTraceCenterlines(igl::viewer::Viewer &viewer)
     }
     if (isDrawTrace)
     {
-        Eigen::Vector3d udir = traceU * weave->Bs[traceFaceId] * weave->v(traceFaceId, 0);
-        Eigen::Vector3d vdir = traceV * weave->Bs[traceFaceId] * weave->v(traceFaceId, 1);
-        Eigen::Vector3d wdir = traceW * weave->Bs[traceFaceId] * weave->v(traceFaceId, 2);
-        trace->traceCurve(*weave, trace_state, udir + vdir + wdir, traceFaceId, traceSteps);
+        trace->traceCurve(*weave, trace_state, traceIdx, traceSign, traceFaceId, traceSteps);
         isDrawTrace = false;
     }
     if (isSaveTrace)
@@ -118,7 +115,7 @@ bool WeaveHook::simulateOneStep()
 {
     //GNtestFiniteDifferences(*weave, params);
     //exit(-1);
-    reassignPermutations();
+    //reassignPermutations();
     oneStep(*weave, params);
     faceEnergies(*weave, params, tempFaceEnergies);
     return false;
@@ -126,8 +123,8 @@ bool WeaveHook::simulateOneStep()
 
 void WeaveHook::reassignPermutations()
 {
-//    int flipped = ::reassignPermutations(*weave);
-//    std::cout << flipped << " permutations changed" << std::endl;
+    int flipped = ::reassignPermutations(*weave);
+    std::cout << flipped << " permutations changed" << std::endl;
 }
 
 void WeaveHook::normalizeFields()

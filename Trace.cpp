@@ -274,7 +274,7 @@ Eigen::VectorXd mapFaceVectorToGlobalCoordinates(const Weave &wv, const Eigen::V
 */
 
 void Trace::traceCurve(const Weave &wv, const Trace_Mode trace_state,
-    const Eigen::Vector3d dir, int faceId, int steps)
+    int traceIdx, int sign, int faceId, int steps)
 {
     Eigen::MatrixXd curve = Eigen::MatrixXd::Zero(steps, 3);
     Eigen::MatrixXd normal = Eigen::MatrixXd::Zero(steps, 3);
@@ -282,20 +282,13 @@ void Trace::traceCurve(const Weave &wv, const Trace_Mode trace_state,
         1. / 3. * wv.V.row(wv.F(faceId, 1)) +
         1. / 3. * wv.V.row(wv.F(faceId, 2)));
     normal.row(0) = (faceNormal(wv.F, wv.V, faceId));
+
+
     
-    Eigen::Vector3d curr_dir;
-    int curr_dir_idx; // For tracing field
-    switch( trace_state )
-    {
-	case GEODESIC:
-	    curr_dir = dir;
-	    break;
-	case FIELD:
-	    curr_dir = wv.Bs[faceId] * wv.v(faceId, 0);
-	    curr_dir_idx = 0;
-            std::cout << "init field" << curr_dir << "\n";
-	    break;
-    }
+    int curr_dir_idx = abs(traceIdx);
+    double coeff_dir = sign > 0 ? 1 : -1;
+    Eigen::Vector3d curr_dir = coeff_dir * wv.Bs[faceId] * wv.v(faceId, curr_dir_idx);
+
     // assumes roughly delaunay    
     curr_dir = curr_dir.normalized() * wv.averageEdgeLength * 1000.;
 
@@ -336,8 +329,6 @@ void Trace::traceCurve(const Weave &wv, const Trace_Mode trace_state,
     assert(curr_edge_id > -1);
     int op_v_id = getOpVIdFromEdge(wv, curr_edge_id, curr_face_id);
 
-    double coeff_dir = 1.;
-
     for (int i = 1; i < steps; i++)
     {
         Eigen::Vector3d op_vertex = wv.V.row(op_v_id);
@@ -365,7 +356,13 @@ void Trace::traceCurve(const Weave &wv, const Trace_Mode trace_state,
                 }
             }
         }
-        assert(op_edge_id != -1);
+        // stop if we hit vertex
+        if (op_edge_id == -1)
+        {
+            curve.conservativeResize(i, 3);
+            normal.conservativeResize(i, 3);
+            break;
+        }
 
         // Find intersection point.
         int next_edge_id = wv.faceEdges(curr_face_id, op_edge_id);
@@ -385,38 +382,38 @@ void Trace::traceCurve(const Weave &wv, const Trace_Mode trace_state,
             next_face_id = wv.E(next_edge_id, 1);
         }
         if (next_face_id == -1) { break; }
-        
-	switch( trace_state )
-	{
-	    case GEODESIC:
-		curr_dir = mapVectorToAdjacentFace(wv.F, wv.V, wv.edgeVerts,
-		    next_edge_id, curr_face_id, next_face_id, curr_dir);
-                break;
-	    case FIELD:
-		Eigen::MatrixXi perm = wv.Ps[next_edge_id];
-		if ( next_face_id == wv.E(next_edge_id, 0) )
-		{
-                    perm = perm.transpose();
-		}
-                Eigen::Vector3i curr_vec = Eigen::Vector3i::Zero();
-                curr_vec(curr_dir_idx) = 1;
-                Eigen::Vector3i next_vec = perm * curr_vec;
-		for (int idx = 0; idx < 3; idx++)
-		{
-                    if ( abs(next_vec(idx)) > 10e-8 )
-		    {
-			if ( next_vec(idx) < 0. )
-			{
-                            coeff_dir *= -1.;
-			}
-                        curr_dir = wv.Bs[next_face_id] * wv.v(next_face_id, idx);
-	                curr_dir_idx = idx;
-			break;
-		    }
-		}
-                curr_dir = coeff_dir * curr_dir.normalized() * wv.averageEdgeLength * 1000.;
-		break;
-	}       
+
+        switch (trace_state)
+        {
+        case GEODESIC:
+            curr_dir = mapVectorToAdjacentFace(wv.F, wv.V, wv.edgeVerts,
+                next_edge_id, curr_face_id, next_face_id, curr_dir);
+            break;
+        case FIELD:
+            Eigen::MatrixXi perm = wv.Ps[next_edge_id];
+            if (next_face_id == wv.E(next_edge_id, 1))
+            {
+                perm.transposeInPlace();
+            }
+            Eigen::Vector3i curr_vec = Eigen::Vector3i::Zero();
+            curr_vec(curr_dir_idx) = 1;
+            Eigen::Vector3i next_vec = perm * curr_vec;
+            for (int idx = 0; idx < 3; idx++)
+            {
+                if (abs(next_vec(idx)) > 10e-8)
+                {
+                    if (next_vec(idx) < 0.)
+                    {
+                        coeff_dir *= -1.;
+                    }
+                    curr_dir = wv.Bs[next_face_id] * wv.v(next_face_id, idx);
+                    curr_dir_idx = idx;
+                    break;
+                }
+            }
+            curr_dir = coeff_dir * curr_dir.normalized() * wv.averageEdgeLength * 1000.;
+            break;
+        }
 
         curr_face_id = next_face_id;
         curr_edge_id = next_edge_id;

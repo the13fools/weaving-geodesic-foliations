@@ -245,9 +245,6 @@ void Weave::buildGeometricStructures()
         beta2 = t2.dot(e2);
         newe2 = alpha2*commone + beta2*t1;
         Ts.block<2, 1>(2 * edgeidx, 3) = BTB1.inverse() * Bs[face1].transpose() * newe2;
-
-        Eigen::Matrix2d test1 = Ts.block<2, 2>(2 * edgeidx, 0);
-        Eigen::Matrix2d test2 = Ts.block<2, 2>(2 * edgeidx, 2);
     }
 }
 
