@@ -28,6 +28,7 @@ public:
     std::vector< Eigen::MatrixXd > curves;
     std::vector< Eigen::MatrixXd > normals;    
     std::vector< Trace_Mode > modes;
+    std::vector< Eigen::VectorXd > bending;
 
     void traceCurve(const Weave &vw, const Trace_Mode trace_state, int traceIdx, int sign, int faceId, int steps);
     void popLastCurve();

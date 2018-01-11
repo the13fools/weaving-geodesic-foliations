@@ -31,6 +31,7 @@ public:
         isDrawTrace = false;
 
         hideVectors = false;
+        showBending = false;
 
         trace = new Trace();
     }
@@ -58,8 +59,8 @@ public:
         viewer.ngui->addVariable("Trace Field", traceIdx);
         viewer.ngui->addVariable("Trace Sign", traceSign);
         viewer.ngui->addVariable("Trace Mode", trace_state, true)
-                   ->setItems({"Geodesic", "Field"});
-        
+                   ->setItems({"Geodesic", "Field"}); 
+        viewer.ngui->addVariable("Show Bending", showBending);
     }
 
     void reassignPermutations();
@@ -134,6 +135,8 @@ private:
     int traceSign;
     int traceFaceId;
     int traceSteps;
+    
+    bool showBending;
 };
 
 #endif

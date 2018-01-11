@@ -25,6 +25,7 @@ void Trace::popLastCurve()
         curves.pop_back();
 	normals.pop_back();
 	modes.pop_back();
+        bending.pop_back();
     }
 }
 
@@ -328,7 +329,7 @@ void Trace::traceCurve(const Weave &wv, const Trace_Mode trace_state,
 
     assert(curr_edge_id > -1);
     int op_v_id = getOpVIdFromEdge(wv, curr_edge_id, curr_face_id);
-
+    Eigen::VectorXd bend = Eigen::VectorXd::Zero(steps);
     for (int i = 1; i < steps; i++)
     {
         Eigen::Vector3d op_vertex = wv.V.row(op_v_id);
@@ -388,9 +389,12 @@ void Trace::traceCurve(const Weave &wv, const Trace_Mode trace_state,
         case GEODESIC:
             curr_dir = mapVectorToAdjacentFace(wv.F, wv.V, wv.edgeVerts,
                 next_edge_id, curr_face_id, next_face_id, curr_dir);
-            break;
+            
+	    break;
         case FIELD:
-            Eigen::MatrixXi perm = wv.Ps[next_edge_id];
+	    Eigen::Vector3d parTransport = mapVectorToAdjacentFace(wv.F, wv.V, wv.edgeVerts,
+		                    next_edge_id, curr_face_id, next_face_id, curr_dir);
+	    Eigen::MatrixXi perm = wv.Ps[next_edge_id];
             if (next_face_id == wv.E(next_edge_id, 1))
             {
                 perm.transposeInPlace();
@@ -412,6 +416,7 @@ void Trace::traceCurve(const Weave &wv, const Trace_Mode trace_state,
                 }
             }
             curr_dir = coeff_dir * curr_dir.normalized() * wv.averageEdgeLength * 1000.;
+	    bend(i) = curr_dir.normalized().dot( parTransport.normalized() );
             break;
         }
 
@@ -423,6 +428,7 @@ void Trace::traceCurve(const Weave &wv, const Trace_Mode trace_state,
     curves.push_back(curve);
     normals.push_back(normal);
     modes.push_back(trace_state);
+    bending.push_back(bend);
     return;
 }
 

@@ -81,6 +81,13 @@ void WeaveHook::drawTraceCenterlines(igl::viewer::Viewer &viewer)
 		break;
 	    case FIELD:
 		viewer.data.add_edges(s1, s2, green);
+                if( showBending )
+		{
+                    Eigen::MatrixXd bend_colors = Eigen::MatrixXd::Zero(s2.rows(),3);
+	       	    igl::ColorMapType viz_color = igl::COLOR_MAP_TYPE_JET;
+		    igl::colormap(viz_color,trace->bending[i].tail(s2.rows()), true, bend_colors);
+		    viewer.data.add_points( s2, bend_colors );
+		}
 		break;
 	}
     }
