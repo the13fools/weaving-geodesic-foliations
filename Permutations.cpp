@@ -83,7 +83,7 @@ int reassignPermutations(Weave &weave)
     return count;
 }
 
-void findSingularVertices(Weave &weave, std::vector<int> &singularVerts)
+void findSingularVertices(const Weave &weave, std::vector<int> &singularVerts)
 {
     int nverts = weave.nVerts();
     singularVerts.clear();
@@ -126,7 +126,15 @@ void findSingularVertices(Weave &weave, std::vector<int> &singularVerts)
             int edge = weave.faceEdges(curface, curspoke);
             int side = (weave.E(edge, 0) == curface) ? 0 : 1;
             int nextface = weave.E(edge, 1 - side);
-            totperm *= (side == 0) ? weave.Ps[edge].transpose() : weave.Ps[edge];
+	    if ( side == 0 )
+	    {
+		totperm *= weave.Ps[edge].transpose();
+	    }
+	    else 
+	    { 
+		totperm *= weave.Ps[edge]; 
+	    }
+	    
             curface = nextface;
             for (int k = 0; k < 3; k++)
             {

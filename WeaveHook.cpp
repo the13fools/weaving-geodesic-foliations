@@ -10,7 +10,7 @@ void WeaveHook::setFaceColors(igl::viewer::Viewer &viewer)
 { 
     int faces = weave->F.rows();
     if ( curFaceEnergies.rows() != faces && shading_state != NONE) { return ; }
- 
+
     igl::ColorMapType viz_color = igl::COLOR_MAP_TYPE_MAGMA;
     
     Eigen::VectorXd Z(faces);
@@ -93,6 +93,12 @@ void WeaveHook::drawTraceCenterlines(igl::viewer::Viewer &viewer)
     }
 }
 
+void WeaveHook::updateSingularVerts(igl::viewer::Viewer &viewer)
+{
+    Eigen::RowVector3d green(.1, .9, .1);
+    viewer.data.add_points( singularVerts, green ); 
+}
+
 void WeaveHook::renderRenderGeometry(igl::viewer::Viewer &viewer)
 {
     viewer.data.clear();
@@ -116,6 +122,7 @@ void WeaveHook::renderRenderGeometry(igl::viewer::Viewer &viewer)
     }
     setFaceColors(viewer);  
     drawTraceCenterlines(viewer); 
+    updateSingularVerts(viewer);
 }
 
 bool WeaveHook::simulateOneStep()
@@ -135,6 +142,12 @@ void WeaveHook::reassignPermutations()
     std::vector<int> singularities;
     findSingularVertices(*weave, singularities);
     std::cout << "now " << singularities.size() << " singular verts" << std::endl;
+
+    singularVerts = Eigen::MatrixXd::Zero(singularities.size(), 3);
+    for (int i = 0; i < singularities.size(); i++) 
+    {
+	singularVerts.row(i) = weave->V.row(singularities[i]);
+    }
 }
 
 void WeaveHook::normalizeFields()

@@ -20,7 +20,7 @@ class WeaveHook : public PhysicsHook
 public:
     WeaveHook() : PhysicsHook(), weave(NULL), vectorScale(1.0), normalizeVectors(true)
     {
-        meshName = "meshes/torus.obj";
+        meshName = "meshes/sphere.obj";
         params.lambdacompat = 100;
         params.lambdareg = 1e-3;
 
@@ -32,6 +32,7 @@ public:
 
         hideVectors = false;
         showBending = false;
+        showSingularities = false;
 
         trace = new Trace();
     }
@@ -61,6 +62,7 @@ public:
         viewer.ngui->addVariable("Trace Mode", trace_state, true)
                    ->setItems({"Geodesic", "Field"}); 
         viewer.ngui->addVariable("Show Bending", showBending);
+   //     viewer.ngui->addVariable("Show Singularities", showSingularities);
     }
 
     void reassignPermutations();
@@ -105,6 +107,8 @@ public:
     void setFaceColors(igl::viewer::Viewer &viewer);
  
     void drawTraceCenterlines(igl::viewer::Viewer &viewer);
+
+    void updateSingularVerts(igl::viewer::Viewer &viewer);
 private:
     std::string meshName;
     Weave *weave;
@@ -137,6 +141,8 @@ private:
     int traceSteps;
     
     bool showBending;
+    bool showSingularities;
+    Eigen::MatrixXd singularVerts;
 };
 
 #endif
