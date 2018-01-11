@@ -231,9 +231,9 @@ void Trace::computeIntersections(int curveIdx1, int curveIdx2, std::vector<Colli
     }
     minSegmentLength = minSegmentLength * 10e-8;
 //    std::cout << minSegmentLength << "\n";
-    for (int i = 0; i < c1.size() - 1; i++) 
+    for (int i = 0; i < c1.rows() - 1; i++) 
     {
-        for (int j = 0; j < c2.size() - 1; j++)
+        for (int j = 0; j < c2.rows() - 1; j++)
 	{     
             if ( curveIdx1 == curveIdx2 && abs(i - j) < 2 ) { continue; }
 	    else 
