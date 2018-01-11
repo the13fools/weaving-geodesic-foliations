@@ -132,6 +132,9 @@ void WeaveHook::reassignPermutations()
 {
     int flipped = ::reassignPermutations(*weave);
     std::cout << flipped << " permutations changed" << std::endl;
+    std::vector<int> singularities;
+    findSingularVertices(*weave, singularities);
+    std::cout << "now " << singularities.size() << " singular verts" << std::endl;
 }
 
 void WeaveHook::normalizeFields()
