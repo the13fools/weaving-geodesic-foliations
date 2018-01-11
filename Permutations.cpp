@@ -82,3 +82,72 @@ int reassignPermutations(Weave &weave)
     }
     return count;
 }
+
+void findSingularVertices(Weave &weave, std::vector<int> &singularVerts)
+{
+    int nverts = weave.nVerts();
+    singularVerts.clear();
+
+    // in principle this can be done in O(|V|) using circulators which we do not currently compute
+    // O(|V||F|) for now
+
+    int nfaces = weave.nFaces();
+    int m = weave.nFields();
+
+    for (int i = 0; i < nverts; i++)
+    {
+        int startface = -1;
+        int startspoke = -1;
+        bool done = false;
+        for (int j = 0; j < nfaces; j++)
+        {
+            for (int k = 0; k < 3; k++)
+            {
+                if (weave.F(j, k) == i)
+                {
+                    startface = j;
+                    startspoke = (k+1)%3;
+                    done = true;
+                    break;
+                }
+            }
+            if (done)
+                break;
+        }
+        assert(startface != -1);
+
+        Eigen::MatrixXi totperm(m, m);
+        totperm.setIdentity();
+
+        int curface = startface;
+        int curspoke = startspoke;
+        while (true)
+        {
+            int edge = weave.faceEdges(curface, curspoke);
+            int side = (weave.E(edge, 0) == curface) ? 0 : 1;
+            int nextface = weave.E(edge, 1 - side);
+            totperm *= (side == 0) ? weave.Ps[edge].transpose() : weave.Ps[edge];
+            curface = nextface;
+            for (int k = 0; k < 3; k++)
+            {
+                if (weave.F(nextface, k) == i)
+                {
+                    curspoke = (k + 1) % 3;
+                    break;
+                }
+            }
+
+            if (curface == startface)
+                break;
+        }
+
+        bool isidentity = true;
+        for (int j = 0; j < m; j++)
+        {
+            if (totperm(j, j) != 1)
+                isidentity = false;
+        }
+        if (!isidentity)
+            singularVerts.push_back(i);
+    }
+}
