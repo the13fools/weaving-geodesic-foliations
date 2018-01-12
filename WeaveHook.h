@@ -21,6 +21,7 @@ public:
     WeaveHook() : PhysicsHook(), weave(NULL), vectorScale(1.0), normalizeVectors(true)
     {
         meshName = "meshes/bunny.obj";
+        vectorFieldName = "field.txt";
         params.lambdacompat = 100;
         params.lambdareg = 1e-3;
 
@@ -51,6 +52,11 @@ public:
         viewer.ngui->addVariable("Compatilibity Lambda", params.lambdacompat);
         viewer.ngui->addVariable("Tikhonov Reg", params.lambdareg);
         viewer.ngui->addButton("Reassign Permutations", std::bind(&WeaveHook::reassignPermutations, this));
+
+        viewer.ngui->addGroup("Save/Load Field");
+        viewer.ngui->addVariable("Filename", vectorFieldName);
+        viewer.ngui->addButton("Save Field", std::bind(&WeaveHook::serializeVectorField, this));
+        viewer.ngui->addButton("Load Field", std::bind(&WeaveHook::deserializeVectorField, this));
         
 //	viewer.ngui->addVariable("Trace Field/Geo", isTraceField);
 	
@@ -67,6 +73,8 @@ public:
 
     void reassignPermutations();
     void normalizeFields();
+    void serializeVectorField();
+    void deserializeVectorField();
 
     virtual void initSimulation()
     {
@@ -143,6 +151,8 @@ private:
     bool showBending;
     bool showSingularities;
     Eigen::MatrixXd singularVerts;
+
+    std::string vectorFieldName;
 };
 
 #endif

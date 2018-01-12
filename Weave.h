@@ -73,6 +73,9 @@ public:
     void normalizeFields(); // make all vectors unit-length
     void createVisualizationEdges(Eigen::MatrixXd &edgePts, Eigen::MatrixXd &edgeVecs, Eigen::MatrixXi &edgeSegs, Eigen::MatrixXd &colors);
 
+    void serialize(const std::string &filename);
+    void deserialize(const std::string &filename);
+
 private:
     // computes E and faceedges/faceWings from V and F
     void buildConnectivityStructures();

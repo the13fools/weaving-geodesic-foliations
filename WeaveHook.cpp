@@ -155,3 +155,14 @@ void WeaveHook::normalizeFields()
     weave->normalizeFields();
     updateRenderGeometry();
 }
+
+void WeaveHook::serializeVectorField()
+{
+    weave->serialize(vectorFieldName);
+}
+
+void WeaveHook::deserializeVectorField()
+{
+    weave->deserialize(vectorFieldName);
+    updateRenderGeometry();
+}

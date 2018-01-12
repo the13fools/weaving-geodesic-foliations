@@ -355,3 +355,116 @@ void Weave::normalizeFields()
         }
     }
 }
+
+/*
+ * Writes vector field to file. Format is:
+ *
+ * - the number of optimization variables, nvars (int)
+ * - nvars doubles specifying the vector field variables, in the same format as Weave::vectorField
+ * - nedges and nfields, two ints specifying the number of edges and vector fields per face
+ * - nedges permutation matrices, each an nfields x nfields integer matrix, where the ith matrix corresponds to edge i
+ * - the number of handles (int)
+ * - for each handle, four numbers: the face of the handle (int), the field of the handle (int), and the direction of the handle,
+ *   in the face's barycentric coordinates (two doubles)
+ * 
+ */
+void Weave::serialize(const std::string &filename)
+{
+    std::ofstream ofs(filename);
+    int nvars = vectorFields.size();
+    ofs << nvars << std::endl;;
+    for (int i = 0; i < nvars; i++)
+    {
+        ofs << vectorFields[i] << std::endl;;
+    }
+
+    int nedges = nEdges();
+    int nfields = nFields();
+    ofs << nedges << " " << nfields << std::endl;
+
+    for (int i = 0; i < nedges; i++)
+    {
+        for (int j = 0; j < nfields; j++)
+        {
+            for (int k = 0; k < nfields; k++)
+            {
+                ofs << Ps[i](j, k) << " ";
+            }
+            ofs << std::endl;
+        }
+        ofs << std::endl;
+    }
+
+    int nhandles = nHandles();
+    ofs << nhandles << std::endl;
+    for (int i = 0; i < nhandles; i++)
+    {
+        ofs << handles[i].face << " " << handles[i].field << " " << handles[i].dir[0] << " " << handles[i].dir[1] << std::endl;
+    }
+}
+
+void Weave::deserialize(const std::string &filename)
+{
+    std::ifstream ifs(filename);
+    int nvars;
+    ifs >> nvars;
+    if (!ifs)
+    {
+        std::cerr << "Couldn't load vector field file " << filename << std::endl;
+        return;
+    }
+
+    if (nvars != vectorFields.size())
+    {
+        std::cerr << "Vector field doesn't match mesh!" << std::endl;
+        return;
+    }
+
+    for (int i = 0; i < nvars; i++)
+        ifs >> vectorFields[i];
+
+    int nedges, nfields;
+    ifs >> nedges >> nfields;
+    if (!ifs)
+    {
+        std::cerr << "Error reading vector field file " << filename << std::endl;
+        return;
+    }
+
+    if (nedges != nEdges() && nfields != nFields())
+    {
+        std::cerr << "Vector field doesn't match mesh!" << std::endl;
+        return;
+    }
+
+    for (int i = 0; i < nedges; i++)
+    {
+        for (int j = 0; j < nfields; j++)
+        {
+            for (int k = 0; k < nfields; k++)
+            {
+                ifs >> Ps[i](j, k);
+            }
+        }
+    }
+
+    int nhandles;
+    ifs >> nhandles;
+    if (!ifs)
+    {
+        std::cerr << "Error reading vector field file " << filename << std::endl;
+        return;
+    }
+    handles.clear();
+
+    for (int i = 0; i < nhandles; i++)
+    {
+        Handle h;
+        ifs >> h.face >> h.field >> h.dir[0] >> h.dir[1];
+        handles.push_back(h);
+    }
+    if (!ifs)
+    {
+        std::cerr << "Error reading the vector field file " << filename << std::endl;
+    }
+}
