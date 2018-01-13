@@ -24,6 +24,7 @@ Weave::Weave(const std::string &objname, int m)
         V.col(i) = Vtmp.col(i);
     }
 
+    centerAndScale();
     buildConnectivityStructures();
     buildGeometricStructures();
 
@@ -46,6 +47,25 @@ Weave::Weave(const std::string &objname, int m)
 
 Weave::~Weave()
 {    
+}
+
+void Weave::centerAndScale()
+{
+    Eigen::Vector3d centroid(0, 0, 0);
+    for (int i = 0; i < V.rows(); i++)
+        centroid += V.row(i);
+    centroid /= V.rows();
+
+    double maxdist = std::numeric_limits<double>::infinity();
+    for (int i = 0; i < V.rows(); i++)
+    {
+        maxdist = std::min(maxdist, (V.row(i).transpose() - centroid).norm());
+    }
+    for (int i = 0; i < V.rows(); i++)
+    {
+        Eigen::Vector3d newpos = V.row(i).transpose() - centroid;
+        V.row(i) = newpos / maxdist;
+    }
 }
 
 void Weave::buildConnectivityStructures()

@@ -77,6 +77,8 @@ public:
     void deserialize(const std::string &filename);
 
 private:
+    // scale mesh to unit size
+    void centerAndScale();
     // computes E and faceedges/faceWings from V and F
     void buildConnectivityStructures();
     // compute the geometric data structs
