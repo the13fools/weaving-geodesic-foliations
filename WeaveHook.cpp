@@ -139,14 +139,15 @@ void WeaveHook::reassignPermutations()
 {
     int flipped = ::reassignPermutations(*weave);
     std::cout << flipped << " permutations changed" << std::endl;
-    std::vector<int> singularities;
-    findSingularVertices(*weave, singularities);
-    std::cout << "now " << singularities.size() << " singular verts" << std::endl;
+    std::vector<int> topsingularities;
+    std::vector<std::pair<int, int> > geosingularities;
+    findSingularVertices(*weave, topsingularities, geosingularities);
+    std::cout << "now " << topsingularities.size() << " topological and " << geosingularities.size() << " geometric singularities" << std::endl;
 
-    singularVerts = Eigen::MatrixXd::Zero(singularities.size(), 3);
-    for (int i = 0; i < singularities.size(); i++) 
+    singularVerts = Eigen::MatrixXd::Zero(topsingularities.size(), 3);
+    for (int i = 0; i < topsingularities.size(); i++)
     {
-	singularVerts.row(i) = weave->V.row(singularities[i]);
+        singularVerts.row(i) = weave->V.row(topsingularities[i]);
     }
 }
 

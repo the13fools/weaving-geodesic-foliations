@@ -69,7 +69,7 @@ public:
     int alphaidx(int face, int field) const;
     double alpha(int face, int field) const;
 
-    Eigen::Vector3d faceNormal(int face);
+    Eigen::Vector3d faceNormal(int face) const;
     void normalizeFields(); // make all vectors unit-length
     void createVisualizationEdges(Eigen::MatrixXd &edgePts, Eigen::MatrixXd &edgeVecs, Eigen::MatrixXi &edgeSegs, Eigen::MatrixXd &colors);
 

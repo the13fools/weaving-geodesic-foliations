@@ -83,10 +83,11 @@ int reassignPermutations(Weave &weave)
     return count;
 }
 
-void findSingularVertices(const Weave &weave, std::vector<int> &singularVerts)
+void findSingularVertices(const Weave &weave, std::vector<int> &topologicalSingularVerts, std::vector<std::pair<int, int> > &geometricSingularVerts)
 {
     int nverts = weave.nVerts();
-    singularVerts.clear();
+    topologicalSingularVerts.clear();
+    geometricSingularVerts.clear();
 
     // in principle this can be done in O(|V|) using circulators which we do not currently compute
     // O(|V||F|) for now
@@ -106,7 +107,7 @@ void findSingularVertices(const Weave &weave, std::vector<int> &singularVerts)
                 if (weave.F(j, k) == i)
                 {
                     startface = j;
-                    startspoke = (k+1)%3;
+                    startspoke = (k + 1) % 3;
                     done = true;
                     break;
                 }
@@ -118,23 +119,43 @@ void findSingularVertices(const Weave &weave, std::vector<int> &singularVerts)
 
         Eigen::MatrixXi totperm(m, m);
         totperm.setIdentity();
+        std::vector<double> angles;
+        for (int j = 0; j < m; j++)
+            angles.push_back(0);
 
         int curface = startface;
         int curspoke = startspoke;
+        double totangle = 0;
         while (true)
         {
             int edge = weave.faceEdges(curface, curspoke);
             int side = (weave.E(edge, 0) == curface) ? 0 : 1;
             int nextface = weave.E(edge, 1 - side);
-	    if ( side == 0 )
-	    {
-		totperm *= weave.Ps[edge].transpose();
-	    }
-	    else 
-	    { 
-		totperm *= weave.Ps[edge]; 
-	    }
-	    
+            if (side == 0)
+            {
+                totperm *= weave.Ps[edge].transpose();
+            }
+            else
+            {
+                totperm *= weave.Ps[edge];
+            }
+
+            Eigen::Vector3d normal = weave.faceNormal(curface);
+
+            for (int j = 0; j < m; j++)
+            {
+                Eigen::Vector3d curv = weave.Bs[curface] * weave.v(curface, j);
+                Eigen::Vector2d nextvbary = weave.v(nextface, j);
+                Eigen::Vector3d nextv = weave.Bs[curface] * weave.Ts.block<2, 2>(2 * edge, 2 - 2 * side) * nextvbary;
+                angles[j] += angle(curv, nextv, normal);
+            }
+
+            int spokep1 = (curspoke + 1) % 3;
+            int apex = (curspoke + 2) % 3;
+            Eigen::Vector3d v1 = weave.V.row(weave.F(curface,curspoke)) - weave.V.row(weave.F(curface,apex));
+            Eigen::Vector3d v2 = weave.V.row(weave.F(curface,spokep1)) - weave.V.row(weave.F(curface,apex));
+            totangle += angle(v1, v2, normal);
+
             curface = nextface;
             for (int k = 0; k < 3; k++)
             {
@@ -156,6 +177,14 @@ void findSingularVertices(const Weave &weave, std::vector<int> &singularVerts)
                 isidentity = false;
         }
         if (!isidentity)
-            singularVerts.push_back(i);
+            topologicalSingularVerts.push_back(i);
+
+        for (int j = 0; j < m; j++)
+        {
+            const double PI = 3.1415926535898;
+            double index = angles[j] + 2 * PI - totangle;
+            if (fabs(index) > PI)
+                geometricSingularVerts.push_back(std::pair<int, int>(i, j));
+        }
     }
 }

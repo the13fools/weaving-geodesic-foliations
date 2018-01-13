@@ -147,7 +147,7 @@ void Weave::buildConnectivityStructures()
     }
 }
 
-Eigen::Vector3d Weave::faceNormal(int face)
+Eigen::Vector3d Weave::faceNormal(int face) const
 {
     Eigen::Vector3d e1 = (V.row(F(face, 1)) - V.row(F(face, 0)));
     Eigen::Vector3d e2 = (V.row(F(face, 2)) - V.row(F(face, 0)));
