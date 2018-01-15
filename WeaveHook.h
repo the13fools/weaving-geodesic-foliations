@@ -21,7 +21,7 @@ public:
     WeaveHook() : PhysicsHook(), weave(NULL), vectorScale(1.0), normalizeVectors(true)
     {
         meshName = "meshes/bunny.obj";
-        vectorFieldName = "field.txt";
+        vectorFieldName = "artery.txt";
         params.lambdacompat = 100;
         params.lambdareg = 1e-3;
 
@@ -56,8 +56,8 @@ public:
         viewer.ngui->addGroup("Save/Load Field");
         viewer.ngui->addVariable("Filename", vectorFieldName);
         viewer.ngui->addButton("Save Field", std::bind(&WeaveHook::serializeVectorField, this));
-        viewer.ngui->addButton("Load Field", std::bind(&WeaveHook::deserializeVectorField, this));
-        
+        viewer.ngui->addButton("Load Field", std::bind(&WeaveHook::deserializeVectorField, this)); 
+        viewer.ngui->addButton("Export Field", std::bind(&WeaveHook::exportVectorField, this));
 //	viewer.ngui->addVariable("Trace Field/Geo", isTraceField);
 	
         viewer.ngui->addGroup("Tracing Controls");
@@ -75,7 +75,8 @@ public:
     void normalizeFields();
     void serializeVectorField();
     void deserializeVectorField();
-
+    void exportVectorField();
+    
     virtual void initSimulation()
     {
         if (weave)
@@ -141,8 +142,6 @@ private:
     Shading_Enum shading_state = Shading_Enum::NONE;
     Trace_Mode trace_state = Trace_Mode::GEODESIC;
 
-    bool isTraceField; // this controls if we trace a geodesic or the field
-
     int traceIdx;
     int traceSign;
     int traceFaceId;
@@ -150,7 +149,9 @@ private:
     
     bool showBending;
     bool showSingularities;
-    Eigen::MatrixXd singularVerts;
+    Eigen::MatrixXd singularVerts_topo;
+    Eigen::MatrixXd singularVerts_geo;
+    Eigen::MatrixXd nonIdentityEdges;
 
     std::string vectorFieldName;
 };

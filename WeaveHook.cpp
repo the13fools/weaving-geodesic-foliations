@@ -96,7 +96,9 @@ void WeaveHook::drawTraceCenterlines(igl::viewer::Viewer &viewer)
 void WeaveHook::updateSingularVerts(igl::viewer::Viewer &viewer)
 {
     Eigen::RowVector3d green(.1, .9, .1);
-    viewer.data.add_points( singularVerts, green ); 
+    Eigen::RowVector3d blue(.1, .1, .9);
+    viewer.data.add_points( singularVerts_topo, green ); 
+    viewer.data.add_points( nonIdentityEdges, blue ); 
 }
 
 void WeaveHook::renderRenderGeometry(igl::viewer::Viewer &viewer)
@@ -144,11 +146,36 @@ void WeaveHook::reassignPermutations()
     findSingularVertices(*weave, topsingularities, geosingularities);
     std::cout << "now " << topsingularities.size() << " topological and " << geosingularities.size() << " geometric singularities" << std::endl;
 
-    singularVerts = Eigen::MatrixXd::Zero(topsingularities.size(), 3);
+
+    singularVerts_geo = Eigen::MatrixXd::Zero(geosingularities.size(), 3);
+    for (int i = 0; i < geosingularities.size(); i++)
+    {
+//        singularVerts_geo.row(i) = weave->V.row(geosingularities[i]);
+    }
+    singularVerts_topo = Eigen::MatrixXd::Zero(topsingularities.size(), 3);
     for (int i = 0; i < topsingularities.size(); i++)
     {
-        singularVerts.row(i) = weave->V.row(topsingularities[i]);
+        singularVerts_topo.row(i) = weave->V.row(topsingularities[i]);
     }
+
+    nonIdentityEdges = Eigen::MatrixXd::Zero(weave->E.size(), 3);
+    for (int i = 0; i < weave->Ps.size(); i++)
+    {
+        bool id = true;
+	for (int j = 0; j < 3; j++)
+	{
+            if (weave->Ps[i](j,j) != 1)
+	    {
+                id = false;
+	    }
+	}
+	if (!id)
+	{
+            nonIdentityEdges.row(i) = ( weave->V.row(weave->edgeVerts(i, 0)) + 
+		                        weave->V.row(weave->edgeVerts(i, 1)) ) * .5;
+	    
+	}
+    }	
 }
 
 void WeaveHook::normalizeFields()
@@ -160,6 +187,11 @@ void WeaveHook::normalizeFields()
 void WeaveHook::serializeVectorField()
 {
     weave->serialize(vectorFieldName);
+}
+
+void WeaveHook::exportVectorField()
+{
+    weave->serialize_forexport(vectorFieldName);
 }
 
 void WeaveHook::deserializeVectorField()

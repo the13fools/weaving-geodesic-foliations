@@ -56,10 +56,10 @@ void Weave::centerAndScale()
         centroid += V.row(i);
     centroid /= V.rows();
 
-    double maxdist = std::numeric_limits<double>::infinity();
+    double maxdist = 0;
     for (int i = 0; i < V.rows(); i++)
     {
-        maxdist = std::min(maxdist, (V.row(i).transpose() - centroid).norm());
+        maxdist = std::max(maxdist, (V.row(i).transpose() - centroid).norm());
     }
     for (int i = 0; i < V.rows(); i++)
     {
@@ -422,6 +422,51 @@ void Weave::serialize(const std::string &filename)
         ofs << handles[i].face << " " << handles[i].field << " " << handles[i].dir[0] << " " << handles[i].dir[1] << std::endl;
     }
 }
+
+
+/*
+ * Writes vector field to file. Format is:
+ *
+ * Number of vector fields (int) = |F|*m (m = fields per face). 
+ * |F| x 3m matrix of vectors
+ * Number of edges |E| (int) m
+ * 1 row recording edge adjacency information (0,1 are adjacent faces, 2,3 are adjacent verts)
+ * mxm permutation matrix
+ * 
+ */
+void Weave::serialize_forexport(const std::string &filename)
+{
+    std::ofstream ofs(filename);
+    int nvars = vectorFields.size();
+    ofs << Bs.size() << std::endl;
+    for (int i = 0; i < nFaces(); i++)
+    {
+	for (int j = 0; j < nFields(); j++)
+	{
+            ofs << (Bs[i] * v(i, j)).transpose() << " "; 
+	}
+        ofs << std::endl;
+    }
+
+    int nedges = nEdges();
+    int nfields = nFields();
+    ofs << nedges << " " << nfields << std::endl;
+
+    for (int i = 0; i < nedges; i++)
+    {
+	ofs << E.row(i) << " " << edgeVerts.row(i) << std::endl;
+        for (int j = 0; j < nfields; j++)
+        {
+            for (int k = 0; k < nfields; k++)
+            {
+                ofs << Ps[i](j, k) << " ";
+            }
+            ofs << std::endl;
+        }
+        ofs << std::endl;
+    }
+}
+
 
 void Weave::deserialize(const std::string &filename)
 {
