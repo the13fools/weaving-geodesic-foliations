@@ -58,6 +58,12 @@ void WeaveHook::drawTraceCenterlines(igl::viewer::Viewer &viewer)
     }
     if (isDrawTrace)
     {
+	for (int i = 0; i < 3; i++)
+	{
+        //    trace->traceCurve(*weave, trace_state, i, 1, traceFaceId, traceSteps);
+        //    trace->traceCurve(*weave, trace_state, i, -1, traceFaceId, traceSteps);
+	}
+
         trace->traceCurve(*weave, trace_state, traceIdx, traceSign, traceFaceId, traceSteps);
         isDrawTrace = false;
     }

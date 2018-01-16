@@ -436,9 +436,12 @@ void Weave::serialize(const std::string &filename)
  */
 void Weave::serialize_forexport(const std::string &filename)
 {
-    std::ofstream ofs(filename);
+    char buffer [100];
+    sprintf(buffer, "%s.fields", filename.c_str());
+
+    std::ofstream ofs(buffer);
     int nvars = vectorFields.size();
-    ofs << Bs.size() << std::endl;
+  //  ofs << Bs.size() << std::endl;
     for (int i = 0; i < nFaces(); i++)
     {
 	for (int j = 0; j < nFields(); j++)
@@ -447,24 +450,37 @@ void Weave::serialize_forexport(const std::string &filename)
 	}
         ofs << std::endl;
     }
+    ofs.close();
+
+
+    sprintf(buffer, "%s.edges", filename.c_str());
+    std::ofstream ofs_edge(buffer);
 
     int nedges = nEdges();
     int nfields = nFields();
-    ofs << nedges << " " << nfields << std::endl;
+  //  ofs << nedges << " " << nfields << std::endl;
 
     for (int i = 0; i < nedges; i++)
     {
-	ofs << E.row(i) << " " << edgeVerts.row(i) << std::endl;
+	ofs_edge << E.row(i) << " " << edgeVerts.row(i) << std::endl;
+    }
+    ofs_edge.close();
+    sprintf(buffer, "%s.permmats", filename.c_str());
+    std::ofstream ofs_mat(buffer);
+
+    for (int i = 0; i < nedges; i++)
+    {
         for (int j = 0; j < nfields; j++)
         {
             for (int k = 0; k < nfields; k++)
             {
-                ofs << Ps[i](j, k) << " ";
+                ofs_mat << Ps[i](j, k) << " ";
             }
-            ofs << std::endl;
+            ofs_mat << std::endl;
         }
-        ofs << std::endl;
+//        ofs << std::endl;
     }
+    ofs_mat.close();
 }
 
 
