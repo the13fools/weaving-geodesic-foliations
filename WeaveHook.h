@@ -62,6 +62,10 @@ public:
         viewer.ngui->addButton("Export Field", std::bind(&WeaveHook::exportVectorField, this));
 
 	viewer.ngui->addGroup("Add Cut");
+	viewer.ngui->addButton("Reset Cut Select", std::bind(&WeaveHook::resetCutSelection, this));
+	viewer.ngui->addButton("Add Cut", std::bind(&WeaveHook::addCut, this));
+	viewer.ngui->addButton("Remove Prev Cut", std::bind(&WeaveHook::removePrevCut, this));
+
 
         viewer.ngui->addWindow(Eigen::Vector2i(300, 10), "Manipulate");	
         viewer.ngui->addGroup("Tracing Controls");
@@ -113,6 +117,10 @@ public:
     void serializeVectorField();
     void deserializeVectorField();
     void exportVectorField();
+    void resetCutSelection();
+    void addCut();
+    void removePrevCut(); 
+    
     
     virtual void initSimulation()
     {
@@ -157,6 +165,8 @@ public:
     void setFaceColors(igl::viewer::Viewer &viewer);
  
     void drawTraceCenterlines(igl::viewer::Viewer &viewer);
+    void drawCuts(igl::viewer::Viewer &viewer);
+
     void showCutVertexSelection(igl::viewer::Viewer &viewer);
     void updateSingularVerts(igl::viewer::Viewer &viewer);
 private:

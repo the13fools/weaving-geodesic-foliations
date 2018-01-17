@@ -54,13 +54,13 @@ void WeaveHook::setFaceColors(igl::viewer::Viewer &viewer)
 void WeaveHook::showCutVertexSelection(igl::viewer::Viewer &viewer)
 {
 
-    Eigen::MatrixXd selectedVert = Eigen::MatrixXd::Zero(3, 3);
+    Eigen::MatrixXd selectedVert = Eigen::MatrixXd::Zero(2, 3);
     int counter = 0;
     for (int i = 0; i < vertexSelect.rows(); i++)
     {
         if ( vertexSelect(i) > -1 )
 	{
-	    if (counter < 2) 
+	    if (counter < 1) 
 	    { 
 		counter++;
 		std::cout << i << "\n";
@@ -73,6 +73,20 @@ void WeaveHook::showCutVertexSelection(igl::viewer::Viewer &viewer)
 
     Eigen::RowVector3d teal(.1, .9, .9);
     viewer.data.add_points( selectedVert, teal ); 
+}
+
+void WeaveHook::drawCuts(igl::viewer::Viewer &viewer)
+{
+    Eigen::RowVector3d blue(0.1, .1, .9);
+/*    for (int i = 0; i < trace->curves.size(); i++)
+    {
+        int rows = trace->curves[i].rows();
+        Eigen::MatrixXd s1 = trace->curves[i].block(0, 0, rows - 1, 3);
+        Eigen::MatrixXd s2 = trace->curves[i].block(1, 0, rows - 1, 3);i
+
+        viewer.data.add_edges(s1, s2, red);
+    }
+*/
 }
 
 void WeaveHook::drawTraceCenterlines(igl::viewer::Viewer &viewer)
@@ -177,6 +191,7 @@ void WeaveHook::renderRenderGeometry(igl::viewer::Viewer &viewer)
     setFaceColors(viewer);  
     drawTraceCenterlines(viewer); 
     updateSingularVerts(viewer);
+    drawCuts(viewer);
 }
 
 bool WeaveHook::simulateOneStep()
@@ -252,3 +267,26 @@ void WeaveHook::deserializeVectorField()
     weave->deserialize(vectorFieldName);
     updateRenderGeometry();
 }
+
+void resetCutSelection()
+{
+    vertexSelect = Eigen::VectorXi::Constant(weave->nFaces(), -1);
+    clicked = Eigen::MatrixXd::Constant(weave->nFaces(), 3, .7);
+}
+
+void addCut()
+{
+//    cuts.push_back();
+
+
+}
+
+void removePrevCut()
+{
+    if (cuts.size() > 0)
+    {
+	cuts.pop_back();
+    }
+} 
+
+
