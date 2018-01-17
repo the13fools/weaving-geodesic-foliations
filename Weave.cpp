@@ -636,3 +636,23 @@ void Weave::shortestPath(int startVert, int endVert, std::vector<std::pair<int, 
 
     delete[] visited;
 }
+
+
+void Weave::createVisualizationCuts(Eigen::MatrixXd &cutPts)
+{
+    int totedges = 0;
+    for (int i = 0; i < (int)cuts.size(); i++)
+    {
+        totedges += cuts[i].path.size();
+    }
+    cutPts.resize(totedges, 3);
+    int idx = 0;
+    for (int i = 0; i < (int)cuts.size(); i++)
+    {
+        for (int j = 0; j < (int)cuts[i].path.size(); j++)
+        {
+            cutPts.row(idx) = (V.row(edgeVerts(cuts[i].path[j].first, 0)) + V.row(edgeVerts(cuts[i].path[j].first, 1))) * .5;
+            idx++;
+        }
+    }
+}

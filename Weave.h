@@ -14,10 +14,7 @@ struct Handle
 
 struct Cut
 { 
-    std::vector<int> edgeList; // ordered list of edgeIds that make up the cut
-    Eigen::MatrixXi perm; // The constant permuation to assign to each cut
-    double weight; // for optimization
-    bool isActive; // for visualization    
+    std::vector<std::pair<int, int> > path; // (edge, orientation) list        
 };
 
 class Weave
@@ -88,6 +85,7 @@ public:
     Eigen::Vector3d faceNormal(int face) const;
     void normalizeFields(); // make all vectors unit-length
     void createVisualizationEdges(Eigen::MatrixXd &edgePts, Eigen::MatrixXd &edgeVecs, Eigen::MatrixXi &edgeSegs, Eigen::MatrixXd &colors);
+    void createVisualizationCuts(Eigen::MatrixXd &cutPts);
 
     void serialize(const std::string &filename);
     void serialize_forexport(const std::string &filename);

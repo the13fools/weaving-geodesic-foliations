@@ -39,7 +39,9 @@ void WeaveHook::setFaceColors(igl::viewer::Viewer &viewer)
     switch (shading_state) 
     {
         case NONE: 
-            faceColors = clicked; // faceColors.setConstant(0.7);
+            faceColors.setConstant(0.7);
+            for (int i = 0; i < (int)selectedVertices.size(); i++)
+                faceColors.row(selectedVertices[i].first) << 1, 0, 0;
             showCutVertexSelection(viewer);     
 	    break;
 	default:
@@ -53,39 +55,26 @@ void WeaveHook::setFaceColors(igl::viewer::Viewer &viewer)
 
 void WeaveHook::showCutVertexSelection(igl::viewer::Viewer &viewer)
 {
-
-    Eigen::MatrixXd selectedVert = Eigen::MatrixXd::Zero(3, 3);
-    int counter = 0;
-    for (int i = 0; i < vertexSelect.rows(); i++)
-    {
-        if ( vertexSelect(i) > -1 )
-	{
-	    if (counter < 2) 
-	    { 
-		selectedVert.row(counter) = weave->V.row( weave->F( i, vertexSelect(i) ) ); 
-		counter++;
-	    }
-    	}
-
-    }	
-//    std::cout << counter << "\n"; 
-
     Eigen::RowVector3d teal(.1, .9, .9);
-    viewer.data.add_points( selectedVert, teal ); 
+    int nsel = renderSelectedVertices.size();
+    Eigen::MatrixXd P(nsel, 3);
+    Eigen::MatrixXd C(nsel, 3);
+    for (int i = 0; i < (int)renderSelectedVertices.size(); i++)
+    {
+        P.row(i) = renderSelectedVertices[i];
+        C.row(i) = teal;
+    }
+    viewer.data.add_points(P, C);
+    
 }
 
 void WeaveHook::drawCuts(igl::viewer::Viewer &viewer)
 {
-    Eigen::RowVector3d blue(0.1, .1, .9);
-/*    for (int i = 0; i < trace->curves.size(); i++)
-    {
-        int rows = trace->curves[i].rows();
-        Eigen::MatrixXd s1 = trace->curves[i].block(0, 0, rows - 1, 3);
-        Eigen::MatrixXd s2 = trace->curves[i].block(1, 0, rows - 1, 3);i
-
-        viewer.data.add_edges(s1, s2, red);
-    }
-*/
+    Eigen::RowVector3d blue(0.9, .1, .9);
+    Eigen::MatrixXd C(cutPos.rows(), 3);
+    for(int i=0; i<3; i++)
+        C.col(i).setConstant(blue[i]);
+    viewer.data.add_points(cutPos, C);
 }
 
 void WeaveHook::drawTraceCenterlines(igl::viewer::Viewer &viewer)
@@ -228,19 +217,19 @@ void WeaveHook::reassignPermutations()
     for (int i = 0; i < weave->Ps.size(); i++)
     {
         bool id = true;
-	for (int j = 0; j < 3; j++)
-	{
-            if (weave->Ps[i](j,j) != 1)
-	    {
+        for (int j = 0; j < 3; j++)
+        {
+            if (weave->Ps[i](j, j) != 1)
+            {
                 id = false;
-	    }
-	}
-	if (!id)
-	{
-            nonIdentityEdges.row(i) = ( weave->V.row(weave->edgeVerts(i, 0)) + 
-		                        weave->V.row(weave->edgeVerts(i, 1)) ) * .5;
-	    
-	}
+            }
+        }
+        if (!id)
+        {
+            nonIdentityEdges.row(i) = (weave->V.row(weave->edgeVerts(i, 0)) +
+                weave->V.row(weave->edgeVerts(i, 1))) * .5;
+
+        }
     }
     params.edgeWeights = Eigen::VectorXd::Constant(weave->nEdges(), 1);
 }
@@ -269,60 +258,38 @@ void WeaveHook::deserializeVectorField()
 
 void WeaveHook::resetCutSelection()
 {
-    vertexSelect = Eigen::VectorXi::Constant(weave->nFaces(), -1);
-    clicked = Eigen::MatrixXd::Constant(weave->nFaces(), 3, .7);
+    selectedVertices.clear();
+    renderSelectedVertices.clear();
 }
 
 void WeaveHook::addCut()
 {
-//    cuts.push_back();
-//    shortestPath
+    //    cuts.push_back();
+    //    shortestPath
     int idx1 = -1;
-    int idx2 = -1;   
-  
-    for (int i = 0; i < vertexSelect.rows(); i++)
-    {
-        if ( vertexSelect(i) > -1 )
-        {
-            if (idx1 == -1)
-            {
-                idx1 = weave->F( i, vertexSelect(i) );
-            }
-            else if (idx2 == -1)
-            {
-                idx2 = weave->F( i, vertexSelect(i) );
-                break;
-            }
-        }
-    }
-    std::cout << idx1 << " " << idx2 << " \n";
+    int idx2 = -1;
 
+    if (selectedVertices.size() < 2)
+        return;
 
-    nonIdentityEdges = Eigen::MatrixXd::Zero(weave->E.size(), 3);
-    if ( idx2 != -1 ) 
-    {
-        std::vector<std::pair<int, int> > path;
-        weave->shortestPath(idx1, idx2, path);
-        for ( int i = 0; i < path.size(); i++)
-        {
-	    std::cout << path[i].first << "\n";
-	    params.edgeWeights(path[i].first) = 0;
-            nonIdentityEdges.row(i) = ( weave->V.row(weave->edgeVerts(path[i].first, 0)) + 
-		                        weave->V.row(weave->edgeVerts(path[i].first, 1)) ) * .5;
-        }
-    }
+    idx1 = weave->F(selectedVertices[0].first, selectedVertices[0].second);
+    idx2 = weave->F(selectedVertices[1].first, selectedVertices[1].second);
 
+    if (idx1 == idx2)
+        return;
 
+    Cut c;    
+    weave->shortestPath(idx1, idx2, c.path);
+    weave->cuts.push_back(c);    
 
-
+    updateRenderGeometry();
 }
 
 void WeaveHook::removePrevCut()
 {
-  //  if (cuts.size() > 0)
-  //  {
-//	cuts.pop_back();
- //   }
+    if (weave->cuts.size() > 0)
+        weave->cuts.pop_back();
+    updateRenderGeometry();
 } 
 
 
