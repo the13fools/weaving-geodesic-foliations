@@ -85,7 +85,7 @@ public:
     Eigen::Vector3d faceNormal(int face) const;
     void normalizeFields(); // make all vectors unit-length
     void createVisualizationEdges(Eigen::MatrixXd &edgePts, Eigen::MatrixXd &edgeVecs, Eigen::MatrixXi &edgeSegs, Eigen::MatrixXd &colors);
-    void createVisualizationCuts(Eigen::MatrixXd &cutPts);
+    void createVisualizationCuts(Eigen::MatrixXd &cutPts1, Eigen::MatrixXd &cutPts2);
 
     void serialize(const std::string &filename);
     void serialize_forexport(const std::string &filename);

@@ -71,10 +71,11 @@ void WeaveHook::showCutVertexSelection(igl::viewer::Viewer &viewer)
 void WeaveHook::drawCuts(igl::viewer::Viewer &viewer)
 {
     Eigen::RowVector3d blue(0.9, .1, .9);
-    Eigen::MatrixXd C(cutPos.rows(), 3);
+    Eigen::MatrixXd C(cutPos1.rows(), 3);
     for(int i=0; i<3; i++)
         C.col(i).setConstant(blue[i]);
-    viewer.data.add_points(cutPos, C);
+    viewer.data.add_edges(cutPos1, cutPos2, C);
+    
 }
 
 void WeaveHook::drawTraceCenterlines(igl::viewer::Viewer &viewer)
@@ -166,18 +167,18 @@ void WeaveHook::renderRenderGeometry(igl::viewer::Viewer &viewer)
         Eigen::Vector3d vec = edgeVecs.row(i);
         if (normalizeVectors)
         {
-            if(vec.norm() != 0.0)
+            if (vec.norm() != 0.0)
                 vec *= baseLength / vec.norm() * sqrt(3.0) / 6.0 * 0.75;
         }
         renderPts.row(2 * i) = edgePts.row(i) - vectorScale*vec.transpose();
         renderPts.row(2 * i + 1) = edgePts.row(i) + vectorScale*vec.transpose();
     }
-    if ( !hideVectors )
+    if (!hideVectors)
     {
-	viewer.data.set_edges(renderPts, edgeSegs, edgeColors);      
+        viewer.data.set_edges(renderPts, edgeSegs, edgeColors);
     }
-    setFaceColors(viewer);  
-    drawTraceCenterlines(viewer); 
+    setFaceColors(viewer);
+    drawTraceCenterlines(viewer);
     updateSingularVerts(viewer);
     drawCuts(viewer);
 }

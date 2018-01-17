@@ -161,7 +161,7 @@ public:
         renderQ = weave->V;
         renderF = weave->F;        
         weave->createVisualizationEdges(edgePts, edgeVecs, edgeSegs, edgeColors);
-        weave->createVisualizationCuts(cutPos);
+        weave->createVisualizationCuts(cutPos1, cutPos2);
         faceColors.resize(weave->nFaces(), 3);
         faceColors.setConstant(0.3);
         baseLength = weave->averageEdgeLength;
@@ -216,7 +216,8 @@ private:
     Eigen::MatrixXd singularVerts_topo;
     Eigen::MatrixXd singularVerts_geo;
     Eigen::MatrixXd nonIdentityEdges;
-    Eigen::MatrixXd cutPos; // centers of cut edges
+    Eigen::MatrixXd cutPos1; // endpoints of cut edges
+    Eigen::MatrixXd cutPos2;
 
     std::string vectorFieldName;
 };

@@ -638,20 +638,27 @@ void Weave::shortestPath(int startVert, int endVert, std::vector<std::pair<int, 
 }
 
 
-void Weave::createVisualizationCuts(Eigen::MatrixXd &cutPts)
+void Weave::createVisualizationCuts(Eigen::MatrixXd &cutPts1, Eigen::MatrixXd &cutPts2)
 {
     int totedges = 0;
     for (int i = 0; i < (int)cuts.size(); i++)
     {
         totedges += cuts[i].path.size();
     }
-    cutPts.resize(totedges, 3);
+    cutPts1.resize(totedges, 3);
+    cutPts2.resize(totedges, 3);
     int idx = 0;
     for (int i = 0; i < (int)cuts.size(); i++)
     {
         for (int j = 0; j < (int)cuts[i].path.size(); j++)
         {
-            cutPts.row(idx) = (V.row(edgeVerts(cuts[i].path[j].first, 0)) + V.row(edgeVerts(cuts[i].path[j].first, 1))) * .5;
+            int f1 = E(cuts[i].path[j].first, 0);
+            int f2 = E(cuts[i].path[j].first, 1);
+            Eigen::Vector3d n1 = faceNormal(f1);
+            Eigen::Vector3d n2 = faceNormal(f2);
+            Eigen::Vector3d offset = 0.0001*(n1 + n2);
+            cutPts1.row(idx) = V.row(edgeVerts(cuts[i].path[j].first, 0)) + offset.transpose();
+            cutPts2.row(idx) = V.row(edgeVerts(cuts[i].path[j].first, 1)) + offset.transpose();
             idx++;
         }
     }
