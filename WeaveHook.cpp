@@ -184,9 +184,15 @@ void WeaveHook::renderRenderGeometry(igl::viewer::Viewer &viewer)
 
 bool WeaveHook::simulateOneStep()
 {
-    //GNtestFiniteDifferences(*weave, params);
-    //exit(-1);
-    //reassignPermutations();
+    params.edgeWeights.resize(weave->nEdges());
+    params.edgeWeights.setConstant(1.0);
+    for (int i = 0; i < (int)weave->cuts.size(); i++)
+    {
+        for (int j = 0; j < (int)weave->cuts[i].path.size(); j++)
+        {
+            params.edgeWeights[weave->cuts[i].path[j].first] = 0.0;
+        }
+    }
     oneStep(*weave, params);
     faceEnergies(*weave, params, tempFaceEnergies);
     return false;
@@ -194,8 +200,9 @@ bool WeaveHook::simulateOneStep()
 
 void WeaveHook::reassignPermutations()
 {
-    int flipped = ::reassignPermutations(*weave);
+    int flipped = reassignCutPermutations(*weave);
     std::cout << flipped << " permutations changed" << std::endl;
+    
     std::vector<int> topsingularities;
     std::vector<std::pair<int, int> > geosingularities;
     findSingularVertices(*weave, topsingularities, geosingularities);
@@ -231,7 +238,6 @@ void WeaveHook::reassignPermutations()
 
         }
     }
-    params.edgeWeights = Eigen::VectorXd::Constant(weave->nEdges(), 1);
 }
 
 void WeaveHook::normalizeFields()

@@ -10,6 +10,69 @@ double angle(const Eigen::Vector3d &v1, const Eigen::Vector3d &v2, const Eigen::
     return 2.0 * atan2(v1.cross(v2).dot(axis), v1.norm() * v2.norm() + v1.dot(v2));
 }
 
+void reassignOneCutPermutation(Weave &weave, int cut, Eigen::MatrixXi &P)
+{
+    int m = weave.nFields();
+    double best = std::numeric_limits<double>::infinity();
+    int bestsigns = -1;
+    std::vector<int> bestperm;
+
+    int nedges = weave.cuts[cut].path.size();
+
+    // try all permutations
+    std::vector<int> perm;
+    for (int i = 0; i < m; i++)
+        perm.push_back(i);
+    do
+    {
+        // try every sign assignment
+        int signmax = 1 << m;
+        for (int signs = 0; signs < signmax; signs++)
+        {
+            // check this permutation, signs pair
+            double tottheta = 0;
+
+            for (int i = 0; i < nedges; i++)
+            {
+                std::vector<Eigen::Vector3d> fvecs;
+                std::vector<Eigen::Vector3d> gvecs;
+                int orient = weave.cuts[cut].path[i].second;
+                Eigen::Matrix2d T = weave.Ts.block<2, 2>(2 * weave.cuts[cut].path[i].first, 2 - 2 * orient);
+                int f = weave.E(weave.cuts[cut].path[i].first, orient);
+                int g = weave.E(weave.cuts[cut].path[i].first, 1 - orient);
+                Eigen::Vector3d n = weave.faceNormal(f);
+
+                for (int j = 0; j < m; j++)
+                {
+                    fvecs.push_back(weave.Bs[f] * weave.v(f, j));
+                    gvecs.push_back(weave.Bs[f] * T * weave.v(g, j));
+                }
+
+                for (int j = 0; j < m; j++)
+                {
+                    double sign = (signs & (1 << j)) ? -1.0 : 1.0;
+                    double theta = angle(fvecs[j], sign*gvecs[perm[j]], n);
+                    tottheta += theta*theta;
+                }
+            }
+            if (tottheta < best)
+            {
+                best = tottheta;
+                bestsigns = signs;
+                bestperm = perm;
+            }
+        }
+    } while (next_permutation(perm.begin(), perm.end()));
+
+    P.resize(m, m);
+    P.setZero();
+    for (int i = 0; i < m; i++)
+    {
+        int sign = (bestsigns & (1 << i)) ? -1 : 1;        
+        P(i, bestperm[i]) = sign;
+    }
+}
+
 void reassignOnePermutation(Weave &weave, int edge, Eigen::MatrixXi &P)
 {
     int f = weave.E(edge, 0);
@@ -187,4 +250,27 @@ void findSingularVertices(const Weave &weave, std::vector<int> &topologicalSingu
                 geometricSingularVerts.push_back(std::pair<int, int>(i, j));
         }
     }
+}
+
+int reassignCutPermutations(Weave &weave)
+{
+    int ncuts = (int)weave.cuts.size();
+    int tot = 0;
+    for (int i = 0; i < ncuts; i++)
+    {
+        Eigen::MatrixXi P;
+        reassignOneCutPermutation(weave, i, P);
+        for (int j = 0; j < weave.cuts[i].path.size(); j++)
+        {
+            Eigen::MatrixXi Pedge = P;
+            if (weave.cuts[i].path[j].second == 1)
+                Pedge.transposeInPlace();
+            if (weave.Ps[weave.cuts[i].path[j].first] != Pedge)
+            {
+                weave.Ps[weave.cuts[i].path[j].first] = Pedge;
+                tot++;
+            }
+        }
+    }
+    return tot;
 }
