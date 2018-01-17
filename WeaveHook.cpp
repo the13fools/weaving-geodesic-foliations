@@ -40,6 +40,7 @@ void WeaveHook::setFaceColors(igl::viewer::Viewer &viewer)
     {
         case NONE: 
             faceColors = clicked; // faceColors.setConstant(0.7);
+            showCutVertexSelection(viewer);     
 	    break;
 	default:
 	    igl::colormap(viz_color,Z, true, faceColors);
@@ -47,6 +48,31 @@ void WeaveHook::setFaceColors(igl::viewer::Viewer &viewer)
     }
     
     viewer.data.set_colors(faceColors);
+}
+
+
+void WeaveHook::showCutVertexSelection(igl::viewer::Viewer &viewer)
+{
+
+    Eigen::MatrixXd selectedVert = Eigen::MatrixXd::Zero(3, 3);
+    int counter = 0;
+    for (int i = 0; i < vertexSelect.rows(); i++)
+    {
+        if ( vertexSelect(i) > -1 )
+	{
+	    if (counter < 2) 
+	    { 
+		counter++;
+		std::cout << i << "\n";
+		selectedVert.row(counter) = weave->V.row( weave->F( i, vertexSelect(i) ) );
+	    }
+    	}
+
+    }	
+//    std::cout << counter << "\n"; 
+
+    Eigen::RowVector3d teal(.1, .9, .9);
+    viewer.data.add_points( selectedVert, teal ); 
 }
 
 void WeaveHook::drawTraceCenterlines(igl::viewer::Viewer &viewer)

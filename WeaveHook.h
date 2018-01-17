@@ -37,14 +37,6 @@ public:
         showBending = false;
         showSingularities = false;
 
-        idmat.resize(3,3);
-	idmat.setIdentity();
-        m.resize(3,3);
-	m.setZero();
-	m(0,1) = 1;
-	m(1,2) = 1; 
-	m(2,3) = 1;
-
         trace = new Trace();
     }
 
@@ -68,7 +60,10 @@ public:
         viewer.ngui->addButton("Save Field", std::bind(&WeaveHook::serializeVectorField, this));
         viewer.ngui->addButton("Load Field", std::bind(&WeaveHook::deserializeVectorField, this)); 
         viewer.ngui->addButton("Export Field", std::bind(&WeaveHook::exportVectorField, this));
-	
+
+	viewer.ngui->addGroup("Add Cut");
+
+        viewer.ngui->addWindow(Eigen::Vector2i(300, 10), "Manipulate");	
         viewer.ngui->addGroup("Tracing Controls");
         viewer.ngui->addVariable("Trace Face", traceFaceId);	
         viewer.ngui->addVariable("Trace Steps", traceSteps);	
@@ -90,16 +85,18 @@ public:
 	    if(igl::unproject_onto_mesh(Eigen::Vector2f(x,y), viewer.core.view * viewer.core.model,
 	      viewer.core.proj, viewer.core.viewport, this->weave->V, this->weave->F, fid, bc))
 	    {
-	      // paint hit red
+
 	      clicked.row(fid)<<1,0,0;
-	      edgeSelect(fid) = (edgeSelect(fid) + 1) % 3;
-     	      params.edgeWeights(this->weave->faceEdges(fid, edgeSelect(fid))) = 0;    
-     	      params.edgeWeights(this->weave->faceEdges(fid, ( edgeSelect(fid) + 2 ) % 3 )) = 1;    
-	      std::cout << this->weave->faceEdges(fid, edgeSelect(fid)) << " " << this->weave->Ps.size() << "\n";
-              this->weave->Ps[this->weave->faceEdges(fid, edgeSelect(fid) )] = this->m;
-              this->weave->Ps[this->weave->faceEdges(fid, ( edgeSelect(fid) + 2 ) % 3 )] = this->idmat;
-	  //    std::cout << fid << " " << F(fid, 0) + 1 << " "<< F(fid, 1) + 1 << " " << F(fid, 2) + 1 << " " << std::endl;
-	    //  viewer.data.set_colors(this->clicked);
+	      vertexSelect(fid) = (vertexSelect(fid) + 1) % 3;
+              std::cout << fid << " " << vertexSelect(fid) << "\n"; 
+		// paint hit red
+//	      clicked.row(fid)<<1,0,0;
+//	      edgeSelect(fid) = (edgeSelect(fid) + 1) % 3;
+//     	      params.edgeWeights(this->weave->faceEdges(fid, edgeSelect(fid))) = 0;    
+//     	      params.edgeWeights(this->weave->faceEdges(fid, ( edgeSelect(fid) + 2 ) % 3 )) = 1;    
+//	      std::cout << this->weave->faceEdges(fid, edgeSelect(fid)) << " " << this->weave->Ps.size() << "\n";
+//              this->weave->Ps[this->weave->faceEdges(fid, edgeSelect(fid) )] = this->m;
+//              this->weave->Ps[this->weave->faceEdges(fid, ( edgeSelect(fid) + 2 ) % 3 )] = this->idmat;
 	      return true;
 	    }
 	    return false;
@@ -150,6 +147,7 @@ public:
         clicked = Eigen::MatrixXd::Constant(weave->nFaces(), 3, .7);
 	params.edgeWeights = Eigen::VectorXd::Constant(weave->nEdges(), 1);
 	edgeSelect = Eigen::VectorXi::Constant(weave->nFaces(), -1);
+	vertexSelect = Eigen::VectorXi::Constant(weave->nFaces(), -1);
     }
 
     virtual bool simulateOneStep();    
@@ -159,7 +157,7 @@ public:
     void setFaceColors(igl::viewer::Viewer &viewer);
  
     void drawTraceCenterlines(igl::viewer::Viewer &viewer);
-
+    void showCutVertexSelection(igl::viewer::Viewer &viewer);
     void updateSingularVerts(igl::viewer::Viewer &viewer);
 private:
     std::string meshName;
@@ -167,9 +165,8 @@ private:
     SolverParams params;
     Trace *trace;
 
-    Eigen::MatrixXi m;
-    Eigen::MatrixXi idmat;
     Eigen::VectorXi edgeSelect;
+    Eigen::VectorXi vertexSelect;
 
     double vectorScale;
     double baseLength;
