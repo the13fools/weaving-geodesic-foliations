@@ -39,7 +39,7 @@ void WeaveHook::setFaceColors(igl::viewer::Viewer &viewer)
     switch (shading_state) 
     {
         case NONE: 
-            faceColors.setConstant(0.7);
+            faceColors = clicked; // faceColors.setConstant(0.7);
 	    break;
 	default:
 	    igl::colormap(viz_color,Z, true, faceColors);
@@ -101,6 +101,26 @@ void WeaveHook::drawTraceCenterlines(igl::viewer::Viewer &viewer)
 
 void WeaveHook::updateSingularVerts(igl::viewer::Viewer &viewer)
 {
+
+    nonIdentityEdges = Eigen::MatrixXd::Zero(weave->E.size(), 3);
+    for (int i = 0; i < weave->Ps.size(); i++)
+    {
+        bool id = true;
+	for (int j = 0; j < 3; j++)
+	{
+            if (weave->Ps[i](j,j) != 1)
+	    {
+                id = false;
+	    }
+	}
+	if (!id)
+	{
+            nonIdentityEdges.row(i) = ( weave->V.row(weave->edgeVerts(i, 0)) + 
+		                        weave->V.row(weave->edgeVerts(i, 1)) ) * .5;
+	    
+	}
+    }	
+
     Eigen::RowVector3d green(.1, .9, .1);
     Eigen::RowVector3d blue(.1, .1, .9);
     viewer.data.add_points( singularVerts_topo, green ); 
@@ -181,7 +201,8 @@ void WeaveHook::reassignPermutations()
 		                        weave->V.row(weave->edgeVerts(i, 1)) ) * .5;
 	    
 	}
-    }	
+    }
+    params.edgeWeights = Eigen::VectorXd::Constant(weave->nEdges(), 1);
 }
 
 void WeaveHook::normalizeFields()

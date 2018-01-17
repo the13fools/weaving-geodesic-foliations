@@ -129,7 +129,7 @@ void GNEnergy(const Weave &weave, SolverParams params, Eigen::VectorXd &E)
                 Eigen::Matrix2d Tgf = weave.Ts.block<2, 2>(2 * e, 2 - 2 * side);
                 for (int k = 0; k < 2; k++)
                 {
-                    E[term] = sqrt(params.lambdacompat) * (Dif*cdiff - (Tgf*vpermut - vif))[k];
+                    E[term] = sqrt(params.edgeWeights(e) * params.lambdacompat) * (Dif*cdiff - (Tgf*vpermut - vif))[k];
                     term++;
                 }
             }
@@ -186,7 +186,7 @@ void GNGradient(const Weave &weave, SolverParams params, Eigen::SparseMatrix<dou
                 for (int coeff = 0; coeff < 2; coeff++)
                 {
                     Eigen::Vector2d innervec(0, 0);
-                    innervec[coeff] = sqrt(params.lambdacompat);
+                    innervec[coeff] = sqrt(params.edgeWeights(i) * params.lambdacompat);
                     Vector2d dE = Jf.transpose()*cdiff * weave.beta(f, i).dot(innervec);
                     dE += cdiff.dot(vif) * weave.alpha(f, i) * innervec;
                     dE += cdiff * weave.alpha(f, i) * vif.dot(innervec);

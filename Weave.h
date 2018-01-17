@@ -12,6 +12,14 @@ struct Handle
     Eigen::Vector2d dir; // the vector itself in triangle barycentric coordinates
 };
 
+struct Cut
+{ 
+    std::vector<int> edgeList; // ordered list of edgeIds that make up the cut
+    Eigen::MatrixXi perm; // The constant permuation to assign to each cut
+    double weight; // for optimization
+    bool isActive; // for visualization    
+};
+
 class Weave
 {
 public:
@@ -31,6 +39,8 @@ public:
     Eigen::MatrixXi faceEdges; // |F| x 3, F(i,j) is the edge opposite vertex j in triangle i
     Eigen::MatrixXi faceNeighbors; // |F| x 3, F(i,j) is the face opposite vertex j in triangle i
     Eigen::MatrixXi faceWings; // |F| x 3, F(i,j) is vertex opposite vertex j in triangle i
+ 
+    std::vector< std::vector<int> > vertEdges; // |V|, F[i] is a list of edges neighboring vertex i
 
     // Geometric Data Structures
 
@@ -53,6 +63,8 @@ public:
                                      // next m|F| entries: first alpha on face 1, ...
     std::vector<Eigen::MatrixXi> Ps; // for each edge i, maps indices from triangle E(i,1) to indices in triangle E(i,0), with sign. I.e. the vector on E(i,1) corresponding to vector j on E(i,0) is \sum_k Ps(j,k) v(E(i,1),k)
     std::vector<Handle> handles; // handles on the vector fields
+ 
+    std::vector<Cut> cuts; // list of cuts 
 
     bool addHandle(Handle h);  // this method will add a handle, also taking care to normalize the handle vector length
 

@@ -462,7 +462,10 @@ void Weave::serialize_forexport(const std::string &filename)
 
     for (int i = 0; i < nedges; i++)
     {
-	ofs_edge << E.row(i) << " " << edgeVerts.row(i) << std::endl;
+	ofs_edge << E(i, 0) + 1 << " " 
+	         << E(i, 1) + 1 << " " 
+		 << edgeVerts(i, 0) << " "
+		 << edgeVerts(i, 1) <<  std::endl;
     }
     ofs_edge.close();
     sprintf(buffer, "%s.permmats", filename.c_str());

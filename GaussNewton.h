@@ -10,6 +10,7 @@ struct SolverParams
 {
     double lambdacompat; // weight of compatibility term
     double lambdareg;    // Tilhonov regularization
+    Eigen::VectorXd edgeWeights;
 };
 
 void GNmetric(const Weave &weave, Eigen::SparseMatrix<double> &M);

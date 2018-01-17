@@ -7,6 +7,8 @@
 #include "Trace.h"
 #include <string>
 
+#include <igl/unproject_onto_mesh.h>
+
 enum Shading_Enum {
     NONE = 0,
     F1_ENERGY,
@@ -35,6 +37,14 @@ public:
         showBending = false;
         showSingularities = false;
 
+        idmat.resize(3,3);
+	idmat.setIdentity();
+        m.resize(3,3);
+	m.setZero();
+	m(0,1) = 1;
+	m(1,2) = 1; 
+	m(2,3) = 1;
+
         trace = new Trace();
     }
 
@@ -58,7 +68,6 @@ public:
         viewer.ngui->addButton("Save Field", std::bind(&WeaveHook::serializeVectorField, this));
         viewer.ngui->addButton("Load Field", std::bind(&WeaveHook::deserializeVectorField, this)); 
         viewer.ngui->addButton("Export Field", std::bind(&WeaveHook::exportVectorField, this));
-//	viewer.ngui->addVariable("Trace Field/Geo", isTraceField);
 	
         viewer.ngui->addGroup("Tracing Controls");
         viewer.ngui->addVariable("Trace Face", traceFaceId);	
@@ -69,6 +78,37 @@ public:
                    ->setItems({"Geodesic", "Field"}); 
         viewer.ngui->addVariable("Show Bending", showBending);
    //     viewer.ngui->addVariable("Show Singularities", showSingularities);
+
+        viewer.callback_mouse_down =
+	    [this](igl::viewer::Viewer& viewer, int, int)->bool
+	  {
+	    int fid;
+	    Eigen::Vector3f bc;
+	    // Cast a ray in the view direction starting from the mouse position
+	    double x = viewer.current_mouse_x;
+	    double y = viewer.core.viewport(3) - viewer.current_mouse_y;
+	    if(igl::unproject_onto_mesh(Eigen::Vector2f(x,y), viewer.core.view * viewer.core.model,
+	      viewer.core.proj, viewer.core.viewport, this->weave->V, this->weave->F, fid, bc))
+	    {
+	      // paint hit red
+	      clicked.row(fid)<<1,0,0;
+	      edgeSelect(fid) = (edgeSelect(fid) + 1) % 3;
+     	      params.edgeWeights(this->weave->faceEdges(fid, edgeSelect(fid))) = 0;    
+     	      params.edgeWeights(this->weave->faceEdges(fid, ( edgeSelect(fid) + 2 ) % 3 )) = 1;    
+	      std::cout << this->weave->faceEdges(fid, edgeSelect(fid)) << " " << this->weave->Ps.size() << "\n";
+              this->weave->Ps[this->weave->faceEdges(fid, edgeSelect(fid) )] = this->m;
+              this->weave->Ps[this->weave->faceEdges(fid, ( edgeSelect(fid) + 2 ) % 3 )] = this->idmat;
+	  //    std::cout << fid << " " << F(fid, 0) + 1 << " "<< F(fid, 1) + 1 << " " << F(fid, 2) + 1 << " " << std::endl;
+	    //  viewer.data.set_colors(this->clicked);
+	      return true;
+	    }
+	    return false;
+	  };
+	  std::cout<<R"(Usage:
+	  [click]  Pick face on shape
+
+	)";
+
     }
 
     void reassignPermutations();
@@ -106,7 +146,10 @@ public:
         faceColors.resize(weave->nFaces(), 3);
         faceColors.setConstant(0.3);
         baseLength = weave->averageEdgeLength;
-        curFaceEnergies = tempFaceEnergies;
+        curFaceEnergies = tempFaceEnergies; 
+        clicked = Eigen::MatrixXd::Constant(weave->nFaces(), 3, .7);
+	params.edgeWeights = Eigen::VectorXd::Constant(weave->nEdges(), 1);
+	edgeSelect = Eigen::VectorXi::Constant(weave->nFaces(), -1);
     }
 
     virtual bool simulateOneStep();    
@@ -124,6 +167,10 @@ private:
     SolverParams params;
     Trace *trace;
 
+    Eigen::MatrixXi m;
+    Eigen::MatrixXi idmat;
+    Eigen::VectorXi edgeSelect;
+
     double vectorScale;
     double baseLength;
 
@@ -136,6 +183,7 @@ private:
     Eigen::MatrixXd edgeVecs;
     Eigen::MatrixXi edgeSegs;
     Eigen::MatrixXd edgeColors;    
+    Eigen::MatrixXd clicked;    
     bool normalizeVectors;
     bool hideVectors;
 
