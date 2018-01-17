@@ -133,6 +133,12 @@ public:
         h.field = 0;
         weave->addHandle(h);
 	curFaceEnergies = Eigen::MatrixXd::Zero(3,3);
+
+        std::vector<std::pair<int, int> > path;
+        weave->shortestPath(1, 0, path);
+        std::cout << path.size() << std::endl;
+        for(int i=0; i<path.size(); i++)
+            std::cout << weave->edgeVerts(path[i].first, path[i].second) << " -> " << weave->edgeVerts(path[i].first, 1-path[i].second) << std::endl;
     }
 
     virtual void updateRenderGeometry()

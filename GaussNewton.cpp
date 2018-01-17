@@ -314,7 +314,7 @@ double lineSearch(Weave &weave, SolverParams params, const Eigen::VectorXd &upda
 
         std::cout << "Trying t = " << t << ", energy now " << newenergy << std::endl;
         
-        if (isnan(newenergy) || newenergy > orig + t*deriv*c1)
+        if (std::isnan(newenergy) || newenergy > orig + t*deriv*c1)
         {
             beta = t;
             t = 0.5*(alpha + beta);

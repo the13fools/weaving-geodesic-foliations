@@ -39,7 +39,6 @@ public:
     Eigen::MatrixXi faceEdges; // |F| x 3, F(i,j) is the edge opposite vertex j in triangle i
     Eigen::MatrixXi faceNeighbors; // |F| x 3, F(i,j) is the face opposite vertex j in triangle i
     Eigen::MatrixXi faceWings; // |F| x 3, F(i,j) is vertex opposite vertex j in triangle i
- 
     std::vector< std::vector<int> > vertEdges; // |V|, F[i] is a list of edges neighboring vertex i
 
     // Geometric Data Structures
@@ -67,6 +66,11 @@ public:
     std::vector<Cut> cuts; // list of cuts 
 
     bool addHandle(Handle h);  // this method will add a handle, also taking care to normalize the handle vector length
+
+    // Finds shortest (combinatorial) path from start to end vertex. Each path entry is a combination of (1) the edge index along the path, and (2) the orientation: the jth path segment goes from
+    // edgeVerts(path[j].first, path[j].second) to edgeVerts(path[j].first, 1 - path[j].second).
+    // List will be empty if no path exists (vertices lie on disconnected components).
+    void shortestPath(int startVert, int endVert, std::vector<std::pair<int, int> > &path);
 
     int nVerts() const { return V.rows(); }
     int nFaces() const { return F.rows(); }

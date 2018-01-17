@@ -14,6 +14,7 @@ find_path(CHOLMOD_INCLUDES
   PATH_SUFFIXES
   suitesparse
   include/suitesparse
+  include
   ufsparse
 )
 
