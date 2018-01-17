@@ -3,6 +3,8 @@
 #include <map>
 #include <Eigen/Dense>
 #include "Colors.h"
+#include <deque>
+#include <algorithm>
 
 Weave::Weave(const std::string &objname, int m)
 {
@@ -144,6 +146,13 @@ void Weave::buildConnectivityStructures()
         faceNeighbors(E(edge, 1), idx2) = E(edge, 0);
         faceWings(E(edge, 0), idx1) = face2[idx2];
         faceWings(E(edge, 1), idx2) = face1[idx1];
+    }
+
+    vertEdges.resize(V.rows());
+    for(int i=0; i<nedges; i++)
+    {
+        vertEdges[edgeVerts(i,0)].push_back(i);
+        vertEdges[edgeVerts(i,1)].push_back(i);
     }
 }
 
@@ -551,4 +560,79 @@ void Weave::deserialize(const std::string &filename)
     {
         std::cerr << "Error reading the vector field file " << filename << std::endl;
     }
+}
+
+void Weave::shortestPath(int startVert, int endVert, std::vector<std::pair<int, int> > &path)
+{
+    int nverts = nVerts();
+    path.clear();
+    bool *visited = new bool[nverts];
+    for(int i=0; i<nverts; i++)
+        visited[i] = false;
+    Eigen::VectorXi prev(nverts);
+    Eigen::VectorXi prevOrient(nverts);
+    Eigen::VectorXd prevEdge(nverts);
+    prev.setConstant(-1);
+    prevOrient.setConstant(-1);
+    prevEdge.setConstant(-1);
+
+    struct SearchNode
+    {
+        int next;
+        int prev;
+        int orient;
+        int prevedge;
+    };
+
+    SearchNode start;
+    start.next = startVert;
+    start.prev = -1;
+    start.orient = -1;
+    start.prevedge = -1;
+    
+    std::deque<SearchNode> q;
+    q.push_back(start);
+
+    while(!q.empty())
+    {
+        SearchNode cur = q.front();
+        q.pop_front();
+        if(visited[cur.next])
+            continue;
+        visited[cur.next] = true;
+        prev[cur.next] = cur.prev;
+        prevOrient[cur.next] = cur.orient;
+        prevEdge[cur.next] = cur.prevedge;
+        
+        if(cur.next == endVert)
+        {
+            int v = endVert;
+            while(prev[v] != -1)
+            {
+                path.push_back(std::pair<int, int>(prevEdge[v], prevOrient[v]));
+                v = prev[v];
+            }
+            std::reverse(path.begin(), path.end());
+            delete[] visited;
+            return;
+        }
+
+        int nbs = (int)vertEdges[cur.next].size();
+        for(int i=0; i<nbs; i++)
+        {
+            int e = vertEdges[cur.next][i];
+            int orient = (edgeVerts(e, 0) == cur.next) ? 0 : 1;
+            int next = edgeVerts(e, 1-orient);
+            if(visited[next])
+                continue;
+            SearchNode nextnode;
+            nextnode.next = next;
+            nextnode.prev = cur.next;
+            nextnode.prevedge = e;
+            nextnode.orient = orient;
+            q.push_back(nextnode);
+        }
+    }
+
+    delete[] visited;
 }
