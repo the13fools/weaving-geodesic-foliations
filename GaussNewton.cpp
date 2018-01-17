@@ -186,7 +186,7 @@ void GNGradient(const Weave &weave, SolverParams params, Eigen::SparseMatrix<dou
                 for (int coeff = 0; coeff < 2; coeff++)
                 {
                     Eigen::Vector2d innervec(0, 0);
-                    innervec[coeff] = sqrt(params.edgeWeights(i) * params.lambdacompat);
+                    innervec[coeff] = sqrt(params.edgeWeights(e) * params.lambdacompat);
                     Vector2d dE = Jf.transpose()*cdiff * weave.beta(f, i).dot(innervec);
                     dE += cdiff.dot(vif) * weave.alpha(f, i) * innervec;
                     dE += cdiff * weave.alpha(f, i) * vif.dot(innervec);

@@ -147,6 +147,13 @@ public:
         std::cout << path.size() << std::endl;
         for(int i=0; i<path.size(); i++)
             std::cout << weave->edgeVerts(path[i].first, path[i].second) << " -> " << weave->edgeVerts(path[i].first, 1-path[i].second) << std::endl;
+    
+    
+        clicked = Eigen::MatrixXd::Constant(weave->nFaces(), 3, .7);
+	params.edgeWeights = Eigen::VectorXd::Constant(weave->nEdges(), 1);
+	edgeSelect = Eigen::VectorXi::Constant(weave->nFaces(), -1);
+	vertexSelect = Eigen::VectorXi::Constant(weave->nFaces(), -1);
+    
     }
 
     virtual void updateRenderGeometry()
@@ -158,10 +165,6 @@ public:
         faceColors.setConstant(0.3);
         baseLength = weave->averageEdgeLength;
         curFaceEnergies = tempFaceEnergies; 
-        clicked = Eigen::MatrixXd::Constant(weave->nFaces(), 3, .7);
-	params.edgeWeights = Eigen::VectorXd::Constant(weave->nEdges(), 1);
-	edgeSelect = Eigen::VectorXi::Constant(weave->nFaces(), -1);
-	vertexSelect = Eigen::VectorXi::Constant(weave->nFaces(), -1);
     }
 
     virtual bool simulateOneStep();    
