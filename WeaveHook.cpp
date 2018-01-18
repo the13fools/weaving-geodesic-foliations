@@ -308,3 +308,8 @@ void WeaveHook::loadTraces()
 {
     trace->load(traceFile);
 }
+
+void WeaveHook::loadSampledTraces()
+{
+    trace->loadSampledCurves(traceFile);
+}

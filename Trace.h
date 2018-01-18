@@ -30,6 +30,8 @@ public:
     std::vector< Trace_Mode > modes;
     std::vector< Eigen::VectorXd > bending;
 
+    void loadSampledCurves(const std::string &filename);
+
     void traceCurve(const Weave &vw, const Trace_Mode trace_state, int traceIdx, int sign, int faceId, int steps);
     void popLastCurve();
     void logRibbonsToFile(std::string foldername, std::string filename);

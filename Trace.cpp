@@ -42,6 +42,69 @@ Eigen::Vector3d parallelTransport(const Eigen::Vector3d &v, const Eigen::Vector3
     return v.dot(n)*n + v.dot(t1)*t2 + v.dot(p1)*p2;
 }
 
+
+void Trace::loadSampledCurves(const std::string &filename)
+{
+    std::ifstream curve_file("f_curve_xyz.txt");
+    if (!curve_file)
+    {
+        std::cerr << "Couldn't load trace file" << std::endl;
+        return;
+    }    
+    std::ifstream normal_file("face_normal.txt");
+    if (!normal_file)
+    {
+        std::cerr << "Couldn't load trace file" << std::endl;
+        return;
+    }
+
+    int npoints, dum1, dum2;
+    double dum3, dum4, dum5;
+    while ( normal_file >> dum3 >> dum4 >> dum5 )
+    {
+        curve_file >> npoints >> dum1 >> dum2;
+        Eigen::MatrixXd curve = Eigen::MatrixXd::Zero(npoints, 3); 
+        Eigen::MatrixXd normal = Eigen::MatrixXd::Zero(npoints, 3); 
+        Eigen::MatrixXd bend = Eigen::MatrixXd::Zero(npoints, 3); // Not implemented yet
+        
+        if ( npoints < 4 ) 
+        {
+            for (int i = 0; i < npoints; i++) 
+            {
+                curve_file >> dum3 >> dum4 >> dum5;
+                normal_file >> dum3 >> dum4 >> dum5;
+            }
+        }
+        else
+        {
+            Eigen::Vector3d prev(0,0,0); 
+            Eigen::Vector3d cur(0,0,0); 
+            Eigen::Vector3d n(0,0,0); 
+            for (int i = 0; i < npoints; i++) 
+            {
+                curve_file >> curve(i, 0) >> curve(i, 1) >> curve(i, 2);
+                normal_file >> normal(i, 0) >> normal(i, 1) >> normal(i, 2);
+                
+                n = normal.row(i);
+                cur = curve.row(i);
+                std::cout << cur.dot(n) << std::endl;
+
+                prev = cur;
+            }
+        }
+
+        curves.push_back(curve);
+        normals.push_back(normal);
+        bending.push_back(bend);
+        modes.push_back( Trace_Mode::FIELD ); // Make another render option
+    }
+    curve_file.close();
+    normal_file.close();
+
+}
+
+
+
 void Trace::logRibbonsToFile(std::string foldername, std::string filename)
 {
     std::stringstream folderpath;
@@ -115,7 +178,7 @@ void Trace::logRibbonsToFile(std::string foldername, std::string filename)
                 Eigen::Vector3d currEdge = curve.row(i) - curve.row(i - 1);
                 Eigen::Vector3d targEdge = cnew[seg_counter] - cnew[seg_counter - 1];
                 nnew.push_back(parallelTransport(curveNormals.row(i), currEdge, targEdge));
-                widths.push_back(.1);
+                widths.push_back(.001);
                 prev_point = cnew.back();
             }
         }

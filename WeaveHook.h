@@ -80,6 +80,7 @@ public:
         viewer.ngui->addVariable("Trace File", traceFile);
         viewer.ngui->addButton("Save Traces", std::bind(&WeaveHook::saveTraces, this));
         viewer.ngui->addButton("Load Traces", std::bind(&WeaveHook::loadTraces, this));
+        viewer.ngui->addButton("Load Sampled Traces", std::bind(&WeaveHook::loadSampledTraces, this));
         //     viewer.ngui->addVariable("Show Singularities", showSingularities);
 
         viewer.callback_mouse_down =
@@ -136,6 +137,7 @@ public:
     void removePrevCut(); 
     void saveTraces();
     void loadTraces();
+    void loadSampledTraces();
     
     
     virtual void initSimulation()
