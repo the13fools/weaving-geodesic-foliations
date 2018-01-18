@@ -299,4 +299,12 @@ void WeaveHook::removePrevCut()
     updateRenderGeometry();
 } 
 
+void WeaveHook::saveTraces()
+{
+    trace->save(traceFile);
+}
 
+void WeaveHook::loadTraces()
+{
+    trace->load(traceFile);
+}

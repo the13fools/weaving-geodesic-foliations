@@ -34,7 +34,8 @@ public:
     void popLastCurve();
     void logRibbonsToFile(std::string foldername, std::string filename);
     void computeIntersections(int curveIdx1, int curveIdx2, std::vector<Collision> &collisions);
-
+    void save(const std::string &filename);
+    void load(const std::string &filename);
 };
 
 

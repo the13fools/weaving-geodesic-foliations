@@ -417,3 +417,80 @@ void Trace::traceCurve(const Weave &wv, const Trace_Mode trace_state,
     return;
 }
 
+void Trace::save(const std::string &filename)
+{
+    std::ofstream ofs(filename);
+    int ntraces = curves.size();
+    ofs << ntraces << std::endl;
+    for (int i = 0; i < ntraces; i++)
+    {
+        int curvesrows = curves[i].rows();
+        ofs << curvesrows << std::endl;
+        for (int j = 0; j < curvesrows; j++)
+        {
+            ofs << curves[i](j, 0) << " " << curves[i](j, 1) << " " << curves[i](j, 2) << std::endl;
+        }
+        int normalsrows = normals[i].rows();
+        ofs << normalsrows << std::endl;
+        for (int j = 0; j < normalsrows; j++)
+        {
+            ofs << normals[i](j, 0) << " " << normals[i](j, 1) << " " << normals[i](j, 2) << std::endl;
+        }
+        int bendingrows = bending[i].rows();
+        ofs << bendingrows << std::endl;
+        for (int j = 0; j < bendingrows; j++)
+        {
+            ofs << bending[i][j] << std::endl;
+        }
+
+        ofs << (int)modes[i] << std::endl;
+    }
+}
+
+void Trace::load(const std::string &filename)
+{
+    std::ifstream ifs(filename);
+    if (!ifs)
+    {
+        std::cerr << "Couldn't load trace file" << std::endl;
+        return;
+    }
+        
+    int ntraces;
+    ifs >> ntraces;
+    curves.resize(ntraces);
+    normals.resize(ntraces);
+    bending.resize(ntraces);
+    modes.resize(ntraces);
+
+    for (int i = 0; i < ntraces; i++)
+    {
+        int curvesrows;
+        ifs >> curvesrows;
+        curves[i].resize(curvesrows, 3);
+        for (int j = 0; j < curvesrows; j++)
+        {
+            ifs >> curves[i](j, 0) >> curves[i](j, 1) >> curves[i](j, 2);
+        }
+
+        int normalsrows;
+        ifs >> normalsrows;
+        normals[i].resize(normalsrows, 3);
+        for (int j = 0; j < normalsrows; j++)
+        {
+            ifs >> normals[i](j, 0) >> normals[i](j, 1) >> normals[i](j, 2);
+        }
+
+        int bendingrows;
+        ifs >> bendingrows;
+        bending[i].resize(bendingrows);
+        for (int j = 0; j < bendingrows; j++)
+        {
+            ifs >> bending[i][j];
+        }
+
+        int mode;
+        ifs >> mode;
+        modes[i] = (Trace_Mode)mode;
+    }
+}

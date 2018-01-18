@@ -24,6 +24,7 @@ public:
     {
         meshName = "meshes/bunny.obj";
         vectorFieldName = "artery.txt";
+        traceFile = "example.tr";
         params.lambdacompat = 100;
         params.lambdareg = 1e-3;
 
@@ -76,6 +77,9 @@ public:
         viewer.ngui->addVariable("Trace Mode", trace_state, true)
             ->setItems({ "Geodesic", "Field" });
         viewer.ngui->addVariable("Show Bending", showBending);
+        viewer.ngui->addVariable("Trace File", traceFile);
+        viewer.ngui->addButton("Save Traces", std::bind(&WeaveHook::saveTraces, this));
+        viewer.ngui->addButton("Load Traces", std::bind(&WeaveHook::loadTraces, this));
         //     viewer.ngui->addVariable("Show Singularities", showSingularities);
 
         viewer.callback_mouse_down =
@@ -130,6 +134,8 @@ public:
     void resetCutSelection();
     void addCut();
     void removePrevCut(); 
+    void saveTraces();
+    void loadTraces();
     
     
     virtual void initSimulation()
@@ -183,6 +189,8 @@ private:
     std::string meshName;
     Weave *weave;
     SolverParams params;
+
+    std::string traceFile;
     Trace *trace;
 
     std::vector<std::pair<int, int > > selectedVertices; // (face, vert) pairs
@@ -205,7 +213,7 @@ private:
 
     Shading_Enum shading_state = Shading_Enum::NONE;
     Trace_Mode trace_state = Trace_Mode::GEODESIC;
-
+    
     int traceIdx;
     int traceSign;
     int traceFaceId;
