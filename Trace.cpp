@@ -65,38 +65,33 @@ void Trace::loadSampledCurves(const std::string &filename)
         curve_file >> npoints >> dum1 >> dum2;
         Eigen::MatrixXd curve = Eigen::MatrixXd::Zero(npoints, 3); 
         Eigen::MatrixXd normal = Eigen::MatrixXd::Zero(npoints, 3); 
-        Eigen::MatrixXd bend = Eigen::MatrixXd::Zero(npoints, 3); // Not implemented yet
+        Eigen::VectorXd bend = Eigen::VectorXd::Zero(npoints); // Not implemented yet
         
-        if ( npoints < 4 ) 
+        Eigen::Vector3d next_normal(0,0,0); 
+        for (int i = 0; i < npoints; i++) 
         {
-            for (int i = 0; i < npoints; i++) 
+            curve_file >> curve(i, 0) >> curve(i, 1) >> curve(i, 2);
+            normal_file >> normal(i, 0) >> normal(i, 1) >> normal(i, 2);
+            Eigen::Vector3d tmp = normal.row(i);
+            if ( tmp.dot(next_normal) < 0. ) 
             {
-                curve_file >> dum3 >> dum4 >> dum5;
-                normal_file >> dum3 >> dum4 >> dum5;
+                tmp = -tmp;
             }
+	    normal.row(i) = next_normal;
+            next_normal = tmp;
         }
-        else
+    
+        std::cout << normal.row(npoints-1) << std::endl;
+        
+
+
+        if ( npoints > 200 ) 
         {
-            Eigen::Vector3d prev(0,0,0); 
-            Eigen::Vector3d cur(0,0,0); 
-            Eigen::Vector3d n(0,0,0); 
-            for (int i = 0; i < npoints; i++) 
-            {
-                curve_file >> curve(i, 0) >> curve(i, 1) >> curve(i, 2);
-                normal_file >> normal(i, 0) >> normal(i, 1) >> normal(i, 2);
-                
-                n = normal.row(i);
-                cur = curve.row(i);
-                std::cout << cur.dot(n) << std::endl;
-
-                prev = cur;
-            }
+            curves.push_back(curve);
+            normals.push_back(normal);
+            bending.push_back(bend);
+            modes.push_back( Trace_Mode::FIELD ); // Make another render option
         }
-
-        curves.push_back(curve);
-        normals.push_back(normal);
-        bending.push_back(bend);
-        modes.push_back( Trace_Mode::FIELD ); // Make another render option
     }
     curve_file.close();
     normal_file.close();
@@ -134,10 +129,11 @@ void Trace::logRibbonsToFile(std::string foldername, std::string filename)
 
     // Write Header 
     myfile << curves.size() << std::endl;;
-    myfile << collisions.size() << std::endl;
+    myfile << collisions.size() << std::endl;;
+  //  myfile << 0 << std::endl;;
     myfile << "0.001"  << std::endl;;
     myfile << "1e+08"  << std::endl;;
-    myfile << "1"  << std::endl  << std::endl  << std::endl;
+    myfile << "1"  << std::endl  << std::endl  << std::endl;;
 
 
     // Decimate and log rods
@@ -178,16 +174,33 @@ void Trace::logRibbonsToFile(std::string foldername, std::string filename)
                 Eigen::Vector3d currEdge = curve.row(i) - curve.row(i - 1);
                 Eigen::Vector3d targEdge = cnew[seg_counter] - cnew[seg_counter - 1];
                 nnew.push_back(parallelTransport(curveNormals.row(i), currEdge, targEdge));
-                widths.push_back(.001);
+                widths.push_back(.005);
                 prev_point = cnew.back();
             }
         }
-        cnew.pop_back();
-        cnew.push_back(curve.row(curve.rows() - 1));
+//        cnew.pop_back();
+//        cnew.push_back(curve.row(curve.rows() - 1));
+
+
         desc_maps.push_back(desc_mapping);
         desc_curves.push_back(cnew);
 
 
+/*    Eigen::Vector3d prev(0,0,0); 
+    Eigen::Vector3d cur(0,0,0); 
+    for (int i = 1; i < cnew.size(); i++) 
+    {
+	Eigen::Vector3d n = nnew[i-1];
+	prev = cnew[i-1];
+	cur =  cnew[i];
+        std::cout << (cur-prev).dot(n) << std::endl;
+    }
+*/
+        if (cnew.size() < 3) 
+            continue;
+
+
+std::cout << "blah";
         myfile << cnew.size() << "\n";
         myfile << "0\n";
         for (int i = 0; i < cnew.size(); i++)
@@ -196,6 +209,9 @@ void Trace::logRibbonsToFile(std::string foldername, std::string filename)
         }
         myfile << "\n";
 
+std::cout << "blah1" << std::endl;
+//        myfile << nnew[0](0) << " " << nnew[0](1) << " " << nnew[0](2) << " ";
+//std::cout << "blah2";
         for (int i = 0; i < nnew.size(); i++)
         {
             myfile << nnew[i](0) << " " << nnew[i](1) << " " << nnew[i](2) << " ";
@@ -219,11 +235,13 @@ void Trace::logRibbonsToFile(std::string foldername, std::string filename)
 
         //	std::cout << "r1 " << col.rod1 << "r2 " << col.rod2 << "idx1 " << idx1 << "idx2 " << idx2 <<"\n";
         double p0bary, p1bary, q0bary, q1bary;
+
         Eigen::Vector3d dist = Distance::edgeEdgeDistance(c1[idx1],
             c1[idx1 + 1],
             c2[idx2],
             c2[idx2 + 1],
             p0bary, p1bary, q0bary, q1bary);
+
         //	std::cout << "dist " << dist.norm() << "idx1" << idx1 << "idx2" << idx2;
         myfile << col.rod1 << " " << col.rod2 << " " << idx1 << " " << idx2
             << " " << p1bary << " " << q1bary << " " << 1000. << "\n";
