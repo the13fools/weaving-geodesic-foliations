@@ -408,11 +408,20 @@ void Weave::normalizeFields()
     }
 }
 
+using namespace std;
+
 void Weave::removePointsFromMesh(std::vector<int> vIds)
 {   
     std::vector<int> faceIds;
     std::vector<int> edgeIds;
-    
+ 
+    std::map<std::pair<int, int>, int> edgeMap;
+    for (int e = 0; e < nEdges(); e++) 
+    { 
+        std::pair<int, int> p(edgeVerts(e,0), edgeVerts(e,1));
+        edgeMap[p] = e; 
+    }
+   
     for (int v = 0; v < vIds.size(); v++)
     {
         for (int f = 0; f < nFaces(); f++)
@@ -426,42 +435,63 @@ void Weave::removePointsFromMesh(std::vector<int> vIds)
 
         for (int e = 0; e < nEdges(); e++)
         {
-            for (int j = 0; j < 3; j++) 
+            for (int j = 0; j < 2; j++) 
             {
-                if ( E(e, j) == vIds[v] ) 
+                if ( edgeVerts(e, j) == vIds[v] ) 
                     edgeIds.push_back(e);       
             }
         }
     }
-
+    
+    cout << faceIds.size() << " fid " << edgeIds.size() << " edgeid \n";
+  
     std::sort( faceIds.begin(), faceIds.end() ); 
     std::sort( edgeIds.begin(), edgeIds.end() ); 
+
+    for (int i = 0; i < faceIds.size(); i++)
+        cout << faceIds[i] << " " ;
+    cout << "face ids \n";
+
+    for (int i = 0; i < edgeIds.size(); i++)
+        cout << edgeIds[i] << " " ;
+    cout << "edge ids \n";
+
 
     int fieldIdx = 0;
     int faceIdIdx = 0;
     int newNFaces = nFaces() - faceIds.size();
     Eigen::VectorXd vectorFields_clean = Eigen::VectorXd::Zero( 5*nFields()*newNFaces );
     Eigen::MatrixXi F_temp = Eigen::MatrixXi::Zero(newNFaces, 3); 
-
+ 
+    cout << "fieldIdx \n";
     for (int i = 0; i < newNFaces; i++)   
     { 
         if ( fieldIdx == faceIds[faceIdIdx] )
         {
             fieldIdx++;
             faceIdIdx++;
+            cout << fieldIdx << " ";
+            i--;
+            continue; // in case two ids to remove appear in sequence
         } 
         
         // vec field
-        vectorFields_clean(i) = vectorFields(fieldIdx);
-        vectorFields_clean(i+1) = vectorFields(fieldIdx+1);
+        vectorFields_clean.segment(2*i*nFields(), 2*nFields()) = vectorFields.segment(2*fieldIdx*nFields(), 2*nFields());
         // beta
-        vectorFields_clean(i   + 2*newNFaces) =  vectorFields(fieldIdx + 2*nFields() );
-        vectorFields_clean(i+1 + 2*newNFaces ) = vectorFields(fieldIdx+1 + 2*nFields()); 
+        vectorFields_clean.segment(2*i*nFields() + 2*newNFaces*nFields(), 2*nFields()) 
+            = vectorFields.segment(2*fieldIdx*nFields() + 2*nFaces()*nFields(), 2*nFields() );
         // alpha
-        vectorFields_clean(i + 4*newNFaces) =  vectorFields(fieldIdx + 4*nFields() );
+        vectorFields_clean.segment(i*nFields() + 4*newNFaces*nFields(), nFields()) 
+            = vectorFields.segment(fieldIdx * nFields() + 4*nFaces()*nFields(), nFields() );
         // faces 
         F_temp.row(i) = F.row(fieldIdx);
+        fieldIdx++;
     }
+
+    vectorFields = vectorFields_clean;
+
+    cout << faceIdIdx << " face id idx\n";
+    
 
     for (int h = 0; h < handles.size(); h++)
     {
@@ -474,23 +504,34 @@ void Weave::removePointsFromMesh(std::vector<int> vIds)
         handles[h].face = handles[h].face - shift;
     }
 
-    // Permutation Matricies 
-    for (int i = edgeIds.size() - 1; i >= 0; i--)
-    {
-        Ps.erase( Ps.begin() + edgeIds[i] );
-    }
-
-//    std::cout << "Num Ps" << Ps.size() << "Num Faces New" << newNFaces;
-
     Eigen::MatrixXd V_temp = V;
-    Eigen::MatrixXi unref; 
-    igl::remove_unreferenced(V_temp, F_temp, V, F, unref);
+    Eigen::MatrixXd V_new;
+    Eigen::MatrixXi F_new;
+    Eigen::VectorXi marked; 
+    Eigen::VectorXi vertMap; 
+     
+    igl::remove_unreferenced(V_temp, F_temp, V_new, F_new, marked, vertMap);
+    V = V_new;
+    F = F_new;
 
-    std::cout << unref << std::endl;
 
     buildConnectivityStructures();
     buildGeometricStructures();
 
+    std::vector<Eigen::MatrixXi> Ps_new;
+    for( int i = 0; i < nEdges(); i++) 
+    {
+        int v0 = vertMap( edgeVerts(i, 0) );
+        int v1 = vertMap( edgeVerts(i, 1) );
+        if ( v0 > v1 ) 
+        { 
+            std::swap(v0, v1);
+        }
+        std::pair<int, int> p(v0, v1);
+        int oldEdge = edgeMap[p];
+        Ps_new.push_back(Ps[oldEdge]);
+    }
+    Ps = Ps_new;
 }
 
 /*
@@ -585,8 +626,8 @@ void Weave::serialize_forexport(const std::string &filename)
     {
 	ofs_edge << E(i, 0) + 1 << " " 
 	         << E(i, 1) + 1 << " " 
-		 << edgeVerts(i, 0) << " "
-		 << edgeVerts(i, 1) <<  std::endl;
+		 << edgeVerts(i, 0) + 1  << " "
+		 << edgeVerts(i, 1) + 1 <<  std::endl;
     }
     ofs_edge.close();
     sprintf(buffer, "%s.permmats", filename.c_str());
@@ -595,7 +636,7 @@ void Weave::serialize_forexport(const std::string &filename)
     for (int i = 0; i < nedges; i++)
     {
         Eigen::MatrixXd perm = Eigen::MatrixXd::Zero(nfields * 2, nfields*2);
-	for (int j = 0; j < nfields; j++) 
+	    for (int j = 0; j < nfields; j++) 
 	{
 	    for (int k = 0; k < nfields; k++)
 	    {
@@ -614,9 +655,9 @@ void Weave::serialize_forexport(const std::string &filename)
         }
  
 
-        for (int j = 0; j < nfields; j++)
+        for (int j = 0; j < nfields * 2; j++)
         {
-            for (int k = 0; k < nfields; k++)
+            for (int k = 0; k < nfields * 2; k++)
             {
                 ofs_mat << perm(j, k) << " ";
             }
