@@ -50,7 +50,7 @@ void Trace::loadSampledCurves(const std::string &filename)
     {
         std::cerr << "Couldn't load trace file" << std::endl;
         return;
-    }    
+    }
     std::ifstream normal_file("face_normal.txt");
     if (!normal_file)
     {
@@ -60,42 +60,41 @@ void Trace::loadSampledCurves(const std::string &filename)
 
     int npoints, dum1, dum2;
     double dum3, dum4, dum5;
-    while ( normal_file >> dum3 >> dum4 >> dum5 )
+    while (normal_file >> dum3 >> dum4 >> dum5)
     {
         curve_file >> npoints >> dum1 >> dum2;
-        Eigen::MatrixXd curve = Eigen::MatrixXd::Zero(npoints, 3); 
-        Eigen::MatrixXd normal = Eigen::MatrixXd::Zero(npoints, 3); 
+        Eigen::MatrixXd curve = Eigen::MatrixXd::Zero(npoints, 3);
+        Eigen::MatrixXd normal = Eigen::MatrixXd::Zero(npoints, 3);
         Eigen::VectorXd bend = Eigen::VectorXd::Zero(npoints); // Not implemented yet
-        
-        Eigen::Vector3d next_normal(0,0,0); 
-        for (int i = 0; i < npoints; i++) 
+
+        Eigen::Vector3d next_normal(0, 0, 0);
+        for (int i = 0; i < npoints; i++)
         {
             curve_file >> curve(i, 0) >> curve(i, 1) >> curve(i, 2);
             normal_file >> normal(i, 0) >> normal(i, 1) >> normal(i, 2);
             Eigen::Vector3d tmp = normal.row(i);
-            if ( tmp.dot(next_normal) < 0. ) 
+            if (tmp.dot(next_normal) < 0.)
             {
                 tmp = -tmp;
             }
-	    normal.row(i) = next_normal;
+            normal.row(i) = next_normal;
             next_normal = tmp;
         }
-    
-        std::cout << normal.row(npoints-1) << std::endl;
-        
+
+        std::cout << normal.row(npoints - 1) << std::endl;
 
 
-        if ( npoints > 200 ) 
+
+        if (npoints > 200)
         {
             curves.push_back(curve);
             normals.push_back(normal);
             bending.push_back(bend);
-            modes.push_back( Trace_Mode::FIELD ); // Make another render option
+            modes.push_back(Trace_Mode::FIELD); // Make another render option
         }
     }
     curve_file.close();
     normal_file.close();
-
 }
 
 
@@ -166,7 +165,7 @@ void Trace::logRibbonsToFile(std::string foldername, std::string filename)
         {
             Eigen::Vector3d curr_point = curve.row(i);
             double seg_length = (prev_point - curr_point).norm();
-            desc_mapping(i) = seg_counter;
+            desc_mapping(i-1) = seg_counter;
             if (seg_length > max_length)
             {
                 seg_counter++;
@@ -314,7 +313,7 @@ void Trace::computeIntersections(int curveIdx1, int curveIdx2, std::vector<Colli
                     c2.row(j),
                     c2.row(j + 1),
                     p0bary, p1bary, q0bary, q1bary);
-                if (dist.norm() < 1e-8)
+                if (dist.norm() < 1e-6 && p0bary != 0 && p0bary != 1.0 && q0bary != 0 && q0bary != 1.0)
                 {
                     collisions.push_back(Collision(curveIdx1, curveIdx2, i, j));
                 }
