@@ -269,6 +269,16 @@ void WeaveHook::resetCutSelection()
     renderSelectedVertices.clear();
 }
 
+void WeaveHook::removeSingularities()
+{
+    std::vector<int> topsingularities;
+    std::vector<std::pair<int, int> > geosingularities;
+    findSingularVertices(*weave, topsingularities, geosingularities);
+
+    weave->removePointsFromMesh(topsingularities);
+    updateRenderGeometry();
+}
+
 void WeaveHook::addCut()
 {
     //    cuts.push_back();

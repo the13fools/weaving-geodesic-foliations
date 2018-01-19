@@ -87,6 +87,8 @@ public:
     void createVisualizationEdges(Eigen::MatrixXd &edgePts, Eigen::MatrixXd &edgeVecs, Eigen::MatrixXi &edgeSegs, Eigen::MatrixXd &colors);
     void createVisualizationCuts(Eigen::MatrixXd &cutPts1, Eigen::MatrixXd &cutPts2);
 
+    void removePointsFromMesh(std::vector<int> vIds);
+
     void serialize(const std::string &filename);
     void serialize_forexport(const std::string &filename);
     void deserialize(const std::string &filename);

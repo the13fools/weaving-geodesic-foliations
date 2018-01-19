@@ -6,6 +6,9 @@
 #include <deque>
 #include <algorithm>
 
+#include <igl/remove_unreferenced.h>
+#include <igl/writeOBJ.h>
+
 Weave::Weave(const std::string &objname, int m)
 {
     Eigen::MatrixXd Vtmp;
@@ -385,6 +388,91 @@ void Weave::normalizeFields()
     }
 }
 
+void Weave::removePointsFromMesh(std::vector<int> vIds)
+{   
+    std::vector<int> faceIds;
+    std::vector<int> edgeIds;
+    
+    for (int v = 0; v < vIds.size(); v++)
+    {
+        for (int f = 0; f < nFaces(); f++)
+        {
+            for (int j = 0; j < 3; j++) 
+            {
+                if ( F(f, j) == vIds[v] ) 
+                    faceIds.push_back(f);       
+            }
+        }
+
+        for (int e = 0; e < nEdges(); e++)
+        {
+            for (int j = 0; j < 3; j++) 
+            {
+                if ( E(e, j) == vIds[v] ) 
+                    edgeIds.push_back(e);       
+            }
+        }
+    }
+
+    std::sort( faceIds.begin(), faceIds.end() ); 
+    std::sort( edgeIds.begin(), edgeIds.end() ); 
+
+    int fieldIdx = 0;
+    int faceIdIdx = 0;
+    int newNFaces = nFaces() - faceIds.size();
+    Eigen::VectorXd vectorFields_clean = Eigen::VectorXd::Zero( 5*nFields()*newNFaces );
+    Eigen::MatrixXi F_temp = Eigen::MatrixXi::Zero(newNFaces, 3); 
+
+    for (int i = 0; i < newNFaces; i++)   
+    { 
+        if ( fieldIdx == faceIds[faceIdIdx] )
+        {
+            fieldIdx++;
+            faceIdIdx++;
+        } 
+        
+        // vec field
+        vectorFields_clean(i) = vectorFields(fieldIdx);
+        vectorFields_clean(i+1) = vectorFields(fieldIdx+1);
+        // beta
+        vectorFields_clean(i   + 2*newNFaces) =  vectorFields(fieldIdx + 2*nFields() );
+        vectorFields_clean(i+1 + 2*newNFaces ) = vectorFields(fieldIdx+1 + 2*nFields()); 
+        // alpha
+        vectorFields_clean(i + 4*newNFaces) =  vectorFields(fieldIdx + 4*nFields() );
+        // faces 
+        F_temp.row(i) = F.row(fieldIdx);
+    }
+
+    for (int h = 0; h < handles.size(); h++)
+    {
+        int shift = 0;
+        for (int f = 0; f < faceIds.size(); f++)
+        {
+            if ( handles[h].face > faceIds[f] )
+                shift++;
+        }
+        handles[h].face = handles[h].face - shift;
+    }
+
+    // Permutation Matricies 
+    for (int i = edgeIds.size() - 1; i >= 0; i--)
+    {
+        Ps.erase( Ps.begin() + edgeIds[i] );
+    }
+
+//    std::cout << "Num Ps" << Ps.size() << "Num Faces New" << newNFaces;
+
+    Eigen::MatrixXd V_temp = V;
+    Eigen::MatrixXi unref; 
+    igl::remove_unreferenced(V_temp, F_temp, V, F, unref);
+
+    std::cout << unref << std::endl;
+
+    buildConnectivityStructures();
+    buildGeometricStructures();
+
+}
+
 /*
  * Writes vector field to file. Format is:
  *
@@ -399,7 +487,8 @@ void Weave::normalizeFields()
  */
 void Weave::serialize(const std::string &filename)
 {
-    std::ofstream ofs(filename);
+    std::string rawname = filename.substr(0, filename.find_last_of("."));
+    std::ofstream ofs(rawname + ".relax");
     int nvars = vectorFields.size();
     ofs << nvars << std::endl;;
     for (int i = 0; i < nvars; i++)
@@ -430,6 +519,9 @@ void Weave::serialize(const std::string &filename)
     {
         ofs << handles[i].face << " " << handles[i].field << " " << handles[i].dir[0] << " " << handles[i].dir[1] << std::endl;
     }
+
+    igl::writeOBJ(rawname + ".obj", V, F);
+
 }
 
 
@@ -510,7 +602,6 @@ void Weave::serialize_forexport(const std::string &filename)
             }
             ofs_mat << std::endl;
         }
-//        ofs << std::endl;
     }
     ofs_mat.close();
 }

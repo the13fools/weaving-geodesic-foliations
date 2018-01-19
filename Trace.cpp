@@ -85,7 +85,7 @@ void Trace::loadSampledCurves(const std::string &filename)
 
 
 
-        if (npoints > 200)
+        if (npoints > 100)
         {
             curves.push_back(curve);
             normals.push_back(normal);

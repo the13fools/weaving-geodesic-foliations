@@ -22,8 +22,8 @@ class WeaveHook : public PhysicsHook
 public:
     WeaveHook() : PhysicsHook(), weave(NULL), vectorScale(1.0), normalizeVectors(true)
     {
-        meshName = "meshes/bunny.obj";
-        vectorFieldName = "artery.txt";
+        meshName = "meshes/bunny_coarser.obj";
+        vectorFieldName = "bunny_coarser_nosing";
         traceFile = "example.tr";
         params.lambdacompat = 100;
         params.lambdareg = 1e-3;
@@ -55,6 +55,7 @@ public:
         viewer.ngui->addVariable("Compatilibity Lambda", params.lambdacompat);
         viewer.ngui->addVariable("Tikhonov Reg", params.lambdareg);
         viewer.ngui->addButton("Reassign Permutations", std::bind(&WeaveHook::reassignPermutations, this));
+        viewer.ngui->addButton("Remove Singularities", std::bind(&WeaveHook::removeSingularities, this));
 
         viewer.ngui->addGroup("Save/Load Field");
         viewer.ngui->addVariable("Filename", vectorFieldName);
@@ -66,7 +67,6 @@ public:
         viewer.ngui->addButton("Reset Cut Select", std::bind(&WeaveHook::resetCutSelection, this));
         viewer.ngui->addButton("Add Cut", std::bind(&WeaveHook::addCut, this));
         viewer.ngui->addButton("Remove Prev Cut", std::bind(&WeaveHook::removePrevCut, this));
-
 
         viewer.ngui->addWindow(Eigen::Vector2i(300, 10), "Manipulate");
         viewer.ngui->addGroup("Tracing Controls");
@@ -134,6 +134,7 @@ public:
     void exportVectorField();
     void resetCutSelection();
     void addCut();
+    void removeSingularities();
     void removePrevCut(); 
     void saveTraces();
     void loadTraces();
