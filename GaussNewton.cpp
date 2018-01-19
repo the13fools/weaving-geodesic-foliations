@@ -21,6 +21,8 @@ void faceEnergies(const Weave &weave, SolverParams params, Eigen::MatrixXd &E)
 
     for (int e = 0; e < nedges; e++)
     {
+        if(weave.E(e, 0) == -1 || weave.E(e, 1) == -1)
+            continue;
         for (int i = 0; i < m; i++)
         {
             for (int side = 0; side < 2; side++)
@@ -41,8 +43,9 @@ void GNmetric(const Weave &weave, Eigen::SparseMatrix<double> &M)
     int nhandles = weave.nHandles();
     int nedges = weave.nEdges();
     int m = weave.nFields();
-
-    M.resize(2 * nhandles + 4 * nedges*m, 2 * nhandles + 4 * nedges*m);
+    int intedges = weave.numInteriorEdges();
+    int numterms = 2*nhandles + 4 * intedges * m;
+    M.resize(numterms, numterms);
 
     std::vector<Eigen::Triplet<double> > Mcoeffs;
 
@@ -63,6 +66,8 @@ void GNmetric(const Weave &weave, Eigen::SparseMatrix<double> &M)
 
     for (int e = 0; e < nedges; e++)
     {
+        if(weave.E(e,0) == -1 || weave.E(e,1) == -1)
+            continue;
         for (int i = 0; i < m; i++)
         {
             for (int side = 0; side < 2; side++)
@@ -89,8 +94,8 @@ void GNEnergy(const Weave &weave, SolverParams params, Eigen::VectorXd &E)
     int nhandles = weave.nHandles();
     int nedges = weave.nEdges();
     int m = weave.nFields();
-
-    int nterms = 2 * nhandles + 4 * nedges*m;
+    int intedges = weave.numInteriorEdges();
+    int nterms = 2 * nhandles + 4 * intedges*m;
     E.resize(nterms);
     E.setZero();
 
@@ -108,6 +113,8 @@ void GNEnergy(const Weave &weave, SolverParams params, Eigen::VectorXd &E)
     // compatibility constraint
     for (int e = 0; e < nedges; e++)
     {
+        if(weave.E(e,0) == -1 || weave.E(e,1) == -1)
+            continue;
         for (int i = 0; i < m; i++)
         {
             for (int side = 0; side < 2; side++)
@@ -142,8 +149,8 @@ void GNGradient(const Weave &weave, SolverParams params, Eigen::SparseMatrix<dou
     int nhandles = weave.nHandles();
     int nedges = weave.nEdges();
     int m = weave.nFields();
-
-    int nterms = 2 * nhandles + 4 * nedges*m;
+    int intedges = weave.numInteriorEdges();
+    int nterms = 2 * nhandles + 4 * intedges*m;
     J.resize(nterms, weave.vectorFields.size());
 
     std::vector<Eigen::Triplet<double> > Jcoeffs;
@@ -163,6 +170,8 @@ void GNGradient(const Weave &weave, SolverParams params, Eigen::SparseMatrix<dou
     // compatibility constraint
     for (int e = 0; e < nedges; e++)
     {
+        if(weave.E(e,0) == -1 || weave.E(e,1) == -1)
+            continue;
         for (int i = 0; i < m; i++)
         {
             for (int side = 0; side < 2; side++)

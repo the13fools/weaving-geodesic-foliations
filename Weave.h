@@ -74,6 +74,7 @@ public:
     int nEdges() const { return E.rows(); }
     int nFields() const { return nFields_; }
     int nHandles() const { return handles.size(); }
+    int numInteriorEdges() const;
 
     int vidx(int face, int field) const;
     Eigen::Vector2d v(int face, int field) const;

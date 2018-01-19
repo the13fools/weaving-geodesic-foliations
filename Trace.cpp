@@ -258,6 +258,8 @@ int getOpVId(const Weave &wv, const Eigen::Vector3d prev_point, int faceId)
 {
     for (int j = 0; j < 3; j++)
     {
+        if(wv.faceNeighbors(faceId, j) == -1)
+            continue;
 	Eigen::VectorXi e = wv.edgeVerts.row(wv.faceNeighbors(faceId, j));
 	Eigen::Vector3d e_test =  wv.V.row( e(0) ) - wv.V.row( e(1) );
 	e_test.normalize();
@@ -277,7 +279,6 @@ int getOpVId(const Weave &wv, const Eigen::Vector3d prev_point, int faceId)
 	    }
 	} 
     }
-    assert(false);
     return -1;
 }
 
@@ -447,7 +448,12 @@ void Trace::traceCurve(const Weave &wv, const Trace_Mode trace_state,
         {
             next_face_id = wv.E(next_edge_id, 1);
         }
-        if (next_face_id == -1) { break; }
+        if (next_face_id == -1)
+        {
+            curve.conservativeResize(i+1, 3);
+            normal.conservativeResize(i+1, 3);
+            break;
+        }
 
         switch (trace_state)
         {
