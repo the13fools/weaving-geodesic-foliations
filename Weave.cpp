@@ -87,7 +87,18 @@ void Weave::buildConnectivityStructures()
                 idx = 1;
                 std::swap(v1, v2);
             }
-            edgemap[std::pair<int, int>(v1, v2)][idx] = i;
+            std::pair<int, int> p(v1,v2);
+            std::map<std::pair<int, int>, Eigen::Vector2i >::iterator it = edgemap.find(p);
+            if(it == edgemap.end())
+            {
+                Eigen::Vector2i edge(-1,-1);
+                edge[idx] = i;
+                edgemap[p] = edge;
+            }
+            else
+            {
+                edgemap[p][idx] = i;
+            }
         }
     }
 
@@ -97,11 +108,6 @@ void Weave::buildConnectivityStructures()
     int idx = 0;
     for (std::map<std::pair<int, int>, Eigen::Vector2i >::iterator it = edgemap.begin(); it != edgemap.end(); ++it)
     {
-        if (it->second.size() != 2)
-        {
-            std::cerr << "Code only supports watertight manifold meshes without boundary" << std::endl;
-            exit(-1);
-        }
         E(idx, 0) = it->second[0];
         E(idx, 1) = it->second[1];
         edgeVerts(idx, 0) = it->first.first;
@@ -109,11 +115,24 @@ void Weave::buildConnectivityStructures()
         idx++;
     }
     faceEdges.resize(nfaces, 3);
+    faceEdges.setConstant(-1);
     faceNeighbors.resize(nfaces, 3);
+    faceNeighbors.setConstant(-1);
     faceWings.resize(nfaces, 3);
+    faceWings.setConstant(-1);
     int nedges = nEdges();
     for (int edge = 0; edge < nedges; edge++)
     {
+        for(int side = 0; side<2; side++)
+        {
+            if(E(edge,side) == -1)
+                 continue;
+            for(int j=0; j<3; j++)
+                 if(F(E(edge,side), j) != edgeVerts(edge,0) && F(E(edge,side), j) != edgeVerts(edge,1))
+                     faceEdges(E(edge, side), j) = edge;           
+        }
+        if(E(edge,0) == -1 || E(edge,1) == -1)
+            continue;
         Eigen::Vector3i face1 = F.row(E(edge, 0));
         Eigen::Vector3i face2 = F.row(E(edge, 1));
         int idx1 = -1;
@@ -140,8 +159,6 @@ void Weave::buildConnectivityStructures()
             if (ok)
                 idx2 = i;
         }
-        faceEdges(E(edge,0), idx1) = edge;
-        faceEdges(E(edge,1), idx2) = edge;
         faceNeighbors(E(edge, 0), idx1) = E(edge, 1);
         faceNeighbors(E(edge, 1), idx2) = E(edge, 0);
         faceWings(E(edge, 0), idx1) = face2[idx2];
@@ -203,10 +220,13 @@ void Weave::buildGeometricStructures()
     cDiffs.resize(2 * nedges, 2);
     Ts.resize(2 * nedges, 4);
     for (int edgeidx = 0; edgeidx < nedges; edgeidx++)
-    {
+    {        
         //collect neighboring face indices
         int face1 = E(edgeidx, 0);
         int face2 = E(edgeidx, 1);
+
+        if(face1 == -1 || face2 == -1)
+            continue;
 
         int v1 = edgeVerts(edgeidx, 0);
         int v2 = edgeVerts(edgeidx, 1);
@@ -682,4 +702,16 @@ void Weave::createVisualizationCuts(Eigen::MatrixXd &cutPts1, Eigen::MatrixXd &c
             idx++;
         }
     }
+}
+
+int Weave::numInteriorEdges() const
+{
+    int nedges = nEdges();
+    int result = 0;
+    for(int i=0; i<nedges; i++)
+    {
+        if(E(i,0) != -1 && E(i,1) != -1)
+            result++;
+    }
+    return result;
 }
