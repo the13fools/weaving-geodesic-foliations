@@ -442,6 +442,9 @@ void Weave::removePointsFromMesh(std::vector<int> vIds)
             }
         }
     }
+
+    if (faceIds.empty())
+        return;
     
     cout << faceIds.size() << " fid " << edgeIds.size() << " edgeid \n";
   

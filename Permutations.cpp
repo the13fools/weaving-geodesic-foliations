@@ -37,9 +37,12 @@ void reassignOneCutPermutation(Weave &weave, int cut, Eigen::MatrixXi &P)
                 std::vector<Eigen::Vector3d> fvecs;
                 std::vector<Eigen::Vector3d> gvecs;
                 int orient = weave.cuts[cut].path[i].second;
-                Eigen::Matrix2d T = weave.Ts.block<2, 2>(2 * weave.cuts[cut].path[i].first, 2 - 2 * orient);
                 int f = weave.E(weave.cuts[cut].path[i].first, orient);
                 int g = weave.E(weave.cuts[cut].path[i].first, 1 - orient);
+                if (f == -1 || g == -1)
+                    continue;
+
+                Eigen::Matrix2d T = weave.Ts.block<2, 2>(2 * weave.cuts[cut].path[i].first, 2 - 2 * orient);
                 Eigen::Vector3d n = weave.faceNormal(f);
 
                 for (int j = 0; j < m; j++)
@@ -189,11 +192,19 @@ void findSingularVertices(const Weave &weave, std::vector<int> &topologicalSingu
         int curface = startface;
         int curspoke = startspoke;
         double totangle = 0;
+
+        bool isboundary = false;
+
         while (true)
         {
             int edge = weave.faceEdges(curface, curspoke);
             int side = (weave.E(edge, 0) == curface) ? 0 : 1;
             int nextface = weave.E(edge, 1 - side);
+            if (nextface == -1)
+            {
+                isboundary = true;
+                break;
+            }
             if (side == 0)
             {
                 totperm *= weave.Ps[edge].transpose();
@@ -233,21 +244,24 @@ void findSingularVertices(const Weave &weave, std::vector<int> &topologicalSingu
                 break;
         }
 
-        bool isidentity = true;
-        for (int j = 0; j < m; j++)
+        if (!isboundary)
         {
-            if (totperm(j, j) != 1)
-                isidentity = false;
-        }
-        if (!isidentity)
-            topologicalSingularVerts.push_back(i);
+            bool isidentity = true;
+            for (int j = 0; j < m; j++)
+            {
+                if (totperm(j, j) != 1)
+                    isidentity = false;
+            }
+            if (!isidentity)
+                topologicalSingularVerts.push_back(i);
 
-        for (int j = 0; j < m; j++)
-        {
-            const double PI = 3.1415926535898;
-            double index = angles[j] + 2 * PI - totangle;
-            if (fabs(index) > PI)
-                geometricSingularVerts.push_back(std::pair<int, int>(i, j));
+            for (int j = 0; j < m; j++)
+            {
+                const double PI = 3.1415926535898;
+                double index = angles[j] + 2 * PI - totangle;
+                if (fabs(index) > PI)
+                    geometricSingularVerts.push_back(std::pair<int, int>(i, j));
+            }
         }
     }
 }
