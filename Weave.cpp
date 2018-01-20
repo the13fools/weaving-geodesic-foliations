@@ -5,7 +5,7 @@
 #include "Colors.h"
 #include <deque>
 #include <algorithm>
-
+#include <set>
 #include <igl/remove_unreferenced.h>
 #include <igl/writeOBJ.h>
 
@@ -412,9 +412,8 @@ using namespace std;
 
 void Weave::removePointsFromMesh(std::vector<int> vIds)
 {   
-    std::vector<int> faceIds;
-    std::vector<int> edgeIds;
- 
+    std::set<int> facesToDelete;
+    
     std::map<std::pair<int, int>, int> edgeMap;
     for (int e = 0; e < nEdges(); e++) 
     { 
@@ -429,36 +428,21 @@ void Weave::removePointsFromMesh(std::vector<int> vIds)
             for (int j = 0; j < 3; j++) 
             {
                 if ( F(f, j) == vIds[v] ) 
-                    faceIds.push_back(f);       
-            }
-        }
-
-        for (int e = 0; e < nEdges(); e++)
-        {
-            for (int j = 0; j < 2; j++) 
-            {
-                if ( edgeVerts(e, j) == vIds[v] ) 
-                    edgeIds.push_back(e);       
+                    facesToDelete.insert(f);       
             }
         }
     }
 
+    std::vector<int> faceIds;
+    for (std::set<int>::iterator it = facesToDelete.begin(); it != facesToDelete.end(); ++it)
+        faceIds.push_back(*it);
+
     if (faceIds.empty())
         return;
     
-    cout << faceIds.size() << " fid " << edgeIds.size() << " edgeid \n";
-  
-    std::sort( faceIds.begin(), faceIds.end() ); 
-    std::sort( edgeIds.begin(), edgeIds.end() ); 
-
     for (int i = 0; i < faceIds.size(); i++)
         cout << faceIds[i] << " " ;
     cout << "face ids \n";
-
-    for (int i = 0; i < edgeIds.size(); i++)
-        cout << edgeIds[i] << " " ;
-    cout << "edge ids \n";
-
 
     int fieldIdx = 0;
     int faceIdIdx = 0;
