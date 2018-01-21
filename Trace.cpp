@@ -6,6 +6,8 @@
 #include <fstream>
 #include <iostream>
 
+#include <igl/point_mesh_squared_distance.h>
+
 // For making directories
 #include <sys/stat.h>
  // #include <direct.h>
@@ -104,7 +106,7 @@ double angle(Eigen::Vector3d v, Eigen::Vector3d w, Eigen::Vector3d n)
 }
 
 
-void Trace::logRibbonsToFile(std::string foldername, std::string filename)
+void Trace::logRibbonsToFile(std::string foldername, std::string filename, const Weave &wv)
 {
     std::stringstream folderpath;
     folderpath << "log/" << foldername;
@@ -190,7 +192,58 @@ void Trace::logRibbonsToFile(std::string foldername, std::string filename)
 
 
     // Project along a geodesic curve at the end point of each rod that ends at a singularity.  
+    
+    // For an intial test, just add 5 true geodesic steps to the end of every rod and hope that this closes up things
+    // without being too noticable. 
+    Eigen::VectorXd sqrD;
+    Eigen::VectorXi nearFace;
+    Eigen::MatrixXd C;
+    Eigen::MatrixXd point = Eigen::MatrixXd::Zero(1,3); 
+    igl::AABB<Eigen::MatrixXd,3> tree; 
+   
+    tree.init(wv.V,wv.F);
 
+ 
+ 
+    int stepstoextend = 20;
+
+    for (int i = 0; i < splitcurves.size(); i++)
+    { 
+        int len = splitcurves[i].rows();
+        int cols = splitcurves[i].cols();
+        splitcurves[i].conservativeResize(len + stepstoextend, cols);
+        splitnormals[i].conservativeResize(len + stepstoextend, cols);
+
+        Eigen::Vector3d endpoint = splitcurves[i].row(len-1);
+        Eigen::Vector3d prevpoint = splitcurves[i].row(len-2);
+        Eigen::Vector3d curr_dir = endpoint - prevpoint;
+        // hack-y way of figuring out the edge of the end-point 
+        point.row(0) = prevpoint + curr_dir * .01;
+
+        curr_dir *= 1000.0; // Assumes mesh is roughly deluanay
+
+        tree.squared_distance(wv.V,wv.F,point,sqrD,nearFace,C);
+        int curr_face_id = nearFace(0);
+
+        TracePoint tp;
+        startTraceFromPoint(wv, curr_face_id, point.row(0), curr_dir, tp);
+//        std::cout << point.row(0) - prevpoint << " should be same \n";
+        int curr_edge_id = tp.edge_id;
+        getNextTracePoint(wv, curr_face_id, tp.edge_id, prevpoint, tp.op_v_id, curr_dir, tp); 
+        std::cout << tp.point - endpoint << " endpoints should be same \n";
+
+        for (int j = 0; j < stepstoextend; j++)
+        {
+            curr_dir = mapVectorToAdjacentFace(wv.F, wv.V, wv.edgeVerts,
+                                               tp.edge_id, curr_face_id, tp.face_id, curr_dir);
+            curr_face_id = tp.face_id;  
+            splitcurves[i].row(len + j)  = tp.point;
+            splitnormals[i].row(len + j) = tp.n;
+
+            getNextTracePoint(wv, curr_face_id, tp.edge_id, tp.point, tp.op_v_id, curr_dir, tp); 
+        }
+
+    }   
 
 
     // Split each segment into k peices
@@ -438,6 +491,7 @@ void Trace::startTraceFromPoint(const Weave &wv,
 
     startPoint.edge_id = curr_edge_id;
     startPoint.point = prev_point;
+    startPoint.op_v_id = getOpVIdFromEdge(wv, curr_edge_id, curr_face_id);
 
 }
 
@@ -499,6 +553,7 @@ void Trace::getNextTracePoint(const Weave &wv,
         nextTrace.face_id = next_face_id;
         nextTrace.edge_id = next_edge_id;
         nextTrace.point = (op_v1 * q0bary + op_v2 * q1bary);
+        nextTrace.op_v_id = getOpVIdFromEdge(wv, next_edge_id, next_face_id);
 }
 
 
@@ -610,7 +665,8 @@ void Trace::traceCurve(const Weave &wv, const Trace_Mode trace_state,
         curr_face_id = tp.face_id;
         curr_edge_id = tp.edge_id;
         prev_point = curve.row(i);
-        op_v_id = getOpVIdFromEdge(wv, curr_edge_id, curr_face_id);
+//        op_v_id = getOpVIdFromEdge(wv, curr_edge_id, curr_face_id);
+        op_v_id = tp.op_v_id;
     }
     curves.push_back(curve);
     normals.push_back(normal);

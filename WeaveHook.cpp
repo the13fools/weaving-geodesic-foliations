@@ -98,7 +98,7 @@ void WeaveHook::drawTraceCenterlines(igl::viewer::Viewer &viewer)
     }
     if (isSaveTrace)
     {
-        trace->logRibbonsToFile( "rods", "example" );
+        trace->logRibbonsToFile( "rods", "example", *weave );
         isSaveTrace = false;	
     }
 
