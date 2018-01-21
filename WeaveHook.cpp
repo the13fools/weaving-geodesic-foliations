@@ -276,8 +276,8 @@ void WeaveHook::removeSingularities()
     findSingularVertices(*weave, topsingularities, geosingularities);
 
     std::vector<int> todelete = topsingularities;
-    for (int i = 0; i < geosingularities.size(); i++)
-        todelete.push_back(geosingularities[i].first);
+//    for (int i = 0; i < geosingularities.size(); i++)
+//        todelete.push_back(geosingularities[i].first);
 
     weave->removePointsFromMesh(todelete);
     updateRenderGeometry();
