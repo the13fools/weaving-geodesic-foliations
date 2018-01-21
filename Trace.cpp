@@ -405,10 +405,46 @@ void Trace::computeIntersections(int curveIdx1, int curveIdx2, std::vector<Colli
 }
 
 
+void Trace::startTraceFromPoint(const Weave &wv,
+                                int curr_face_id, 
+                                const Eigen::Vector3d startpoint, 
+                                const Eigen::Vector3d curr_dir, TracePoint &startPoint)
+{
+
+    // Project backwards to initialize.  Kinda hacky.
+    double min_dist = std::numeric_limits<double>::infinity();
+
+    int curr_edge_id = -1;
+    Eigen::Vector3d prev_point;
+
+    for (int i = 0; i < 3; i++)
+    {
+        int next_edge_id = wv.faceEdges(curr_face_id, i);
+        Eigen::Vector3d op_v1 = wv.V.row(wv.edgeVerts(next_edge_id, 0));
+        Eigen::Vector3d op_v2 = wv.V.row(wv.edgeVerts(next_edge_id, 1));
+
+        double p0bary, p1bary, q0bary, q1bary;
+        Eigen::Vector3d dist = Distance::edgeEdgeDistance(startpoint,
+            startpoint - curr_dir,
+            op_v1, op_v2,
+            p0bary, p1bary, q0bary, q1bary);
+        if (dist.norm() < min_dist)
+        {
+            min_dist = dist.norm();
+            prev_point = op_v1 * q0bary + op_v2 * q1bary;
+            curr_edge_id = next_edge_id;
+        }
+    }
+
+    startPoint.edge_id = curr_edge_id;
+    startPoint.point = prev_point;
+
+}
+
 void Trace::getNextTracePoint(const Weave &wv, 
                               int curr_face_id, int curr_edge_id, 
-                              Eigen::Vector3d prev_point, int op_v_id,  
-                              Eigen::Vector3d curr_dir, TracePoint &nextTrace)
+                              const Eigen::Vector3d prev_point, int op_v_id,  
+                              const Eigen::Vector3d curr_dir, TracePoint &nextTrace)
 {
 
         Eigen::Vector3d op_vertex = wv.V.row(op_v_id);
@@ -495,8 +531,6 @@ void Trace::traceCurve(const Weave &wv, const Trace_Mode trace_state,
 
     int curr_face_id = faceId;
 
-    // Project backwards to initialize.  Kinda hacky.
-    double min_dist = std::numeric_limits<double>::infinity();
     Eigen::Vector3d startpoint;
     startpoint.setZero();
     for (int i = 0; i < 3; i++)
@@ -505,32 +539,15 @@ void Trace::traceCurve(const Weave &wv, const Trace_Mode trace_state,
     }
     startpoint /= 3.0;
 
-    int curr_edge_id = -1;
-    Eigen::Vector3d prev_point;
 
-    for (int i = 0; i < 3; i++)
-    {
-        int next_edge_id = wv.faceEdges(curr_face_id, i);
-        Eigen::Vector3d op_v1 = wv.V.row(wv.edgeVerts(next_edge_id, 0));
-        Eigen::Vector3d op_v2 = wv.V.row(wv.edgeVerts(next_edge_id, 1));
-
-        double p0bary, p1bary, q0bary, q1bary;
-        Eigen::Vector3d dist = Distance::edgeEdgeDistance(startpoint,
-            startpoint - curr_dir,
-            op_v1, op_v2,
-            p0bary, p1bary, q0bary, q1bary);
-        if (dist.norm() < min_dist)
-        {
-            min_dist = dist.norm();
-            prev_point = op_v1 * q0bary + op_v2 * q1bary;
-            curr_edge_id = next_edge_id;
-        }
-    }
+    TracePoint tp;
+    startTraceFromPoint(wv, curr_face_id, startpoint, curr_dir, tp); 
+    int curr_edge_id = tp.edge_id;
+    Eigen::Vector3d prev_point = tp.point;
 
     assert(curr_edge_id > -1);
     int op_v_id = getOpVIdFromEdge(wv, curr_edge_id, curr_face_id);
     Eigen::VectorXd bend = Eigen::VectorXd::Zero(steps);
-    TracePoint tp;
     for (int i = 1; i < steps; i++)
     {
             

@@ -47,10 +47,14 @@ public:
     void load(const std::string &filename);
 
     void getNextTracePoint(const Weave &wv, 
-                             int curr_face_id, int curr_edge_id, 
-                             Eigen::Vector3d prev_point, int op_v_id,  
-                             Eigen::Vector3d cur_dir, TracePoint &nextTrace);
+                           int curr_face_id, int curr_edge_id, 
+                           const Eigen::Vector3d prev_point, int op_v_id,  
+                           const Eigen::Vector3d cur_dir, TracePoint &nextTrace);
 
+    void startTraceFromPoint(const Weave &wv,
+                             int curr_face_id, 
+                             const Eigen::Vector3d startpoint, 
+                             const Eigen::Vector3d curr_dir, TracePoint &startPoint);
 
 
 };
