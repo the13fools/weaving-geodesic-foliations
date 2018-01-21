@@ -630,21 +630,21 @@ void Weave::serialize_forexport(const std::string &filename)
     {
         Eigen::MatrixXd perm = Eigen::MatrixXd::Zero(nfields * 2, nfields*2);
 	    for (int j = 0; j < nfields; j++) 
-	{
-	    for (int k = 0; k < nfields; k++)
 	    {
+	        for (int k = 0; k < nfields; k++)
+	        {
                 if( Ps[i](j, k) == 1 )
-		{
+		        {
                     perm(j,k) = 1;
-		    perm(j+3, k+3) = 1;
-		}
+		            perm(j+3, k+3) = 1;
+		        }
 
                 if( Ps[i](j, k) == -1 )
-		{
+		        {
                     perm(j,k+3) = 1;
-		    perm(j+3, k) = 1;
-		}
-	    }
+                    perm(j+3, k) = 1;
+		        }
+	        }
         }
  
 

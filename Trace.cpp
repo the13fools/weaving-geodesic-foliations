@@ -86,7 +86,7 @@ void Trace::loadSampledCurves(const std::string &filename)
 
 
 
-        if (npoints > 100)
+        if (npoints > 20)
         {
             curves.push_back(curve);
             normals.push_back(normal);
@@ -121,10 +121,14 @@ void Trace::logRibbonsToFile(std::string foldername, std::string filename)
         return;
     }
 
+
+    // Cut strips at areas of high curvature.
+
     std::vector<Eigen::MatrixXd> splitcurves;
     std::vector<Eigen::MatrixXd> splitnormals;
 
     double maxcurvature = 30;
+    double minrodlen = 30;
 
     for(int i=0; i<curves.size(); i++)
     {
@@ -144,7 +148,7 @@ void Trace::logRibbonsToFile(std::string foldername, std::string filename)
             if(fabs(angle(prevproj, nextedge, normals[i].row(j)))/(prevedge.norm() + nextedge.norm()) > maxcurvature)
             {
                 // cut
-                if(curpts.size() > 30)
+                if(curpts.size() > minrodlen)
                 {
                     Eigen::MatrixXd newcurve(curpts.size(), 3);
                     Eigen::MatrixXd newnormal(curpts.size(), 3);
@@ -170,7 +174,7 @@ void Trace::logRibbonsToFile(std::string foldername, std::string filename)
             }
             prevedge = nextedge;
         }
-        if(curpts.size() > 30)
+        if(curpts.size() > minrodlen)
         {
             Eigen::MatrixXd newcurve(curpts.size(), 3);
             Eigen::MatrixXd newnormal(curpts.size(), 3);
@@ -183,6 +187,16 @@ void Trace::logRibbonsToFile(std::string foldername, std::string filename)
             splitnormals.push_back(newnormal);
         }             
     }
+
+
+    // Project along a geodesic curve at the end point of each rod that ends at a singularity.  
+
+
+
+    // Split each segment into k peices
+
+
+
 
     // Find collisions between rods
     std::vector<Collision> collisions;
@@ -390,20 +404,73 @@ void Trace::computeIntersections(int curveIdx1, int curveIdx2, std::vector<Colli
     }
 }
 
-/*
-void Trace::projectToClosestFaceDir()
+
+void Trace::getNextTracePoint(const Weave &wv, 
+                              int curr_face_id, int curr_edge_id, 
+                              Eigen::Vector3d prev_point, int op_v_id,  
+                              Eigen::Vector3d curr_dir, TracePoint &nextTrace)
 {
 
+        Eigen::Vector3d op_vertex = wv.V.row(op_v_id);
+        Eigen::Vector3d split = op_vertex - prev_point;
+
+        double split_len = split.norm();
+        split = split / split_len;
+        Eigen::Vector3d n = faceNormal(wv.F, wv.V, curr_face_id);
+        Eigen::Vector3d perp = split.cross(n);
+        nextTrace.n = n;
+
+        int op_edge_id = -1;
+        for (int j = 0; j < 3; j++)
+        {
+            Eigen::Vector2i e = wv.edgeVerts.row(wv.faceEdges(curr_face_id, j));
+
+            if (e(0) == op_v_id || e(1) == op_v_id)
+            {
+                Eigen::Vector3d e_test = (wv.V.row(e(0)) + wv.V.row(e(1))) * .5;
+                e_test -= prev_point;
+                if (e_test.dot(perp) * curr_dir.dot(perp) > 0.)
+                {
+                    op_edge_id = j;
+                    break;
+                }
+            }
+        }
+        // stop if we hit vertex
+        if (op_edge_id == -1)
+        {
+            nextTrace.edge_id = -1;
+            nextTrace.face_id = -1;
+            return;
+        }
+
+        // Find intersection point.
+        int next_edge_id = wv.faceEdges(curr_face_id, op_edge_id);
+        Eigen::Vector3d op_v1 = wv.V.row(wv.edgeVerts(next_edge_id, 0));
+        Eigen::Vector3d op_v2 = wv.V.row(wv.edgeVerts(next_edge_id, 1));
+
+        double p0bary, p1bary, q0bary, q1bary;
+        Eigen::Vector3d dist = Distance::edgeEdgeDistance(prev_point,
+            prev_point + curr_dir,
+            op_v1, op_v2,
+            p0bary, p1bary, q0bary, q1bary);
+
+        int next_face_id = wv.E(next_edge_id, 0);
+        if (next_face_id == curr_face_id)
+        {
+            next_face_id = wv.E(next_edge_id, 1);
+        }
+        nextTrace.face_id = next_face_id;
+        nextTrace.edge_id = next_edge_id;
+        nextTrace.point = (op_v1 * q0bary + op_v2 * q1bary);
 }
-*/
+
+
 /*
-Eigen::VectorXd mapFaceVectorToGlobalCoordinates(const Weave &wv, const Eigen::VectorXi coords, int faceId)
+void Trace::traceKSteps(const Weave &wv, int traceIdx, int faceId, int steps)
 {
-    Eigen::VectorXd ret = Eigen::VectorXd::Zero(3);
-    for (int i = 0; i < 3; i++)
-    {
-        
-    }
+
+
 }
 */
 
@@ -463,59 +530,24 @@ void Trace::traceCurve(const Weave &wv, const Trace_Mode trace_state,
     assert(curr_edge_id > -1);
     int op_v_id = getOpVIdFromEdge(wv, curr_edge_id, curr_face_id);
     Eigen::VectorXd bend = Eigen::VectorXd::Zero(steps);
+    TracePoint tp;
     for (int i = 1; i < steps; i++)
     {
-        Eigen::Vector3d op_vertex = wv.V.row(op_v_id);
-        Eigen::Vector3d split = op_vertex - prev_point;
+            
+        getNextTracePoint(wv, curr_face_id, curr_edge_id, prev_point, op_v_id, curr_dir, tp);  
+        curve.row(i) = tp.point;
+        normal.row(i) = tp.n;
 
-        double split_len = split.norm();
-        split = split / split_len;
-        Eigen::Vector3d n = faceNormal(wv.F, wv.V, curr_face_id);
-        Eigen::Vector3d perp = split.cross(n);
-        normal.row(i) = n;
 
-        int op_edge_id = -1;
-        for (int j = 0; j < 3; j++)
-        {
-            Eigen::Vector2i e = wv.edgeVerts.row(wv.faceEdges(curr_face_id, j));
-
-            if (e(0) == op_v_id || e(1) == op_v_id)
-            {
-                Eigen::Vector3d e_test = (wv.V.row(e(0)) + wv.V.row(e(1))) * .5;
-                e_test -= prev_point;
-                if (e_test.dot(perp) * curr_dir.dot(perp) > 0.)
-                {
-                    op_edge_id = j;
-                    break;
-                }
-            }
-        }
         // stop if we hit vertex
-        if (op_edge_id == -1)
+        if (tp.edge_id == -1)
         {
             curve.conservativeResize(i, 3);
             normal.conservativeResize(i, 3);
             break;
         }
-
-        // Find intersection point.
-        int next_edge_id = wv.faceEdges(curr_face_id, op_edge_id);
-        Eigen::Vector3d op_v1 = wv.V.row(wv.edgeVerts(next_edge_id, 0));
-        Eigen::Vector3d op_v2 = wv.V.row(wv.edgeVerts(next_edge_id, 1));
-
-        double p0bary, p1bary, q0bary, q1bary;
-        Eigen::Vector3d dist = Distance::edgeEdgeDistance(prev_point,
-            prev_point + curr_dir,
-            op_v1, op_v2,
-            p0bary, p1bary, q0bary, q1bary);
-
-        curve.row(i) = (op_v1 * q0bary + op_v2 * q1bary);
-        int next_face_id = wv.E(next_edge_id, 0);
-        if (next_face_id == curr_face_id)
-        {
-            next_face_id = wv.E(next_edge_id, 1);
-        }
-        if (next_face_id == -1)
+        // stop if we hit boundary
+        if (tp.face_id == -1)
         {
             curve.conservativeResize(i+1, 3);
             normal.conservativeResize(i+1, 3);
@@ -526,14 +558,14 @@ void Trace::traceCurve(const Weave &wv, const Trace_Mode trace_state,
         {
         case GEODESIC:
             curr_dir = mapVectorToAdjacentFace(wv.F, wv.V, wv.edgeVerts,
-                next_edge_id, curr_face_id, next_face_id, curr_dir);
+                           tp.edge_id, curr_face_id, tp.face_id, curr_dir);
             
 	    break;
         case FIELD:
-	    Eigen::Vector3d parTransport = mapVectorToAdjacentFace(wv.F, wv.V, wv.edgeVerts,
-		                    next_edge_id, curr_face_id, next_face_id, curr_dir);
-	    Eigen::MatrixXi perm = wv.Ps[next_edge_id];
-            if (next_face_id == wv.E(next_edge_id, 1))
+	        Eigen::Vector3d parTransport = mapVectorToAdjacentFace(wv.F, wv.V, wv.edgeVerts,
+		                                   tp.edge_id, curr_face_id, tp.face_id, curr_dir);
+	        Eigen::MatrixXi perm = wv.Ps[tp.edge_id];
+            if (tp.face_id == wv.E(tp.edge_id, 1))
             {
                 perm.transposeInPlace();
             }
@@ -548,18 +580,18 @@ void Trace::traceCurve(const Weave &wv, const Trace_Mode trace_state,
                     {
                         coeff_dir *= -1.;
                     }
-                    curr_dir = wv.Bs[next_face_id] * wv.v(next_face_id, idx);
+                    curr_dir = wv.Bs[tp.face_id] * wv.v(tp.face_id, idx);
                     curr_dir_idx = idx;
                     break;
                 }
             }
             curr_dir = coeff_dir * curr_dir.normalized() * wv.averageEdgeLength * 1000.;
-	    bend(i) = curr_dir.normalized().dot( parTransport.normalized() );
+	        bend(i) = curr_dir.normalized().dot( parTransport.normalized() );
             break;
         }
 
-        curr_face_id = next_face_id;
-        curr_edge_id = next_edge_id;
+        curr_face_id = tp.face_id;
+        curr_edge_id = tp.edge_id;
         prev_point = curve.row(i);
         op_v_id = getOpVIdFromEdge(wv, curr_edge_id, curr_face_id);
     }
@@ -567,7 +599,7 @@ void Trace::traceCurve(const Weave &wv, const Trace_Mode trace_state,
     normals.push_back(normal);
     modes.push_back(trace_state);
     bending.push_back(bend);
-    return;
+    return; 
 }
 
 void Trace::save(const std::string &filename)

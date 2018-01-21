@@ -19,6 +19,13 @@ struct Collision {
     int seg2;
 };
 
+struct TracePoint {
+    int face_id; // current face to trace
+    int edge_id; // current edge that contains point
+    Eigen::Vector3d n; // Face normal
+    Eigen::Vector3d point; // current point
+};
+
 class Trace
 {
 public:
@@ -38,6 +45,14 @@ public:
     void computeIntersections(int curveIdx1, int curveIdx2, std::vector<Collision> &collisions, std::vector<Eigen::MatrixXd> &curves);
     void save(const std::string &filename);
     void load(const std::string &filename);
+
+    void getNextTracePoint(const Weave &wv, 
+                             int curr_face_id, int curr_edge_id, 
+                             Eigen::Vector3d prev_point, int op_v_id,  
+                             Eigen::Vector3d cur_dir, TracePoint &nextTrace);
+
+
+
 };
 
 
