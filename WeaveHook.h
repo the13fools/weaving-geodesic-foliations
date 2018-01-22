@@ -37,6 +37,16 @@ public:
         hideVectors = false;
         showBending = false;
         showSingularities = false;
+    
+        handleLocation = 0;
+        handleParams = Eigen::VectorXd::Zero(6);
+        handleParams(0) = 0;
+        handleParams(1) = 1;
+        handleParams(2) = 1;
+        handleParams(3) = 0;
+        handleParams(4) = 1;
+        handleParams(5) = -1;
+
 
         trace = new Trace();
     }
@@ -68,6 +78,17 @@ public:
         viewer.ngui->addButton("Add Cut", std::bind(&WeaveHook::addCut, this));
         viewer.ngui->addButton("Remove Prev Cut", std::bind(&WeaveHook::removePrevCut, this));
 
+        viewer.ngui->addWindow(Eigen::Vector2i(300, 600), "Handles");
+        viewer.ngui->addVariable("Face location", handleLocation);
+        viewer.ngui->addVariable("P0", handleParams[0]);
+        viewer.ngui->addVariable("P1", handleParams[1]);
+        viewer.ngui->addVariable("P2", handleParams[2]);
+        viewer.ngui->addVariable("P3", handleParams[3]);
+        viewer.ngui->addVariable("P4", handleParams[4]);
+        viewer.ngui->addVariable("P5", handleParams[5]);
+
+
+
         viewer.ngui->addWindow(Eigen::Vector2i(300, 10), "Manipulate");
         viewer.ngui->addGroup("Tracing Controls");
         viewer.ngui->addVariable("Trace Face", traceFaceId);
@@ -94,6 +115,7 @@ public:
             if (igl::unproject_onto_mesh(Eigen::Vector2f(x, y), viewer.core.view * viewer.core.model,
                 viewer.core.proj, viewer.core.viewport, this->weave->V, this->weave->F, fid, bc))
             {
+                std::cout << fid << " - clicked on vertex #\n"; 
                 bool found = false;
                 for (int i = 0; i < (int)selectedVertices.size(); i++)
                 {
@@ -174,7 +196,19 @@ public:
         faceColors.resize(weave->nFaces(), 3);
         faceColors.setConstant(0.3);
         baseLength = weave->averageEdgeLength;
-        curFaceEnergies = tempFaceEnergies; 
+        curFaceEnergies = tempFaceEnergies;
+
+
+    weave->handles[0].face = handleLocation; 
+    weave->handles[0].dir(0) = handleParams(0); 
+    weave->handles[0].dir(1) = handleParams(1); 
+    weave->handles[1].face = handleLocation; 
+    weave->handles[1].dir(0) = handleParams(2); 
+    weave->handles[1].dir(1) = handleParams(3); 
+    weave->handles[2].face = handleLocation; 
+    weave->handles[2].dir(0) = handleParams(4); 
+    weave->handles[2].dir(1) = handleParams(5); 
+
     }
 
     virtual bool simulateOneStep();    
@@ -200,6 +234,9 @@ private:
     
     double vectorScale;
     double baseLength;
+
+    Eigen::VectorXd handleParams;
+    int handleLocation;
 
     Eigen::MatrixXd faceColors;
     Eigen::MatrixXd curFaceEnergies;

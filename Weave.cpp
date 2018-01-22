@@ -597,6 +597,12 @@ void Weave::serialize_forexport(const std::string &filename)
 	{
             ofs << (Bs[i] * v(i, j)).transpose() << " "; 
 	}
+    
+	for (int j = 0; j < nFields(); j++)
+	{
+            ofs << -(Bs[i] * v(i, j)).transpose() << " "; 
+	}
+
         ofs << std::endl;
     }
     ofs.close();
@@ -685,7 +691,7 @@ void Weave::deserialize(const std::string &filename)
 
     if (nedges != nEdges() && nfields != nFields())
     {
-        std::cerr << "Vector field doesn't match mesh!" << std::endl;
+        std::cerr << "Vector field doesn't match mesh! edge/fields wrong." << std::endl;
         return;
     }
 

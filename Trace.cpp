@@ -58,11 +58,12 @@ void Trace::loadSampledCurves(const std::string &filename)
         return;
     }
 
-    int npoints, dum1, dum2;
+    double npoints_d, dum1, dum2;
     double dum3, dum4, dum5;
     while (normal_file >> dum3 >> dum4 >> dum5)
     {
-        curve_file >> npoints >> dum1 >> dum2;
+        curve_file >> npoints_d >> dum1 >> dum2;
+        double npoints = npoints_d;
         Eigen::MatrixXd curve = Eigen::MatrixXd::Zero(npoints, 3);
         Eigen::MatrixXd normal = Eigen::MatrixXd::Zero(npoints, 3);
         Eigen::VectorXd bend = Eigen::VectorXd::Zero(npoints); // Not implemented yet
@@ -81,7 +82,7 @@ void Trace::loadSampledCurves(const std::string &filename)
             next_normal = tmp;
         }
 
-        std::cout << normal.row(npoints - 1) << std::endl;
+        std::cout << normal.row(npoints - 1) << " " << npoints;
 
 
 
