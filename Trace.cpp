@@ -97,6 +97,10 @@ void Trace::loadSampledCurves(const std::string &filename)
     normal_file.close();
 }
 
+double angle(Eigen::Vector3d v, Eigen::Vector3d w, Eigen::Vector3d n)
+{
+    return 2.0 * atan2( v.cross(w).dot(n), v.norm() * w.norm() + v.dot(w));
+}
 
 
 void Trace::logRibbonsToFile(std::string foldername, std::string filename)
@@ -116,13 +120,76 @@ void Trace::logRibbonsToFile(std::string foldername, std::string filename)
         return;
     }
 
+    std::vector<Eigen::MatrixXd> splitcurves;
+    std::vector<Eigen::MatrixXd> splitnormals;
+
+    double maxcurvature = 30;
+
+    for(int i=0; i<curves.size(); i++)
+    {
+        if(curves[i].rows() < 3)
+            continue;
+        std::vector<Eigen::Vector3d> curpts;
+        std::vector<Eigen::Vector3d> curnormals;
+        curpts.push_back(curves[i].row(0));
+        curpts.push_back(curves[i].row(1));
+        curnormals.push_back(normals[i].row(0));
+        curnormals.push_back(normals[i].row(1));
+        Eigen::Vector3d prevedge = curves[i].row(1) - curves[i].row(0);
+        for(int j=2; j<curves[i].rows(); j++)
+        {
+            Eigen::Vector3d nextedge = curves[i].row(j).transpose() - curpts.back();
+            Eigen::Vector3d prevproj = prevedge - prevedge.dot(normals[i].row(j)) * normals[i].row(j).transpose();
+            if(fabs(angle(prevproj, nextedge, normals[i].row(j)))/(prevedge.norm() + nextedge.norm()) > maxcurvature)
+            {
+                // cut
+                if(curpts.size() > 30)
+                {
+                    Eigen::MatrixXd newcurve(curpts.size(), 3);
+                    Eigen::MatrixXd newnormal(curpts.size(), 3);
+                    for(int j=0; j<curpts.size(); j++)
+                    {
+                        newcurve.row(j) = curpts[j].transpose();
+                        newnormal.row(j) = curnormals[j].transpose();
+                    }
+                    splitcurves.push_back(newcurve);
+                    splitnormals.push_back(newnormal);
+                }
+                curpts.clear();
+                curnormals.clear();
+                curpts.push_back(curves[i].row(j-1));
+                curpts.push_back(curves[i].row(j));
+                curnormals.push_back(normals[i].row(j-1));
+                curnormals.push_back(normals[i].row(j));
+            }
+            else
+            {
+                curpts.push_back(curves[i].row(j));
+                curnormals.push_back(normals[i].row(j));
+            }
+            prevedge = nextedge;
+        }
+        if(curpts.size() > 30)
+        {
+            Eigen::MatrixXd newcurve(curpts.size(), 3);
+            Eigen::MatrixXd newnormal(curpts.size(), 3);
+            for(int j=0; j<curpts.size(); j++)
+            {
+                newcurve.row(j) = curpts[j].transpose();
+                newnormal.row(j) = curnormals[j].transpose();
+            }
+            splitcurves.push_back(newcurve);
+            splitnormals.push_back(newnormal);
+        }             
+    }
+
     // Find collisions between rods
     std::vector<Collision> collisions;
-    for (int i = 0; i < curves.size(); i++)
+    for (int i = 0; i < splitcurves.size(); i++)
     {
-        for (int j = i; j < curves.size(); j++)
+        for (int j = i; j < splitcurves.size(); j++)
         {
-            computeIntersections(i, j, collisions);
+            computeIntersections(i, j, collisions, splitcurves);
         }
     }
 
@@ -130,10 +197,10 @@ void Trace::logRibbonsToFile(std::string foldername, std::string filename)
     std::vector<Eigen::VectorXd> desc_maps;
     std::vector< std::vector<Eigen::Vector3d> > desc_curves; //eeew
     std::vector< std::vector<Eigen::Vector3d> > desc_normals;
-    for (int curveId = 0; curveId < curves.size(); curveId++)
+    for (int curveId = 0; curveId < splitcurves.size(); curveId++)
     {
-        Eigen::MatrixXd curve = curves[curveId];
-        Eigen::MatrixXd curveNormals = normals[curveId];
+        Eigen::MatrixXd curve = splitcurves[curveId];
+        Eigen::MatrixXd curveNormals = splitnormals[curveId];
 
         double max_length = 0.;
         for (int i = 0; i < curve.rows() - 1; i++)
@@ -190,7 +257,7 @@ void Trace::logRibbonsToFile(std::string foldername, std::string filename)
     }
 
     // Write Header 
-    myfile << curves.size() << std::endl;;
+    myfile << desc_curves.size() << std::endl;;
     myfile << desc_collisions.size() << std::endl;;
   //  myfile << 0 << std::endl;;
     myfile << "0.001"  << std::endl;;
@@ -198,7 +265,7 @@ void Trace::logRibbonsToFile(std::string foldername, std::string filename)
     myfile << "1"  << std::endl  << std::endl  << std::endl;;
 
 
-    for (int curveId = 0; curveId < curves.size(); curveId++)
+    for (int curveId = 0; curveId < desc_curves.size(); curveId++)
     {
         std::vector<Eigen::Vector3d> &cnew = desc_curves[curveId];
         std::vector<Eigen::Vector3d> &nnew = desc_normals[curveId];
@@ -295,10 +362,10 @@ int getOpVIdFromEdge(const Weave &wv, int curr_edge, int faceId)
     return -1;
 }
 
-void Trace::computeIntersections(int curveIdx1, int curveIdx2, std::vector<Collision> &collisions)
+void Trace::computeIntersections(int curveIdx1, int curveIdx2, std::vector<Collision> &collisions, std::vector<Eigen::MatrixXd> &splitcurves)
 {
-    Eigen::MatrixXd c1 = curves[curveIdx1];
-    Eigen::MatrixXd c2 = curves[curveIdx2];
+    Eigen::MatrixXd c1 = splitcurves[curveIdx1];
+    Eigen::MatrixXd c2 = splitcurves[curveIdx2];
 
     for (int i = 0; i < c1.rows() - 1; i++)
     {
