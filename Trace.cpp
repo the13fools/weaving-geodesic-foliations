@@ -62,6 +62,8 @@ void Trace::loadSampledCurves(const std::string &filename)
 
     double npoints_d, dum1, dum2;
     double dum3, dum4, dum5;
+    
+    int counter = 0;
     while (normal_file >> dum3 >> dum4 >> dum5)
     {
         curve_file >> npoints_d >> dum1 >> dum2;
@@ -87,9 +89,10 @@ void Trace::loadSampledCurves(const std::string &filename)
         std::cout << normal.row(npoints - 1) << " " << npoints;
 
 
-
-        if (npoints > 20)
+     
+        if (npoints > 80 && npoints < 250 && counter < 50)
         {
+            counter++;
             curves.push_back(curve);
             normals.push_back(normal);
             bending.push_back(bend);
@@ -124,13 +127,82 @@ void Trace::logRibbonsToFile(std::string foldername, std::string filename, const
     }
 
 
+
+
+    // Project along a geodesic curve at the end point of each rod that ends at a singularity.  
+    
+    Eigen::VectorXd sqrD;
+    Eigen::VectorXi nearFace;
+    Eigen::MatrixXd C;
+    Eigen::MatrixXd point = Eigen::MatrixXd::Zero(1,3); 
+    igl::AABB<Eigen::MatrixXd,3> tree; 
+   
+    tree.init(wv.V,wv.F);
+
+ 
+ 
+    int stepstoextend = 40;
+    int backoff = 3; // The very ends of curves seem generally bad.  Taking a few steps to back off
+
+    for (int rev = 0; rev < 2; rev++) 
+    {
+        for (int i = 0; i < curves.size(); i++)
+        { 
+            int len = curves[i].rows();
+            int cols = curves[i].cols();
+            curves[i].conservativeResize(len + stepstoextend - backoff, cols);
+            normals[i].conservativeResize(len + stepstoextend - backoff, cols);
+
+            Eigen::Vector3d endpoint = curves[i].row(len-1 - backoff);
+            Eigen::Vector3d prevpoint = curves[i].row(len-2 - backoff);
+            Eigen::Vector3d curr_dir = endpoint - prevpoint;
+            // hack-y way of figuring out the edge of the end-point 
+            point.row(0) = prevpoint + curr_dir * .01;
+
+            curr_dir *= 1000.0; // Assumes mesh is roughly deluanay
+
+            tree.squared_distance(wv.V,wv.F,point,sqrD,nearFace,C);
+            int curr_face_id = nearFace(0);
+
+            TracePoint tp;
+            startTraceFromPoint(wv, curr_face_id, point.row(0), curr_dir, tp);
+    //        std::cout << point.row(0) - prevpoint << " should be same \n";
+            int curr_edge_id = tp.edge_id;
+            getNextTracePoint(wv, curr_face_id, tp.edge_id, prevpoint, tp.op_v_id, curr_dir, tp); 
+            std::cout << tp.point - endpoint << " endpoints should be same \n";
+
+            for (int j = 0; j < stepstoextend; j++)
+            {
+                curr_dir = mapVectorToAdjacentFace(wv.F, wv.V, wv.edgeVerts,
+                                                   tp.edge_id, curr_face_id, tp.face_id, curr_dir);
+                curr_face_id = tp.face_id;  
+                curves[i].row(len + j - backoff)  = tp.point;
+                normals[i].row(len + j - backoff) = tp.n;
+
+                getNextTracePoint(wv, curr_face_id, tp.edge_id, tp.point, tp.op_v_id, curr_dir, tp); 
+            }
+
+            Eigen::MatrixXd revcurve = curves[i];
+            Eigen::MatrixXd revnorm = normals[i];
+            int c_len = curves[i].rows();
+            for (int r = 0; r < c_len; r++)
+            {
+                revcurve.row(r) = curves[i].row(c_len - r - 1);
+                revnorm.row(r) = normals[i].row(c_len - r - 1);
+            }
+            curves[i] = revcurve;
+            normals[i] = revnorm;
+    
+        }   
+    }
+
     // Cut strips at areas of high curvature.
 
     std::vector<Eigen::MatrixXd> splitcurves;
     std::vector<Eigen::MatrixXd> splitnormals;
 
-    double maxcurvature = 30;
-    double minrodlen = 30;
+    double maxcurvature = 200;
+    double minrodlen = 70;
 
     for(int i=0; i<curves.size(); i++)
     {
@@ -191,59 +263,6 @@ void Trace::logRibbonsToFile(std::string foldername, std::string filename, const
     }
 
 
-    // Project along a geodesic curve at the end point of each rod that ends at a singularity.  
-    
-    // For an intial test, just add 5 true geodesic steps to the end of every rod and hope that this closes up things
-    // without being too noticable. 
-    Eigen::VectorXd sqrD;
-    Eigen::VectorXi nearFace;
-    Eigen::MatrixXd C;
-    Eigen::MatrixXd point = Eigen::MatrixXd::Zero(1,3); 
-    igl::AABB<Eigen::MatrixXd,3> tree; 
-   
-    tree.init(wv.V,wv.F);
-
- 
- 
-    int stepstoextend = 20;
-
-    for (int i = 0; i < splitcurves.size(); i++)
-    { 
-        int len = splitcurves[i].rows();
-        int cols = splitcurves[i].cols();
-        splitcurves[i].conservativeResize(len + stepstoextend, cols);
-        splitnormals[i].conservativeResize(len + stepstoextend, cols);
-
-        Eigen::Vector3d endpoint = splitcurves[i].row(len-1);
-        Eigen::Vector3d prevpoint = splitcurves[i].row(len-2);
-        Eigen::Vector3d curr_dir = endpoint - prevpoint;
-        // hack-y way of figuring out the edge of the end-point 
-        point.row(0) = prevpoint + curr_dir * .01;
-
-        curr_dir *= 1000.0; // Assumes mesh is roughly deluanay
-
-        tree.squared_distance(wv.V,wv.F,point,sqrD,nearFace,C);
-        int curr_face_id = nearFace(0);
-
-        TracePoint tp;
-        startTraceFromPoint(wv, curr_face_id, point.row(0), curr_dir, tp);
-//        std::cout << point.row(0) - prevpoint << " should be same \n";
-        int curr_edge_id = tp.edge_id;
-        getNextTracePoint(wv, curr_face_id, tp.edge_id, prevpoint, tp.op_v_id, curr_dir, tp); 
-        std::cout << tp.point - endpoint << " endpoints should be same \n";
-
-        for (int j = 0; j < stepstoextend; j++)
-        {
-            curr_dir = mapVectorToAdjacentFace(wv.F, wv.V, wv.edgeVerts,
-                                               tp.edge_id, curr_face_id, tp.face_id, curr_dir);
-            curr_face_id = tp.face_id;  
-            splitcurves[i].row(len + j)  = tp.point;
-            splitnormals[i].row(len + j) = tp.n;
-
-            getNextTracePoint(wv, curr_face_id, tp.edge_id, tp.point, tp.op_v_id, curr_dir, tp); 
-        }
-
-    }   
 
 
     // Split each segment into k peices
@@ -328,7 +347,7 @@ void Trace::logRibbonsToFile(std::string foldername, std::string filename, const
     myfile << desc_curves.size() << std::endl;;
     myfile << desc_collisions.size() << std::endl;;
   //  myfile << 0 << std::endl;;
-    myfile << "0.001"  << std::endl;;
+    myfile << "0.1"  << std::endl;;
     myfile << "1e+08"  << std::endl;;
     myfile << "1"  << std::endl  << std::endl  << std::endl;;
 
@@ -353,7 +372,7 @@ void Trace::logRibbonsToFile(std::string foldername, std::string filename, const
 
         for (int i = 0; i < cnew.size()-1; i++)
         {
-            myfile << " 0.005";
+            myfile << " 0.02";
         }
         myfile << "\n";
 
