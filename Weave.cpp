@@ -1,4 +1,5 @@
 #include "Weave.h"
+#include <math.h>
 #include <igl/read_triangle_mesh.h>
 #include <map>
 #include <Eigen/Dense>
@@ -573,6 +574,194 @@ void Weave::serialize(const std::string &filename)
 }
 
 
+vector<long> Weave::_BFS_adj_list(vector<vector<long> > adj_list, int startPoint)
+{
+    vector<long> traversed;
+    vector<long> stk;
+    traversed.push_back(startPoint);
+    for (int i = 0; i < adj_list[startPoint].size(); i ++)
+        stk.push_back(adj_list[startPoint][i]);
+    long cnt = 0;
+    while (stk.size() > 0)
+    {
+        long curPoint = stk.back();
+        stk.pop_back();
+        traversed.push_back(curPoint);
+        for (int j = 0; j < adj_list[curPoint].size(); j ++)
+        {
+            long to_add = adj_list[curPoint][j];
+            if (std::find(traversed.begin(), traversed.end(), to_add) != traversed.end())
+                continue;
+            if (std::find(stk.begin(), stk.end(), to_add) != stk.end())
+                continue;
+            stk.push_back(to_add);
+        }
+        cnt ++;
+        if (cnt > 100000){
+            cout << "+++++++++++++++++++++++++++++";
+            break;
+        }
+    }
+    return traversed;
+}
+
+ std::vector<Eigen::MatrixXd> Weave::_augmentPs()
+ {
+    int nCover = nFields() * 2;
+    int nfaces = nFaces();
+    int nverts = nVerts();
+    std::vector<Eigen::MatrixXd> perms;
+    Eigen::MatrixXd perm;
+    for (int e = 0; e < nEdges(); e++)
+    {
+        perm = Eigen::MatrixXd::Zero(nCover, nCover);
+        for (int j = 0; j < nFields(); j++) 
+        {
+            for (int k = 0; k < nFields(); k++)
+            {
+                if( Ps[e](j, k) == 1 )
+                {
+                    perm(j,k) = 1;
+                    perm(j+3, k+3) = 1;
+                }
+                if( Ps[e](j, k) == -1 )
+                {
+                    perm(j,k+3) = 1;
+                    perm(j+3, k) = 1;
+                }
+            }
+        }
+        perms.push_back(perm);
+    }
+    return perms;
+ }
+
+
+void Weave::augmentField()
+{
+    std::cout << "Current fields number: " << nFields() << endl;
+    int nCover = nFields() * 2;
+    int nfaces = nFaces();
+    int nverts = nVerts();
+    std::vector<Eigen::MatrixXd> perms;
+    Eigen::MatrixXd perm;
+    perms = _augmentPs();
+    Eigen::MatrixXd eye = Eigen::MatrixXd::Identity(nCover, nCover);
+
+    // Compute points to glue
+    vector<vector<long> > adj_list(nCover*nfaces*3);
+    for (int e = 0; e < nEdges(); e++)
+    {
+        perm = perms[e];
+        int f1Id = E(e, 0);
+        int f2Id = E(e, 1);
+        if(f1Id == -1 || f2Id == -1)
+            continue;
+        int v1ID = edgeVerts(e, 0);
+        int v2ID = edgeVerts(e, 1);
+        int v1f1 = -1, v2f1 = -1, v1f2 = -1, v2f2 = -1;
+        for (int i = 0; i < 3; i ++)
+        { // find the vid at face (0,1,or 2)
+            if (F(f1Id,i) == v1ID) v1f1 = i;
+            if (F(f1Id,i) == v2ID) v2f1 = i;
+            if (F(f2Id,i) == v1ID) v1f2 = i;
+            if (F(f2Id,i) == v2ID) v2f2 = i;
+        }
+        assert((v1f1 != -1) && (v2f1 != -1) && (v1f2 != -1) && (v2f2 != -1));
+        if ((perm - eye).norm() == 0)
+        { // perm == I case
+            for (int l = 0; l < nCover; l ++)
+            {
+                long v1f1_idx = v1f1 + f1Id*3 + l*3*nfaces;
+                long v2f1_idx = v2f1 + f1Id*3 + l*3*nfaces;
+                long v1f2_idx = v1f2 + f2Id*3 + l*3*nfaces;
+                long v2f2_idx = v2f2 + f2Id*3 + l*3*nfaces;
+                adj_list[v1f1_idx].push_back(v1f2_idx);
+                adj_list[v1f2_idx].push_back(v1f1_idx);
+                adj_list[v2f1_idx].push_back(v2f2_idx);
+                adj_list[v2f2_idx].push_back(v2f1_idx);
+            }
+        }
+        else
+        { // perm != I case
+            for (int l1 = 0; l1 < nCover; l1 ++)
+            {
+                int l2 = -1;
+                for (int j = 0; j < nCover; j ++)
+                {
+                    if (perm(l1, j) == 1)
+                    {
+                        l2 = j;
+                        break;
+                    }
+                }
+                long v1f1_idx = v1f1 + f1Id*3 + l1*3*nfaces;
+                long v2f1_idx = v2f1 + f1Id*3 + l1*3*nfaces;
+                long v1f2_idx = v1f2 + f2Id*3 + l2*3*nfaces;
+                long v2f2_idx = v2f2 + f2Id*3 + l2*3*nfaces;
+                adj_list[v1f1_idx].push_back(v1f2_idx);
+                adj_list[v1f2_idx].push_back(v1f1_idx);
+                adj_list[v2f1_idx].push_back(v2f2_idx);
+                adj_list[v2f2_idx].push_back(v2f1_idx);
+            }
+        }
+    }
+    // Do some glueing
+    vector<vector<long> > gluePointList;
+    vector<bool> toSearchFlag(nCover*nfaces*3,1);
+    for (int i = 0; i < nCover*nfaces*3; i ++)
+    {
+        if (i % 5000 == 0)
+            cout << toSearchFlag[i] << " " << i << "/" << nCover*nfaces*3 << endl;
+        if (toSearchFlag[i] == 0)
+            continue;
+        vector<long> gluePoint = _BFS_adj_list(adj_list, i);
+        gluePointList.push_back(gluePoint);
+        for (int j = 0; j < gluePoint.size(); j ++)
+            toSearchFlag[gluePoint[j]] = 0;
+    }
+    int nNewPoints = gluePointList.size();
+    Eigen::MatrixXd VAug = Eigen::MatrixXd::Zero(nNewPoints, 3);; // |gluePointList| x 3
+    vector<long> oldId2NewId(nCover*nverts);
+    vector<long> encodeDOldId2NewId(nCover*3*nfaces);
+    for (int i = 0; i < nNewPoints; i ++)
+    { // Assign a new Vertex for each group of glue vetices
+        long encodedVid = gluePointList[i][0];
+        int layerId = floor(encodedVid / (nfaces*3));
+        int atFace = floor((encodedVid - layerId*nfaces*3) / 3);
+        int atVid = encodedVid - layerId*nfaces*3 - 3*atFace;
+        int vid = F(atFace, atVid);
+        for (int j = 0; j < 3; j ++)
+            VAug(i,j) = V(vid,j) + layerId;
+        for (int j = 0; j < gluePointList[i].size(); j ++)
+        { // Maintain a vid mapping
+            encodedVid = gluePointList[i][j];
+            layerId = floor(encodedVid / (nfaces*3));
+            atFace = floor((encodedVid - layerId*nfaces*3) / 3);
+            atVid = encodedVid - layerId*nfaces*3 - 3*atFace;
+            vid = F(atFace, atVid);
+            oldId2NewId[vid + layerId*nverts] = i;
+            encodeDOldId2NewId[gluePointList[i][j]] = i;
+        }
+    }
+    Eigen::MatrixXi FAug = Eigen::MatrixXi::Zero(nCover*nfaces, 3);; // |gluePointList| x 3
+    for (int cId = 0; cId < nCover; cId ++)
+    {
+        for (int fId = 0; fId < nfaces; fId ++)
+        {
+            int id0 = (fId + cId*nfaces) * 3;
+            int id1 = (fId + cId*nfaces) * 3 + 1;
+            int id2 = (fId + cId*nfaces) * 3 + 2;
+            FAug(fId+cId*nfaces,0) = encodeDOldId2NewId[id0];
+            FAug(fId+cId*nfaces,1) = encodeDOldId2NewId[id1];
+            FAug(fId+cId*nfaces,2) = encodeDOldId2NewId[id2];
+        }
+    }
+    igl::writeOBJ("debug.obj", VAug, FAug);
+    cout << "finish augmenting the mesh" << endl;
+}
+
+
 /*
  * Writes vector field to file. Format is:
  *
@@ -593,15 +782,15 @@ void Weave::serialize_forexport(const std::string &filename)
   //  ofs << Bs.size() << std::endl;
     for (int i = 0; i < nFaces(); i++)
     {
-	for (int j = 0; j < nFields(); j++)
-	{
+        for (int j = 0; j < nFields(); j++)
+        {
             ofs << (Bs[i] * v(i, j)).transpose() << " "; 
-	}
+        }
     
-	for (int j = 0; j < nFields(); j++)
-	{
+        for (int j = 0; j < nFields(); j++)
+        {
             ofs << -(Bs[i] * v(i, j)).transpose() << " "; 
-	}
+        }
 
         ofs << std::endl;
     }
@@ -617,10 +806,10 @@ void Weave::serialize_forexport(const std::string &filename)
 
     for (int i = 0; i < nedges; i++)
     {
-	ofs_edge << E(i, 0) + 1 << " " 
-	         << E(i, 1) + 1 << " " 
-		 << edgeVerts(i, 0) + 1  << " "
-		 << edgeVerts(i, 1) + 1 <<  std::endl;
+        ofs_edge << E(i, 0) + 1 << " " 
+                 << E(i, 1) + 1 << " " 
+                 << edgeVerts(i, 0) + 1  << " "
+                 << edgeVerts(i, 1) + 1 <<  std::endl;
     }
     ofs_edge.close();
     sprintf(buffer, "%s.permmats", filename.c_str());
@@ -629,22 +818,22 @@ void Weave::serialize_forexport(const std::string &filename)
     for (int i = 0; i < nedges; i++)
     {
         Eigen::MatrixXd perm = Eigen::MatrixXd::Zero(nfields * 2, nfields*2);
-	    for (int j = 0; j < nfields; j++) 
-	    {
-	        for (int k = 0; k < nfields; k++)
-	        {
+        for (int j = 0; j < nfields; j++) 
+        {
+            for (int k = 0; k < nfields; k++)
+            {
                 if( Ps[i](j, k) == 1 )
-		        {
+                {
                     perm(j,k) = 1;
-		            perm(j+3, k+3) = 1;
-		        }
+                    perm(j+3, k+3) = 1;
+                }
 
                 if( Ps[i](j, k) == -1 )
-		        {
+                {
                     perm(j,k+3) = 1;
                     perm(j+3, k) = 1;
-		        }
-	        }
+                }
+            }
         }
  
 

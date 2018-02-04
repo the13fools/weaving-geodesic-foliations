@@ -257,6 +257,11 @@ void WeaveHook::exportVectorField()
     weave->serialize_forexport(vectorFieldName);
 }
 
+void WeaveHook::augmentField()
+{
+    weave->augmentField();
+}
+
 void WeaveHook::deserializeVectorField()
 {
     weave->deserialize(vectorFieldName);

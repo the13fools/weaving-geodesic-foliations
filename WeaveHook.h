@@ -72,6 +72,7 @@ public:
         viewer.ngui->addButton("Save Field", std::bind(&WeaveHook::serializeVectorField, this));
         viewer.ngui->addButton("Load Field", std::bind(&WeaveHook::deserializeVectorField, this));
         viewer.ngui->addButton("Export Field", std::bind(&WeaveHook::exportVectorField, this));
+        viewer.ngui->addButton("Augment Field", std::bind(&WeaveHook::augmentField, this));
 
         viewer.ngui->addGroup("Add Cut");
         viewer.ngui->addButton("Reset Cut Select", std::bind(&WeaveHook::resetCutSelection, this));
@@ -154,6 +155,7 @@ public:
     void serializeVectorField();
     void deserializeVectorField();
     void exportVectorField();
+    void augmentField();
     void resetCutSelection();
     void addCut();
     void removeSingularities();
