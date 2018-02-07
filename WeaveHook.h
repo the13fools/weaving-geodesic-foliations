@@ -14,7 +14,8 @@ enum Shading_Enum {
     F1_ENERGY,
     F2_ENERGY,
     F3_ENERGY,
-    TOT_ENERGY
+    TOT_ENERGY,
+    FUN_VAL
 };
 
 class WeaveHook : public PhysicsHook
@@ -22,7 +23,8 @@ class WeaveHook : public PhysicsHook
 public:
     WeaveHook() : PhysicsHook(), weave(NULL), vectorScale(1.0), normalizeVectors(true)
     {
-        meshName = "meshes/bunny_coarser.obj";
+        // meshName = "meshes/bunny_coarser.obj";
+        meshName = "meshes/tet.obj";
         vectorFieldName = "bunny_coarser_nosing";
         traceFile = "example.tr";
         params.lambdacompat = 100;
@@ -59,20 +61,21 @@ public:
         viewer.ngui->addVariable("Normalize Vectors", normalizeVectors);
         viewer.ngui->addVariable("Hide Vectors", hideVectors);
         viewer.ngui->addVariable("Shading", shading_state, true)
-            ->setItems({ "None", "F1 Energy", "F2 Energy", "F3 Energy", "Total Energy" });
+            ->setItems({ "None", "F1 Energy", "F2 Energy", "F3 Energy", "Total Energy", "FUN_VAL" });
 
         viewer.ngui->addGroup("Solver Parameters");
         viewer.ngui->addVariable("Compatilibity Lambda", params.lambdacompat);
         viewer.ngui->addVariable("Tikhonov Reg", params.lambdareg);
         viewer.ngui->addButton("Reassign Permutations", std::bind(&WeaveHook::reassignPermutations, this));
         viewer.ngui->addButton("Remove Singularities", std::bind(&WeaveHook::removeSingularities, this));
+        viewer.ngui->addButton("Augment Field", std::bind(&WeaveHook::augmentField, this));
+        viewer.ngui->addButton("Compute Function Value", std::bind(&WeaveHook::computeFunc, this));
 
         viewer.ngui->addGroup("Save/Load Field");
         viewer.ngui->addVariable("Filename", vectorFieldName);
         viewer.ngui->addButton("Save Field", std::bind(&WeaveHook::serializeVectorField, this));
         viewer.ngui->addButton("Load Field", std::bind(&WeaveHook::deserializeVectorField, this));
         viewer.ngui->addButton("Export Field", std::bind(&WeaveHook::exportVectorField, this));
-        viewer.ngui->addButton("Augment Field", std::bind(&WeaveHook::augmentField, this));
 
         viewer.ngui->addGroup("Add Cut");
         viewer.ngui->addButton("Reset Cut Select", std::bind(&WeaveHook::resetCutSelection, this));
@@ -156,6 +159,7 @@ public:
     void deserializeVectorField();
     void exportVectorField();
     void augmentField();
+    void computeFunc();
     void resetCutSelection();
     void addCut();
     void removeSingularities();

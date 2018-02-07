@@ -3,12 +3,18 @@
 #include <igl/read_triangle_mesh.h>
 #include <map>
 #include <Eigen/Dense>
+#include <Eigen/Sparse>
+#include <Eigen/Core>
+#include <Eigen/Eigenvalues> 
 #include "Colors.h"
 #include <deque>
 #include <algorithm>
 #include <set>
 #include <igl/remove_unreferenced.h>
 #include <igl/writeOBJ.h>
+
+typedef Eigen::Triplet<double> triplet;
+# define M_PI           3.14159265358979323846
 
 Weave::Weave(const std::string &objname, int m)
 {
@@ -721,7 +727,7 @@ void Weave::augmentField()
             toSearchFlag[gluePoint[j]] = 0;
     }
     int nNewPoints = gluePointList.size();
-    Eigen::MatrixXd VAug = Eigen::MatrixXd::Zero(nNewPoints, 3);; // |gluePointList| x 3
+    Eigen::MatrixXd VAug = Eigen::MatrixXd::Zero(nNewPoints, 3); // |gluePointList| x 3
     vector<long> oldId2NewId(nCover*nverts);
     vector<long> encodeDOldId2NewId(nCover*3*nfaces);
     for (int i = 0; i < nNewPoints; i ++)
@@ -761,6 +767,231 @@ void Weave::augmentField()
     cout << "finish augmenting the mesh" << endl;
 }
 
+void Weave::computeFunc()
+{
+    int nfaces = nFaces();
+    int nverts = nVerts();
+    vector<int> rowsL;
+    vector<int> colsL;
+    vector<double> difVecUnscaled;
+    for (int fId = 0; fId < nfaces; fId ++)
+    { // Compute rowsL, colsL, difVecUnscaled
+        int vId0 = F(fId, 0);
+        int vId1 = F(fId, 1);
+        int vId2 = F(fId, 2);
+        rowsL.push_back(vId0); rowsL.push_back(vId1); rowsL.push_back(vId2);
+        colsL.push_back(vId1); colsL.push_back(vId2); colsL.push_back(vId0);
+        Eigen::Vector3d p0 = V.row(vId0);
+        Eigen::Vector3d p1 = V.row(vId1);
+        Eigen::Vector3d p2 = V.row(vId2);
+        Eigen::Vector3d e01 = p0 - p1;
+        Eigen::Vector3d e12 = p1 - p2;
+        Eigen::Vector3d e20 = p2 - p0;
+        // For debug only! Take only the first field
+        Eigen::Vector3d faceVec = Bs[fId] * v(fId, 0); // The original vec
+        faceVec = faceVec.cross(faceNormal(fId));
+        faceVec /= faceVec.norm();
+        difVecUnscaled.push_back(e01.dot(faceVec));
+        difVecUnscaled.push_back(e12.dot(faceVec));
+        difVecUnscaled.push_back(e20.dot(faceVec));
+    }
+    assert((rowsL.size()==3*nfaces) && (colsL.size()==3*nfaces) && (difVecUnscaled.size()==3*nfaces));
+
+    // for (int fId = 0; fId < nfaces; fId ++)
+        // cout << "faceid: " << fId << " " << 
+            // difVecUnscaled[3*fId] << " " << difVecUnscaled[3*fId+1] << " " << difVecUnscaled[3*fId+2] << endl;
+
+    
+    Eigen::SparseMatrix<double> faceLapMat = faceLaplacian();
+    Eigen::VectorXd scales(nfaces);
+    scales.setConstant(15);
+    int totalIter = 100;
+    for (int iter = 0; iter < totalIter; iter ++)
+    {
+        vector<double> difVec;
+        for (int i = 0; i < difVecUnscaled.size(); i ++)
+            difVec.push_back(difVecUnscaled[i]*scales(i/3));
+        // for (int fId = 0; fId < nfaces; fId ++)
+        //     cout << "faceid: " << fId << " " << 
+        //         difVec[3*fId] << " " << difVec[3*fId+1] << " " << difVec[3*fId+2] << endl;
+        // for (int i = 0; i < nfaces; i ++)
+            // cout << "faceid: " << i << " " << scales[i] << endl;
+        // connection_adjacency
+        //// Compute the vertex degree - TODO - opt
+        //// TODO: delete the triplet vectors
+        std::vector<triplet> sparseContent;
+        for (int i = 0; i < rowsL.size(); i ++)
+            sparseContent.push_back(triplet(rowsL[i],colsL[i],1));
+        Eigen::SparseMatrix<double> TP (nverts, nverts);
+        Eigen::SparseMatrix<double> TPTran (nverts, nverts);
+        TP.setFromTriplets(sparseContent.begin(),sparseContent.end());
+        TPTran = TP.transpose();
+        TP += TPTran;
+        vector<int> degree;
+        for (int i = 0; i < nverts; i ++)
+            degree.push_back(TP.row(i).sum());
+        // for (int i = 0; i < nverts; i ++)
+            // cout << "vid: " << i << " " << degree[i] << endl;
+        //// Compute the laplacian
+        std::vector<triplet> AContent;
+        for (int i = 0; i < rowsL.size(); i ++)
+        {
+            double cVal = cos(difVec[i]);
+            double sVal = sin(difVec[i]);
+            AContent.push_back(triplet(2*rowsL[i], 2*colsL[i], cVal));
+            AContent.push_back(triplet(2*rowsL[i], 2*colsL[i]+1, -sVal));
+            AContent.push_back(triplet(2*rowsL[i]+1, 2*colsL[i], sVal));
+            AContent.push_back(triplet(2*rowsL[i]+1, 2*colsL[i]+1, cVal));
+        }
+        Eigen::SparseMatrix<double> Amat (2*nverts, 2*nverts);
+        Eigen::SparseMatrix<double> Amat_tran (2*nverts, 2*nverts);
+        Amat.setFromTriplets(AContent.begin(),AContent.end());
+        Amat_tran = Amat.transpose();
+        Amat += Amat_tran;
+        //
+        std::vector<triplet> LContent;
+        for (int i = 0; i < 2*nverts; i ++)
+            LContent.push_back(triplet(i,i,degree[int(i/2)]));
+        Eigen::SparseMatrix<double> Lmat (2*nverts, 2*nverts);
+        Lmat.setFromTriplets(LContent.begin(), LContent.end());
+        Lmat -= Amat;
+        // Eigen Decompose
+        Eigen::SimplicialLDLT<Eigen::SparseMatrix<double> > solverL(Lmat);
+        Eigen::VectorXd ones(Lmat.rows());
+        ones.setConstant(1.0);
+        ones /= ones.norm();
+        Eigen::VectorXd eigenVec;
+        eigenVec.setRandom();
+        eigenVec += ones;
+        eigenVec /= eigenVec.norm();
+        for(int i=0; i<100; i++)
+        {
+            eigenVec = solverL.solve(eigenVec);
+            Eigen::VectorXd proj = eigenVec.dot(ones) * ones;
+            eigenVec -= proj;
+            eigenVec /= eigenVec.norm();
+        }
+        // for (int i = 0; i < eigenVec.size(); i ++)
+        //     cout << i << " " << eigenVec[i] << endl;
+        double eigenVal = eigenVec.transpose() * Lmat * eigenVec;
+        cout << "Current iteration = " << iter  << " currents error is: " << eigenVal << endl;
+
+        // Extract the function value
+        vector<double> curTheta;
+        for (int i = 0; i < nverts; i ++)
+        {
+            double curCos = eigenVec(2*i);
+            double curSin = eigenVec(2*i+1);
+            double normalizer = sqrt(curCos * curCos + curSin * curSin);
+            double curFunc = acos(curCos / normalizer);
+            if (curSin < 0)
+                curFunc = -curFunc;
+            curTheta.push_back(curFunc);
+        }
+        ////
+        //// Re-compute face scales
+        vector<double> difVecPred;
+        for (int i = 0; i < rowsL.size(); i ++)
+        {
+            double curPred = curTheta[rowsL[i]] - curTheta[colsL[i]];
+            if (curPred > M_PI) curPred -= 2*M_PI;
+            if (curPred < -M_PI) curPred += 2*M_PI;
+            difVecPred.push_back(curPred);
+        }
+        vector<double> bScales;
+        vector<double> diagAScales;
+        for (int i = 0; i < rowsL.size(); i=i+3)
+        {
+            double bVal = 0;
+            double diagAVal = 0;
+            for (int j = 0; j < 3; j ++)
+            {
+                bVal += difVecPred[i+j] * difVecUnscaled[i+j];
+                diagAVal += difVecUnscaled[i+j] * difVecUnscaled[i+j];
+
+            }
+            bScales.push_back(bVal);
+            diagAScales.push_back(diagAVal);
+        }
+        // for (int i = 0; i < diagAScales.size(); i ++)
+            // cout << "faceid: " << i << " " << diagAScales[i] << endl;
+        // Construct A
+        // TODO mu and lambda
+        std::vector<triplet> AScalesContent;
+        for (int i = 0; i < nfaces; i ++)
+            AScalesContent.push_back(triplet(i, i, diagAScales[i]));
+        Eigen::SparseMatrix<double> AScalesMat (nfaces, nfaces);
+        AScalesMat.setFromTriplets(AScalesContent.begin(),AScalesContent.end());
+        // Solve for scale
+        Eigen::SimplicialLDLT<Eigen::SparseMatrix<double> > solverScales(AScalesMat);
+        scales = solverScales.solve(
+        // solverScales.solve(
+            Eigen::Map<Eigen::VectorXd, Eigen::Unaligned>(bScales.data(), bScales.size()));
+
+        // for (int k=0; k<AScalesMat.outerSize(); ++k)
+        //   for (Eigen::SparseMatrix<double>::InnerIterator it(AScalesMat,k); it; ++it)
+        //   {
+        //     cout << it.row() << " ";
+        //     cout << it.col() << " ";
+        //     cout << it.value() << " ";
+        //     cout << it.index() << " ";
+        //     cout << endl;
+        //   }
+        theta = curTheta;
+    }
+    for (int i = 0; i < nverts; i ++)
+    {
+        cout << theta[i] << endl;;
+    }
+}
+
+Eigen::SparseMatrix<double> Weave::faceLaplacian()
+{ // Only augment vector
+    int nfaces = nFaces();
+    // TODO: boundary
+    // ids = find(min(adjFaces) > 0);
+    // adjFaces = adjFaces(:, ids);
+    std::vector<triplet> AContent;
+    for (int i = 0; i < E.rows(); i ++)
+        AContent.push_back(triplet(E(i,0), E(i,1), 1));
+    Eigen::SparseMatrix<double> AFaceMat (nfaces, nfaces);
+    AFaceMat.setFromTriplets(AContent.begin(),AContent.end());
+    // Ge the degree of face
+    vector<int> degreeFace;
+    for (int i = 0; i < nfaces; i ++)
+        degreeFace.push_back(AFaceMat.row(i).sum());
+    // Get LFace
+    std::vector<triplet> LContent;
+    for (int i = 0; i < degreeFace.size(); i ++)
+        LContent.push_back(triplet(i, i, degreeFace[i]));
+    Eigen::SparseMatrix<double> LFaceMat (nfaces, nfaces);
+    LFaceMat.setFromTriplets(LContent.begin(), LContent.end());
+    LFaceMat -= AFaceMat;
+    // Eigen::SparseMatrix<double> LFaceMat;
+    return LFaceMat;
+}
+
+vector<double> Weave::simpleKron(Eigen::Vector3d vec, int augRow)
+{ // Only augment vector
+    vector<double> result;
+    for(int i = 0; i < vec.size(); i ++)
+    {
+        for(int j = 0; j < augRow; j ++)
+            result.push_back(vec(i));
+    }
+    return result;
+}
+
+vector<double> Weave::simpleKron(vector<double> vec, int augRow)
+{ // Only augment vector
+    vector<double> result;
+    for(int i = 0; i < vec.size(); i ++)
+    {
+        for(int j = 0; j < augRow; j ++)
+            result.push_back(vec[i]);
+    }
+    return result;
+}
 
 /*
  * Writes vector field to file. Format is:

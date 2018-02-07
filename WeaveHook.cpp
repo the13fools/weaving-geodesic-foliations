@@ -14,28 +14,43 @@ void WeaveHook::setFaceColors(igl::viewer::Viewer &viewer)
     igl::ColorMapType viz_color = igl::COLOR_MAP_TYPE_MAGMA;
     
     Eigen::VectorXd Z(faces);
+    Eigen::VectorXd FVAL(weave->nVerts());
     
     for (int i = 0; i < faces; i++) 
     {
-	switch(shading_state)
-	{
-	    case NONE:
-		Z(i) = .7;
-		break;
-	    case F1_ENERGY:
-		Z(i) = log(curFaceEnergies(i,0));
-	        break;	
-	    case F2_ENERGY:
-		Z(i) = log(curFaceEnergies(i,1));
-	        break;	
-	    case F3_ENERGY:
-		Z(i) = log(curFaceEnergies(i,2));
-	        break;	
-	    case TOT_ENERGY:
-		Z(i) = log(curFaceEnergies.row(i).norm());
-	        break;	
-	}	
+        switch(shading_state)
+        {
+            case NONE:
+                Z(i) = .7;
+                break;
+            case F1_ENERGY:
+                Z(i) = log(curFaceEnergies(i,0));
+                break;  
+            case F2_ENERGY:
+                Z(i) = log(curFaceEnergies(i,1));
+                break;  
+            case F3_ENERGY:
+                Z(i) = log(curFaceEnergies(i,2));
+                break;  
+            case TOT_ENERGY:
+                Z(i) = log(curFaceEnergies.row(i).norm());
+                break;  
+        }       
     }
+    if (shading_state == FUN_VAL)
+    {
+        for (int i = 0; i < weave->nVerts(); i ++)
+        {
+            FVAL(i) = weave->theta[i];
+            viewer.data.set_face_based(false);
+        }
+    }
+    else
+    {
+        viewer.data.set_face_based(true);
+    }
+
+
     switch (shading_state) 
     {
         case NONE: 
@@ -43,9 +58,14 @@ void WeaveHook::setFaceColors(igl::viewer::Viewer &viewer)
             for (int i = 0; i < (int)selectedVertices.size(); i++)
                 faceColors.row(selectedVertices[i].first) << 1, 0, 0;
             showCutVertexSelection(viewer);     
-	    break;
-	default:
-	    igl::colormap(viz_color,Z, true, faceColors);
+            break;
+        case FUN_VAL:
+            faceColors.resize(weave->nVerts(), 3);
+            igl::colormap(viz_color,FVAL, true, faceColors);
+            break;
+        default:
+            faceColors.resize(weave->nFaces(), 3);
+            igl::colormap(viz_color,Z, true, faceColors);
             break;
     }
     
@@ -87,11 +107,11 @@ void WeaveHook::drawTraceCenterlines(igl::viewer::Viewer &viewer)
     }
     if (isDrawTrace)
     {
-	for (int i = 0; i < 3; i++)
-	{
+        for (int i = 0; i < 3; i++)
+        {
             trace->traceCurve(*weave, trace_state, i, 1, traceFaceId, traceSteps);
             trace->traceCurve(*weave, trace_state, i, -1, traceFaceId, traceSteps);
-	}
+        }
 
      //   trace->traceCurve(*weave, trace_state, traceIdx, traceSign, traceFaceId, traceSteps);
         isDrawTrace = false;
@@ -99,7 +119,7 @@ void WeaveHook::drawTraceCenterlines(igl::viewer::Viewer &viewer)
     if (isSaveTrace)
     {
         trace->logRibbonsToFile( "rods", "example", *weave );
-        isSaveTrace = false;	
+        isSaveTrace = false;    
     }
 
     Eigen::RowVector3d red(0.9, .1, .1), green(.1, .9, .1);
@@ -109,22 +129,22 @@ void WeaveHook::drawTraceCenterlines(igl::viewer::Viewer &viewer)
         Eigen::MatrixXd s1 = trace->curves[i].block(0, 0, rows - 1, 3);
         Eigen::MatrixXd s2 = trace->curves[i].block(1, 0, rows - 1, 3);
          
-	switch (trace->modes[i])
-	{
-	    case GEODESIC:
+        switch (trace->modes[i])
+        {
+            case GEODESIC:
                 viewer.data.add_edges(s1, s2, red);
-		break;
-	    case FIELD:
-		viewer.data.add_edges(s1, s2, green);
+                break;
+            case FIELD:
+                viewer.data.add_edges(s1, s2, green);
                 if( showBending )
-		{
+                {
                     Eigen::MatrixXd bend_colors = Eigen::MatrixXd::Zero(s2.rows(),3);
-	       	    igl::ColorMapType viz_color = igl::COLOR_MAP_TYPE_JET;
-		    igl::colormap(viz_color,trace->bending[i].tail(s2.rows()), true, bend_colors);
-		    viewer.data.add_points( s2, bend_colors );
-		}
-		break;
-	}
+                    igl::ColorMapType viz_color = igl::COLOR_MAP_TYPE_JET;
+                    igl::colormap(viz_color,trace->bending[i].tail(s2.rows()), true, bend_colors);
+                    viewer.data.add_points( s2, bend_colors );
+                }
+                break;
+        }
     }
 }
 
@@ -135,20 +155,20 @@ void WeaveHook::updateSingularVerts(igl::viewer::Viewer &viewer)
     for (int i = 0; i < weave->Ps.size(); i++)
     {
         bool id = true;
-	for (int j = 0; j < 3; j++)
-	{
+        for (int j = 0; j < 3; j++)
+        {
             if (weave->Ps[i](j,j) != 1)
-	    {
+            {
                 id = false;
-	    }
-	}
-	if (!id)
-	{
+            }
+        }
+        if (!id)
+        {
             nonIdentityEdges.row(i) = ( weave->V.row(weave->edgeVerts(i, 0)) + 
-		                        weave->V.row(weave->edgeVerts(i, 1)) ) * .5;
-	    
-	}
-    }	*/
+                                        weave->V.row(weave->edgeVerts(i, 1)) ) * .5;
+            
+        }
+    }   */
 
     Eigen::RowVector3d green(.1, .9, .1);
     Eigen::RowVector3d blue(.1, .1, .9);
@@ -260,6 +280,11 @@ void WeaveHook::exportVectorField()
 void WeaveHook::augmentField()
 {
     weave->augmentField();
+}
+
+void WeaveHook::computeFunc()
+{
+    weave->computeFunc();
 }
 
 void WeaveHook::deserializeVectorField()

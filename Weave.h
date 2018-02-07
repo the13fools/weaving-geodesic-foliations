@@ -2,6 +2,7 @@
 #define WEAVE_H
 
 #include <Eigen/Core>
+#include <Eigen/Sparse>
 #include <vector>
 
 // handles on the mesh
@@ -97,6 +98,11 @@ public:
     std::vector<long> _BFS_adj_list(std::vector<std::vector<long> > adj_list, int i);
     std::vector<Eigen::MatrixXd> _augmentPs();
     void augmentField();
+    void computeFunc();
+    std::vector<double> theta;
+    std::vector<double> simpleKron(Eigen::Vector3d vec, int augRow);
+    std::vector<double> simpleKron(std::vector<double> vec, int augRow);
+    Eigen::SparseMatrix<double> faceLaplacian();
 
 private:
     // scale mesh to unit size
