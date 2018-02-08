@@ -8,6 +8,7 @@
 #include <Eigen/Eigenvalues> 
 #include "Colors.h"
 #include <deque>
+#include <queue>
 #include <algorithm>
 #include <set>
 #include <igl/remove_unreferenced.h>
@@ -583,28 +584,33 @@ void Weave::serialize(const std::string &filename)
 vector<long> Weave::_BFS_adj_list(vector<vector<long> > adj_list, int startPoint)
 {
     vector<long> traversed;
-    vector<long> stk;
+    queue<long> que;
     traversed.push_back(startPoint);
-    for (int i = 0; i < adj_list[startPoint].size(); i ++)
-        stk.push_back(adj_list[startPoint][i]);
+    que.push(startPoint);
     long cnt = 0;
-    while (stk.size() > 0)
+    while (que.size() > 0)
     {
-        long curPoint = stk.back();
-        stk.pop_back();
-        traversed.push_back(curPoint);
+        long curPoint = que.front();
+        que.pop();
         for (int j = 0; j < adj_list[curPoint].size(); j ++)
         {
             long to_add = adj_list[curPoint][j];
-            if (std::find(traversed.begin(), traversed.end(), to_add) != traversed.end())
+            bool visited = false;
+            for (int i = 0; i < traversed.size(); i ++)
+            {
+                if (traversed[i] == to_add){
+                    visited = true;
+                    break;
+                }
+            }
+            if (visited)
                 continue;
-            if (std::find(stk.begin(), stk.end(), to_add) != stk.end())
-                continue;
-            stk.push_back(to_add);
+            traversed.push_back(to_add);
+            que.push(to_add);
         }
         cnt ++;
         if (cnt > 100000){
-            cout << "+++++++++++++++++++++++++++++";
+            cout << "++++++++++++++++++++++++++++";
             break;
         }
     }
