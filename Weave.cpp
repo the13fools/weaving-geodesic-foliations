@@ -581,6 +581,280 @@ void Weave::serialize(const std::string &filename)
 }
 
 
+double Weave::barycentric(double val1, double val2, double target)
+{
+    return (target-val1) / (val2-val1);
+}
+
+bool Weave::crosses(double isoval, double val1, double val2, double minval, double maxval, double &bary)
+{
+    double halfperiod = 0.5*(maxval-minval);
+    if(fabs(val2-val1) <= halfperiod)
+    {
+        bary = barycentric(val1, val2, isoval);
+        if(bary >= 0 && bary < 1)
+            return true;
+        return false;
+    }
+    if(val1 < val2)
+    {
+        double wrapval1 = val1 + (maxval - minval);
+        bary = barycentric(wrapval1, val2, isoval);
+        if(bary >= 0 && bary < 1)
+            return true;
+        double wrapval2 = val2 + (minval - maxval);
+        bary = barycentric(val1, wrapval2, isoval);
+        if(bary >= 0 && bary < 1)
+            return true;
+    }
+    else
+    {
+        double wrapval1 = val1 + (minval - maxval);
+        bary = barycentric(wrapval1, val2, isoval);
+        if(bary >= 0 && bary < 1)
+            return true;
+        double wrapval2 = val2 + (maxval - minval);
+        bary = barycentric(val1, wrapval2, isoval);
+        if(bary >= 0 && bary < 1)
+            return true;
+    }
+    return false;
+} 
+
+
+
+int Weave::extractIsoline(const Eigen::MatrixXd &V, const Eigen::MatrixXi &F, const Eigen::MatrixXi &faceNeighbors, const Eigen::VectorXd &func, double isoval, double minval, double maxval)
+{
+    isoLines.clear();
+    isoNormal.clear();
+    int nfaces = F.rows();
+    bool *visited = new bool[nfaces];
+    for(int i=0; i<nfaces; i++)
+        visited[i] = false;
+
+    int ntraces = 0;
+
+    for(int i=0; i<nfaces; i++)
+    {
+        if(visited[i])
+            continue;
+        visited[i] = true;
+        std::vector<std::vector<Eigen::Vector3d> > traces;
+        std::vector<std::vector<std::pair<int, int> > > traces_vids;
+        for(int j=0; j<3; j++)
+        {
+            int vp1 = F(i, (j+1)%3);
+            int vp2 = F(i, (j+2)%3);
+            double bary;
+            if(crosses(isoval, func[vp1], func[vp2], minval, maxval, bary))
+            {
+                std::vector<Eigen::Vector3d> trace;
+                std::vector<std::pair<int, int> > trace_vid;
+                trace.push_back( (1.0 - bary) * V.row(vp1) + bary * V.row(vp2) );
+                trace_vid.push_back(std::make_pair(vp1, vp2));
+                int prevface = i;
+                int curface = faceNeighbors(i, j);
+                while(curface != -1 && !visited[curface])
+                {
+                    visited[curface] = true;
+                    bool found = false;
+                    for(int k=0; k<3; k++)
+                    {
+                        if(faceNeighbors(curface, k) == prevface)
+                            continue;
+                    int vp1 = F(curface, (k+1)%3);
+                    int vp2 = F(curface, (k+2)%3);
+                        double bary;
+                        if(crosses(isoval, func[vp1], func[vp2], minval, maxval, bary))
+                        {
+                            trace.push_back( (1.0 - bary) * V.row(vp1) + bary * V.row(vp2) );
+                            trace_vid.push_back(std::make_pair(vp1, vp2));
+                            prevface = curface;
+                            curface = faceNeighbors(curface, k);
+                            found = true;
+                            break;
+                        }                       
+                    }
+                }
+                traces.push_back(trace);
+                traces_vids.push_back(trace_vid);
+            }
+        }
+        assert(traces.size() == traces_vids.size());
+        assert(traces.size() < 3);
+        if(traces.size() == 1)
+        {
+            ntraces++;
+            vector<Eigen::Vector3d> curISONormal;
+            vector<Eigen::Vector3d> curISOLine;
+            std::cout << traces[0].size() << " 0 0 " << traces[0].size() << " 0 0 " << std::endl;
+            int next_vid1, next_vid2;
+            for(int j=0; j<traces[0].size(); j++)
+            {
+                curISOLine.push_back(traces[0][j]);
+                std::cout << traces[0][j].transpose() << " ";
+                if (j == traces[0].size()-1)
+                {
+                    std::cout << " 0 0 0 " << std::endl;            
+                    break;
+                }
+                else
+                {
+                    int next_vid1 = std::get<0>(traces_vids[0][j+1]);
+                    int next_vid2 = std::get<1>(traces_vids[0][j+1]);
+                    int cur_vid1 = std::get<0>(traces_vids[0][j]);
+                    int cur_vid2 = std::get<1>(traces_vids[0][j]);
+                    Eigen::Vector3d e1 = V.row(next_vid1) - V.row(next_vid2);
+                    Eigen::Vector3d e2 = V.row(cur_vid1) - V.row(cur_vid2);
+                    Eigen::Vector3d normal = (e1.cross(e2));
+                    normal = normal / normal.norm();
+                    std::cout << normal.transpose() << std::endl;
+                    curISONormal.push_back(normal);
+                }
+            }
+            isoNormal.push_back(curISONormal);
+            isoLines.push_back(curISOLine);
+        }
+        if(traces.size() == 2)
+        {
+            ntraces++;
+            vector<Eigen::Vector3d> curISONormal1;
+            vector<Eigen::Vector3d> curISONormal2;
+            vector<Eigen::Vector3d> curISOLine1;
+            vector<Eigen::Vector3d> curISOLine2;
+            int nterms = traces[0].size() + traces[1].size();
+            std::cout << nterms << " 0 0 " << nterms << " 0 0 " << std::endl;
+            for(int j=traces[1].size()-1; j >= 0; j--)
+            {
+                curISOLine1.push_back(traces[0][j]);
+                std::cout << traces[1][j].transpose() << " ";
+                if (j == 0)
+                {
+                    int next_vid1 = std::get<0>(traces_vids[0][0]);
+                    int next_vid2 = std::get<1>(traces_vids[0][0]);
+                    int cur_vid1 = std::get<0>(traces_vids[1][j]);
+                    int cur_vid2 = std::get<1>(traces_vids[1][j]);
+                    Eigen::Vector3d e1 = V.row(next_vid1) - V.row(next_vid2);
+                    Eigen::Vector3d e2 = V.row(cur_vid1) - V.row(cur_vid2);
+                    Eigen::Vector3d normal = (e1.cross(e2));
+                    normal = normal / normal.norm();
+                    std::cout << normal.transpose() << std::endl;
+                    curISONormal1.push_back(normal);
+                }
+                else
+                {
+                    int next_vid1 = std::get<0>(traces_vids[1][j-1]);
+                    int next_vid2 = std::get<1>(traces_vids[1][j-1]);
+                    int cur_vid1 = std::get<0>(traces_vids[1][j]);
+                    int cur_vid2 = std::get<1>(traces_vids[1][j]);
+                    Eigen::Vector3d e1 = V.row(next_vid1) - V.row(next_vid2);
+                    Eigen::Vector3d e2 = V.row(cur_vid1) - V.row(cur_vid2);
+                    Eigen::Vector3d normal = (e1.cross(e2));
+                    normal = normal / normal.norm();
+                    std::cout << normal.transpose() << std::endl;
+                    curISONormal1.push_back(normal);
+                }
+            }
+            for(int j=0; j<traces[0].size(); j++)
+            {
+                curISOLine2.push_back(traces[0][j]);
+                std::cout << traces[0][j].transpose() << " ";
+                if (j == traces[0].size()-1)
+                {
+                    std::cout << "0 0 0 " << std::endl;
+                    break;
+                }
+                else
+                {
+                    int next_vid1 = std::get<0>(traces_vids[0][j+1]);
+                    int next_vid2 = std::get<1>(traces_vids[0][j+1]);
+                    int cur_vid1 = std::get<0>(traces_vids[0][j]);
+                    int cur_vid2 = std::get<1>(traces_vids[0][j]);
+                    Eigen::Vector3d e1 = V.row(next_vid1) - V.row(next_vid2);
+                    Eigen::Vector3d e2 = V.row(cur_vid1) - V.row(cur_vid2);
+                    Eigen::Vector3d normal = (e1.cross(e2));
+                    normal = normal / normal.norm();
+                    std::cout << normal.transpose() << std::endl;
+                    curISONormal2.push_back(normal);
+                }
+            }
+            isoNormal.push_back(curISONormal1);
+            isoNormal.push_back(curISONormal2);
+            isoLines.push_back(curISOLine1);
+            isoLines.push_back(curISOLine2);
+        }
+    }
+    delete[] visited;
+    return ntraces;
+}
+
+void Weave::drawISOLines()
+{
+    double minval = -M_PI;
+    double maxval = M_PI;
+    int numlines = 100;
+
+    int nfaces = nFaces();
+    int nverts = nVerts();
+    
+    std::map<std::pair<int, int>, Eigen::Vector2i > edgemap;
+    for (int i = 0; i < nfaces; i++)
+    {
+        for (int j = 0; j < 3; j++)
+        {
+            int nextj = (j + 1) % 3;
+            int v1 = F(i, j);
+            int v2 = F(i, nextj);
+            int idx = 0;
+            if (v1 > v2)
+            {
+                idx = 1;
+                std::swap(v1, v2);
+            }
+            std::pair<int, int> p(v1,v2);
+            std::map<std::pair<int, int>, Eigen::Vector2i >::iterator it = edgemap.find(p);
+            if(it != edgemap.end())
+                 edgemap[p][idx] = i;
+            else
+            {
+                 Eigen::Vector2i entry(-1,-1);
+                 entry[idx] = i;
+                 edgemap[p] = entry;
+            }
+        }
+    }
+
+    Eigen::MatrixXi faceNeighbors(nfaces, 3);
+    faceNeighbors.setConstant(-1);
+    for(int i=0; i<nfaces; i++)
+    {
+        for(int j=0; j<3; j++)
+        {
+            int vp1 = F(i,(j+1)%3);
+            int vp2 = F(i,(j+2)%3);
+            if(vp1 > vp2) std::swap(vp1, vp2);
+            std::map<std::pair<int, int>, Eigen::Vector2i >::iterator it = edgemap.find(std::pair<int,int>(vp1, vp2));
+            if(it == edgemap.end())
+                faceNeighbors(i, j) = -1;
+            else
+            {
+                int opp = (it->second[0] == i ? it->second[1] : it->second[0]);
+                faceNeighbors(i, j) = opp;
+            }
+        }
+    }
+    int ntraces = 0;
+    for(int i=0; i<numlines; i++)
+    {
+        double isoval = minval + (maxval-minval) * double(i)/double(numlines);
+        ntraces += extractIsoline(V, F, faceNeighbors, 
+            Eigen::Map<Eigen::VectorXd, Eigen::Unaligned>(theta.data(), theta.size()), 
+            isoval, minval, maxval);
+    }
+    std::cout << ntraces << " 0 0 " << ntraces <<  " 0 0 " << std::endl;
+}
+
+
 vector<long> Weave::_BFS_adj_list(vector<vector<long> > adj_list, int startPoint)
 {
     vector<long> traversed;
@@ -931,7 +1205,6 @@ void Weave::computeFunc()
         // Solve for scale
         Eigen::SimplicialLDLT<Eigen::SparseMatrix<double> > solverScales(AScalesMat);
         scales = solverScales.solve(
-        // solverScales.solve(
             Eigen::Map<Eigen::VectorXd, Eigen::Unaligned>(bScales.data(), bScales.size()));
 
         // for (int k=0; k<AScalesMat.outerSize(); ++k)

@@ -49,7 +49,7 @@ public:
         handleParams(4) = 1;
         handleParams(5) = -1;
 
-
+        drawLine = false;
         trace = new Trace();
     }
 
@@ -70,6 +70,7 @@ public:
         viewer.ngui->addButton("Remove Singularities", std::bind(&WeaveHook::removeSingularities, this));
         viewer.ngui->addButton("Augment Field", std::bind(&WeaveHook::augmentField, this));
         viewer.ngui->addButton("Compute Function Value", std::bind(&WeaveHook::computeFunc, this));
+        viewer.ngui->addButton("Draw ISO Lines", std::bind(&WeaveHook::toggleDrawLine, this));
 
         viewer.ngui->addGroup("Save/Load Field");
         viewer.ngui->addVariable("Filename", vectorFieldName);
@@ -160,6 +161,8 @@ public:
     void exportVectorField();
     void augmentField();
     void computeFunc();
+    void toggleDrawLine();
+    void drawISOLines();
     void resetCutSelection();
     void addCut();
     void removeSingularities();
@@ -228,6 +231,7 @@ public:
 
     void showCutVertexSelection(igl::viewer::Viewer &viewer);
     void updateSingularVerts(igl::viewer::Viewer &viewer);
+    void drawISOLines(igl::viewer::Viewer &viewer);
 private:
     std::string meshName;
     Weave *weave;
@@ -274,6 +278,8 @@ private:
     Eigen::MatrixXd cutPos2;
 
     std::string vectorFieldName;
+
+    bool drawLine;
 };
 
 #endif

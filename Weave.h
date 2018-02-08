@@ -103,6 +103,16 @@ public:
     std::vector<double> simpleKron(Eigen::Vector3d vec, int augRow);
     std::vector<double> simpleKron(std::vector<double> vec, int augRow);
     Eigen::SparseMatrix<double> faceLaplacian();
+    double barycentric(double val1, double val2, double target);
+    bool crosses(double isoval, double val1, double val2, double minval, 
+        double maxval, double &bary);
+    int extractIsoline(const Eigen::MatrixXd &V, const Eigen::MatrixXi &F, 
+        const Eigen::MatrixXi &faceNeighbors, const Eigen::VectorXd &func, 
+        double isoval, double minval, double maxval);
+    void drawISOLines();
+    std::vector<std::vector<Eigen::Vector3d> > isoLines;
+    std::vector<std::vector<Eigen::Vector3d> > isoNormal;
+
 
 private:
     // scale mesh to unit size
