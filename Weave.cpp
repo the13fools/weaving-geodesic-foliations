@@ -625,8 +625,6 @@ bool Weave::crosses(double isoval, double val1, double val2, double minval, doub
 
 int Weave::extractIsoline(const Eigen::MatrixXd &V, const Eigen::MatrixXi &F, const Eigen::MatrixXi &faceNeighbors, const Eigen::VectorXd &func, double isoval, double minval, double maxval)
 {
-    isoLines.clear();
-    isoNormal.clear();
     int nfaces = F.rows();
     bool *visited = new bool[nfaces];
     for(int i=0; i<nfaces; i++)
@@ -726,7 +724,7 @@ int Weave::extractIsoline(const Eigen::MatrixXd &V, const Eigen::MatrixXi &F, co
             std::cout << nterms << " 0 0 " << nterms << " 0 0 " << std::endl;
             for(int j=traces[1].size()-1; j >= 0; j--)
             {
-                curISOLine1.push_back(traces[0][j]);
+                curISOLine1.push_back(traces[1][j]);
                 std::cout << traces[1][j].transpose() << " ";
                 if (j == 0)
                 {
@@ -792,7 +790,7 @@ void Weave::drawISOLines()
 {
     double minval = -M_PI;
     double maxval = M_PI;
-    int numlines = 100;
+    double numlines = 100;
 
     int nfaces = nFaces();
     int nverts = nVerts();
@@ -844,6 +842,8 @@ void Weave::drawISOLines()
         }
     }
     int ntraces = 0;
+    isoLines.clear();
+    isoNormal.clear();
     for(int i=0; i<numlines; i++)
     {
         double isoval = minval + (maxval-minval) * double(i)/double(numlines);

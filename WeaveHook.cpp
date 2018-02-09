@@ -62,10 +62,18 @@ void WeaveHook::setFaceColors(igl::viewer::Viewer &viewer)
         case FUN_VAL:
             faceColors.resize(weave->nVerts(), 3);
             igl::colormap(viz_color,FVAL, true, faceColors);
+            cout << "drawLine " << drawLine << endl;
             if (drawLine)
             {
-                drawISOLines(viewer);
-                drawLine = false;
+                cout << paths.size() << endl;;
+                cout << weave->isoLines.size() << endl;;
+                for (int i = 0; i < paths.size(); i ++)
+                {
+                    const Eigen::RowVector3d red(0.9,.1,.1), blue(0.1,.1,.9);
+                    Eigen::MatrixXd line_starts = paths[i].block(0, 0, paths[i].rows() - 1, 3);
+                    Eigen::MatrixXd line_ends  = paths[i].block(1, 0, paths[i].rows() - 1, 3);
+                    viewer.data.add_edges( line_starts, line_ends, red);
+                }
             }
             break;
         default:
@@ -292,29 +300,26 @@ void WeaveHook::computeFunc()
     weave->computeFunc();
 }
 
-void WeaveHook::toggleDrawLine()
+void WeaveHook::drawISOLines()
 {
+    paths.clear();
     drawLine = true;
-}
-
-void WeaveHook::drawISOLines(igl::viewer::Viewer &viewer)
-{
     weave->drawISOLines();
-    const Eigen::RowVector3d red(0.9,.1,.1), blue(0.1,.1,.9);
     for (int p_cnt = 0; p_cnt < weave->isoLines.size(); p_cnt ++)
     {
         std::vector<Eigen::Vector3d> curPath = weave->isoLines[p_cnt];
         Eigen::MatrixXd path(curPath.size(), 3);
         if (curPath.size() < 10){
-            cout << "skip the " << p_cnt << " iso line" << endl;
+            // cout << "skip the " << p_cnt << " iso line" << endl;
             continue;
         }
         for (int i = 0; i < curPath.size(); i ++)
             path.row(i) = curPath[i];
-        cout << "Generating the " << p_cnt << " iso line" << endl;
-        Eigen::MatrixXd line_starts = path.block(0, 0, curPath.size() - 1, 3);
-        Eigen::MatrixXd line_ends  = path.block(1, 0, curPath.size() - 1, 3);
-        viewer.data.add_edges( line_starts, line_ends, red);
+        paths.push_back(path);
+        // cout << "Generating the " << p_cnt << " iso line" << endl;
+        // Eigen::MatrixXd line_starts = path.block(0, 0, curPath.size() - 1, 3);
+        // Eigen::MatrixXd line_ends  = path.block(1, 0, curPath.size() - 1, 3);
+        // viewer.data.add_edges( line_starts, line_ends, red);
     }
 }
 
