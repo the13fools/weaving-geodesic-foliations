@@ -98,7 +98,7 @@ public:
     std::vector<long> _BFS_adj_list(std::vector<std::vector<long> > adj_list, int i);
     std::vector<Eigen::MatrixXd> _augmentPs();
     void augmentField();
-    void computeFunc();
+    void computeFunc(double scalesInit);
     std::vector<double> theta;
     std::vector<double> simpleKron(Eigen::Vector3d vec, int augRow);
     std::vector<double> simpleKron(std::vector<double> vec, int augRow);
@@ -109,10 +109,14 @@ public:
     int extractIsoline(const Eigen::MatrixXd &V, const Eigen::MatrixXi &F, 
         const Eigen::MatrixXi &faceNeighbors, const Eigen::VectorXd &func, 
         double isoval, double minval, double maxval);
-    void drawISOLines();
+    void drawISOLines(int numISOLines);
     std::vector<std::vector<Eigen::Vector3d> > isoLines;
     std::vector<std::vector<Eigen::Vector3d> > isoNormal;
-
+    bool augmented;
+    Eigen::MatrixXd VAugmented; // |V| x 3
+    Eigen::MatrixXi FAugmented; // |F| x 3
+    Eigen::MatrixXd VBuffer; // |V| x 3
+    Eigen::MatrixXi FBuffer; // |F| x 3
 
 private:
     // scale mesh to unit size

@@ -25,7 +25,8 @@ public:
     {
         // meshName = "meshes/bunny_coarser.obj";
         meshName = "meshes/tet.obj";
-        vectorFieldName = "bunny_coarser_nosing";
+        // vectorFieldName = "bunny_coarser_nosing";
+        vectorFieldName = "tet.relax";
         traceFile = "example.tr";
         params.lambdacompat = 100;
         params.lambdareg = 1e-3;
@@ -69,7 +70,9 @@ public:
         viewer.ngui->addButton("Reassign Permutations", std::bind(&WeaveHook::reassignPermutations, this));
         viewer.ngui->addButton("Remove Singularities", std::bind(&WeaveHook::removeSingularities, this));
         viewer.ngui->addButton("Augment Field", std::bind(&WeaveHook::augmentField, this));
+        viewer.ngui->addVariable("The initial value of Scales", scalesInit);
         viewer.ngui->addButton("Compute Function Value", std::bind(&WeaveHook::computeFunc, this));
+        viewer.ngui->addVariable("Number of ISO Lines", numISOLines);
         viewer.ngui->addButton("Draw ISO Lines", std::bind(&WeaveHook::drawISOLines, this));
 
         viewer.ngui->addGroup("Save/Load Field");
@@ -279,6 +282,8 @@ private:
 
     bool drawLine;
     std::vector<Eigen::MatrixXd> paths;
+    int numISOLines;
+    double scalesInit;
 };
 
 #endif

@@ -9,7 +9,8 @@ using namespace std;
 void WeaveHook::setFaceColors(igl::viewer::Viewer &viewer)
 { 
     int faces = weave->F.rows();
-    if ( curFaceEnergies.rows() != faces && shading_state != NONE) { return ; }
+    // if ( curFaceEnergies.rows() != faces && shading_state != NONE) { return ; }
+    // cout << "fuck" << endl;
 
     igl::ColorMapType viz_color = igl::COLOR_MAP_TYPE_MAGMA;
     
@@ -293,18 +294,19 @@ void WeaveHook::exportVectorField()
 void WeaveHook::augmentField()
 {
     weave->augmentField();
+    updateRenderGeometry();
 }
 
 void WeaveHook::computeFunc()
 {
-    weave->computeFunc();
+    weave->computeFunc(scalesInit);
 }
 
 void WeaveHook::drawISOLines()
 {
     paths.clear();
     drawLine = true;
-    weave->drawISOLines();
+    weave->drawISOLines(numISOLines);
     for (int p_cnt = 0; p_cnt < weave->isoLines.size(); p_cnt ++)
     {
         std::vector<Eigen::Vector3d> curPath = weave->isoLines[p_cnt];

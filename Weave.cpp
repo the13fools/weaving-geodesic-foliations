@@ -56,6 +56,7 @@ Weave::Weave(const std::string &objname, int m)
         Ps[i].resize(m, m);
         Ps[i].setIdentity();
     }
+    augmented = false;
 }
 
 Weave::~Weave()
@@ -786,11 +787,11 @@ int Weave::extractIsoline(const Eigen::MatrixXd &V, const Eigen::MatrixXi &F, co
     return ntraces;
 }
 
-void Weave::drawISOLines()
+void Weave::drawISOLines(int numISOLines)
 {
     double minval = -M_PI;
     double maxval = M_PI;
-    double numlines = 100;
+    double numlines = numISOLines;
 
     int nfaces = nFaces();
     int nverts = nVerts();
@@ -970,6 +971,7 @@ void Weave::augmentField()
         }
         else
         { // perm != I case
+            cout << "Non Identity Perm!" << endl;
             for (int l1 = 0; l1 < nCover; l1 ++)
             {
                 int l2 = -1;
@@ -1002,6 +1004,7 @@ void Weave::augmentField()
         if (toSearchFlag[i] == 0)
             continue;
         vector<long> gluePoint = _BFS_adj_list(adj_list, i);
+        // cout << gluePoint.size() << endl;
         gluePointList.push_back(gluePoint);
         for (int j = 0; j < gluePoint.size(); j ++)
             toSearchFlag[gluePoint[j]] = 0;
@@ -1019,13 +1022,14 @@ void Weave::augmentField()
         int vid = F(atFace, atVid);
         for (int j = 0; j < 3; j ++)
             VAug(i,j) = V(vid,j) + layerId;
+            // VAug(i,j) = V(vid,j);
         for (int j = 0; j < gluePointList[i].size(); j ++)
         { // Maintain a vid mapping
             encodedVid = gluePointList[i][j];
             layerId = floor(encodedVid / (nfaces*3));
             atFace = floor((encodedVid - layerId*nfaces*3) / 3);
             atVid = encodedVid - layerId*nfaces*3 - 3*atFace;
-            vid = F(atFace, atVid);
+            assert(vid == F(atFace, atVid));
             oldId2NewId[vid + layerId*nverts] = i;
             encodeDOldId2NewId[gluePointList[i][j]] = i;
         }
@@ -1045,12 +1049,21 @@ void Weave::augmentField()
     }
     igl::writeOBJ("debug.obj", VAug, FAug);
     cout << "finish augmenting the mesh" << endl;
+    // VAugmented = VAug;
+    // FAugmented = FAug;
+    V = VAug;
+    F = FAug;
+    buildConnectivityStructures();
+    buildGeometricStructures();
+    augmented = true;
 }
 
-void Weave::computeFunc()
+void Weave::computeFunc(double scalesInit)
 {
     int nfaces = nFaces();
     int nverts = nVerts();
+    cout << "nfaces: " << nfaces << endl;
+    cout << "nverts: " << nverts << endl;
     vector<int> rowsL;
     vector<int> colsL;
     vector<double> difVecUnscaled;
@@ -1067,8 +1080,19 @@ void Weave::computeFunc()
         Eigen::Vector3d e01 = p0 - p1;
         Eigen::Vector3d e12 = p1 - p2;
         Eigen::Vector3d e20 = p2 - p0;
-        // For debug only! Take only the first field
-        Eigen::Vector3d faceVec = Bs[fId] * v(fId, 0); // The original vec
+        Eigen::Vector3d faceVec;
+        if (augmented)
+        {
+            int oriFId = fId % (nfaces / (nFields() * 2));
+            int layerId = fId / (nfaces / (nFields() * 2));
+            assert((layerId >= 0) && (layerId < nFields() * 2));
+            if (layerId >= 3)
+                faceVec = - Bs[oriFId] * v(oriFId, layerId); // The original vec
+            else
+                faceVec = Bs[oriFId] * v(oriFId, layerId); // The original vec
+        }
+        else
+            faceVec = Bs[fId] * v(fId, 0); // The original vec
         faceVec = faceVec.cross(faceNormal(fId));
         faceVec /= faceVec.norm();
         difVecUnscaled.push_back(e01.dot(faceVec));
@@ -1077,28 +1101,15 @@ void Weave::computeFunc()
     }
     assert((rowsL.size()==3*nfaces) && (colsL.size()==3*nfaces) && (difVecUnscaled.size()==3*nfaces));
 
-    // for (int fId = 0; fId < nfaces; fId ++)
-        // cout << "faceid: " << fId << " " << 
-            // difVecUnscaled[3*fId] << " " << difVecUnscaled[3*fId+1] << " " << difVecUnscaled[3*fId+2] << endl;
-
-    
     Eigen::SparseMatrix<double> faceLapMat = faceLaplacian();
     Eigen::VectorXd scales(nfaces);
-    scales.setConstant(15);
-    int totalIter = 100;
+    scales.setConstant(scalesInit);
+    int totalIter = 30;
     for (int iter = 0; iter < totalIter; iter ++)
     {
         vector<double> difVec;
         for (int i = 0; i < difVecUnscaled.size(); i ++)
             difVec.push_back(difVecUnscaled[i]*scales(i/3));
-        // for (int fId = 0; fId < nfaces; fId ++)
-        //     cout << "faceid: " << fId << " " << 
-        //         difVec[3*fId] << " " << difVec[3*fId+1] << " " << difVec[3*fId+2] << endl;
-        // for (int i = 0; i < nfaces; i ++)
-            // cout << "faceid: " << i << " " << scales[i] << endl;
-        // connection_adjacency
-        //// Compute the vertex degree - TODO - opt
-        //// TODO: delete the triplet vectors
         std::vector<triplet> sparseContent;
         for (int i = 0; i < rowsL.size(); i ++)
             sparseContent.push_back(triplet(rowsL[i],colsL[i],1));
@@ -1110,9 +1121,6 @@ void Weave::computeFunc()
         vector<int> degree;
         for (int i = 0; i < nverts; i ++)
             degree.push_back(TP.row(i).sum());
-        // for (int i = 0; i < nverts; i ++)
-            // cout << "vid: " << i << " " << degree[i] << endl;
-        //// Compute the laplacian
         std::vector<triplet> AContent;
         for (int i = 0; i < rowsL.size(); i ++)
         {
@@ -1140,19 +1148,26 @@ void Weave::computeFunc()
         Eigen::VectorXd ones(Lmat.rows());
         ones.setConstant(1.0);
         ones /= ones.norm();
-        Eigen::VectorXd eigenVec;
+        Eigen::VectorXd eigenVec(Lmat.rows());
         eigenVec.setRandom();
         eigenVec += ones;
         eigenVec /= eigenVec.norm();
-        for(int i=0; i<100; i++)
+        // for (int k=0; k<Amat.outerSize(); ++k)
+        //   for (Eigen::SparseMatrix<double>::InnerIterator it(Amat,k); it; ++it)
+        //   {
+        //     cout << it.row() << " ";
+        //     cout << it.col() << " ";
+        //     cout << it.value() << " ";
+        //     cout << endl;
+        //   }
+        for(int i=0; i<10; i++)
         {
             eigenVec = solverL.solve(eigenVec);
             Eigen::VectorXd proj = eigenVec.dot(ones) * ones;
             eigenVec -= proj;
             eigenVec /= eigenVec.norm();
         }
-        // for (int i = 0; i < eigenVec.size(); i ++)
-        //     cout << i << " " << eigenVec[i] << endl;
+
         double eigenVal = eigenVec.transpose() * Lmat * eigenVec;
         cout << "Current iteration = " << iter  << " currents error is: " << eigenVal << endl;
 
@@ -1193,8 +1208,6 @@ void Weave::computeFunc()
             bScales.push_back(bVal);
             diagAScales.push_back(diagAVal);
         }
-        // for (int i = 0; i < diagAScales.size(); i ++)
-            // cout << "faceid: " << i << " " << diagAScales[i] << endl;
         // Construct A
         // TODO mu and lambda
         std::vector<triplet> AScalesContent;
@@ -1207,21 +1220,14 @@ void Weave::computeFunc()
         scales = solverScales.solve(
             Eigen::Map<Eigen::VectorXd, Eigen::Unaligned>(bScales.data(), bScales.size()));
 
-        // for (int k=0; k<AScalesMat.outerSize(); ++k)
-        //   for (Eigen::SparseMatrix<double>::InnerIterator it(AScalesMat,k); it; ++it)
-        //   {
-        //     cout << it.row() << " ";
-        //     cout << it.col() << " ";
-        //     cout << it.value() << " ";
-        //     cout << it.index() << " ";
-        //     cout << endl;
-        //   }
+
         theta = curTheta;
     }
     for (int i = 0; i < nverts; i ++)
     {
         cout << theta[i] << endl;;
     }
+
 }
 
 Eigen::SparseMatrix<double> Weave::faceLaplacian()
