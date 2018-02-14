@@ -717,15 +717,13 @@ int Weave::extractIsoline(const Eigen::MatrixXd &V, const Eigen::MatrixXi &F, co
         if(traces.size() == 2)
         {
             ntraces++;
-            vector<Eigen::Vector3d> curISONormal1;
-            vector<Eigen::Vector3d> curISONormal2;
-            vector<Eigen::Vector3d> curISOLine1;
-            vector<Eigen::Vector3d> curISOLine2;
+            vector<Eigen::Vector3d> curISONormal;
+            vector<Eigen::Vector3d> curISOLine;
             int nterms = traces[0].size() + traces[1].size();
             std::cout << nterms << " 0 0 " << nterms << " 0 0 " << std::endl;
             for(int j=traces[1].size()-1; j >= 0; j--)
             {
-                curISOLine1.push_back(traces[1][j]);
+                curISOLine.push_back(traces[1][j]);
                 std::cout << traces[1][j].transpose() << " ";
                 if (j == 0)
                 {
@@ -738,7 +736,7 @@ int Weave::extractIsoline(const Eigen::MatrixXd &V, const Eigen::MatrixXi &F, co
                     Eigen::Vector3d normal = (e1.cross(e2));
                     normal = normal / normal.norm();
                     std::cout << normal.transpose() << std::endl;
-                    curISONormal1.push_back(normal);
+                    curISONormal.push_back(normal);
                 }
                 else
                 {
@@ -751,12 +749,12 @@ int Weave::extractIsoline(const Eigen::MatrixXd &V, const Eigen::MatrixXi &F, co
                     Eigen::Vector3d normal = (e1.cross(e2));
                     normal = normal / normal.norm();
                     std::cout << normal.transpose() << std::endl;
-                    curISONormal1.push_back(normal);
+                    curISONormal.push_back(normal);
                 }
             }
             for(int j=0; j<traces[0].size(); j++)
             {
-                curISOLine2.push_back(traces[0][j]);
+                curISOLine.push_back(traces[0][j]);
                 std::cout << traces[0][j].transpose() << " ";
                 if (j == traces[0].size()-1)
                 {
@@ -774,13 +772,11 @@ int Weave::extractIsoline(const Eigen::MatrixXd &V, const Eigen::MatrixXi &F, co
                     Eigen::Vector3d normal = (e1.cross(e2));
                     normal = normal / normal.norm();
                     std::cout << normal.transpose() << std::endl;
-                    curISONormal2.push_back(normal);
+                    curISONormal.push_back(normal);
                 }
             }
-            isoNormal.push_back(curISONormal1);
-            isoNormal.push_back(curISONormal2);
-            isoLines.push_back(curISOLine1);
-            isoLines.push_back(curISOLine2);
+            isoNormal.push_back(curISONormal);
+            isoLines.push_back(curISOLine);
         }
     }
     delete[] visited;
