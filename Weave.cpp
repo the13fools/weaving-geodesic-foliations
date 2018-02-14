@@ -1021,8 +1021,8 @@ void Weave::augmentField()
         int atVid = encodedVid - layerId*nfaces*3 - 3*atFace;
         int vid = F(atFace, atVid);
         for (int j = 0; j < 3; j ++)
-            VAug(i,j) = V(vid,j) + layerId;
-            // VAug(i,j) = V(vid,j);
+            // VAug(i,j) = V(vid,j) + layerId;
+            VAug(i,j) = V(vid,j);
         for (int j = 0; j < gluePointList[i].size(); j ++)
         { // Maintain a vid mapping
             encodedVid = gluePointList[i][j];
@@ -1101,7 +1101,7 @@ void Weave::computeFunc(double scalesInit)
     }
     assert((rowsL.size()==3*nfaces) && (colsL.size()==3*nfaces) && (difVecUnscaled.size()==3*nfaces));
 
-    Eigen::SparseMatrix<double> faceLapMat = faceLaplacian();
+    // Eigen::SparseMatrix<double> faceLapMat = faceLaplacian();
     Eigen::VectorXd scales(nfaces);
     scales.setConstant(scalesInit);
     int totalIter = 30;
@@ -1160,17 +1160,15 @@ void Weave::computeFunc(double scalesInit)
         //     cout << it.value() << " ";
         //     cout << endl;
         //   }
-        for(int i=0; i<10; i++)
+        for(int i=0; i<30; i++)
         {
             eigenVec = solverL.solve(eigenVec);
             Eigen::VectorXd proj = eigenVec.dot(ones) * ones;
             eigenVec -= proj;
             eigenVec /= eigenVec.norm();
         }
-
         double eigenVal = eigenVec.transpose() * Lmat * eigenVec;
         cout << "Current iteration = " << iter  << " currents error is: " << eigenVal << endl;
-
         // Extract the function value
         vector<double> curTheta;
         for (int i = 0; i < nverts; i ++)
@@ -1219,15 +1217,10 @@ void Weave::computeFunc(double scalesInit)
         Eigen::SimplicialLDLT<Eigen::SparseMatrix<double> > solverScales(AScalesMat);
         scales = solverScales.solve(
             Eigen::Map<Eigen::VectorXd, Eigen::Unaligned>(bScales.data(), bScales.size()));
-
-
         theta = curTheta;
     }
     for (int i = 0; i < nverts; i ++)
-    {
         cout << theta[i] << endl;;
-    }
-
 }
 
 Eigen::SparseMatrix<double> Weave::faceLaplacian()
@@ -1256,27 +1249,6 @@ Eigen::SparseMatrix<double> Weave::faceLaplacian()
     return LFaceMat;
 }
 
-vector<double> Weave::simpleKron(Eigen::Vector3d vec, int augRow)
-{ // Only augment vector
-    vector<double> result;
-    for(int i = 0; i < vec.size(); i ++)
-    {
-        for(int j = 0; j < augRow; j ++)
-            result.push_back(vec(i));
-    }
-    return result;
-}
-
-vector<double> Weave::simpleKron(vector<double> vec, int augRow)
-{ // Only augment vector
-    vector<double> result;
-    for(int i = 0; i < vec.size(); i ++)
-    {
-        for(int j = 0; j < augRow; j ++)
-            result.push_back(vec[i]);
-    }
-    return result;
-}
 
 /*
  * Writes vector field to file. Format is:

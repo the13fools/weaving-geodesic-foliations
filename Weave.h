@@ -100,8 +100,6 @@ public:
     void augmentField();
     void computeFunc(double scalesInit);
     std::vector<double> theta;
-    std::vector<double> simpleKron(Eigen::Vector3d vec, int augRow);
-    std::vector<double> simpleKron(std::vector<double> vec, int augRow);
     Eigen::SparseMatrix<double> faceLaplacian();
     double barycentric(double val1, double val2, double target);
     bool crosses(double isoval, double val1, double val2, double minval, 
