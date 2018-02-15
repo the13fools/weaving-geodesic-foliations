@@ -852,7 +852,7 @@ void Weave::drawISOLines(int numISOLines)
 }
 
 
-vector<long> Weave::_BFS_adj_list(vector<vector<long> > adj_list, int startPoint)
+vector<long> Weave::_BFS_adj_list(vector<vector<long> > & adj_list, int startPoint)
 {
     vector<long> traversed;
     queue<long> que;
@@ -1104,8 +1104,8 @@ void Weave::computeFunc(double scalesInit)
     int totalIter = 30;
     for (int iter = 0; iter < totalIter; iter ++)
     {
-        for (int i = 0; i < nfaces; i ++)
-            cout << "Scales " << i << " " << scales(i) << endl;
+        // for (int i = 0; i < nfaces; i ++)
+            // cout << "Scales " << i << " " << scales(i) << endl;
         vector<double> difVec;
         for (int i = 0; i < difVecUnscaled.size(); i ++)
             difVec.push_back(difVecUnscaled[i]*scales(i/3));

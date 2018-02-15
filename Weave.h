@@ -95,7 +95,7 @@ public:
     void serialize_forexport(const std::string &filename);
     void deserialize(const std::string &filename);
 
-    std::vector<long> _BFS_adj_list(std::vector<std::vector<long> > adj_list, int i);
+    std::vector<long> _BFS_adj_list(std::vector<std::vector<long> > & relaxadj_list, int i);
     std::vector<Eigen::MatrixXd> _augmentPs();
     void augmentField();
     void computeFunc(double scalesInit);
