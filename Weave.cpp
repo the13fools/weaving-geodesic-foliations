@@ -1056,6 +1056,7 @@ void Weave::augmentField()
 
 void Weave::computeFunc(double scalesInit)
 {
+    std::ofstream debugOut("debug.txt");
     int nfaces = nFaces();
     int nverts = nVerts();
     cout << "nfaces: " << nfaces << endl;
@@ -1083,9 +1084,9 @@ void Weave::computeFunc(double scalesInit)
             int layerId = fId / (nfaces / (nFields() * 2));
             assert((layerId >= 0) && (layerId < nFields() * 2));
             if (layerId >= 3)
-                faceVec = - Bs[oriFId] * v(oriFId, layerId); // The original vec
+                faceVec = Bs[oriFId] * v(oriFId, layerId-3); // The original vec
             else
-                faceVec = Bs[oriFId] * v(oriFId, layerId); // The original vec
+                faceVec = - Bs[oriFId] * v(oriFId, layerId); // The original vec
         }
         else
             faceVec = Bs[fId] * v(fId, 0); // The original vec
@@ -1103,6 +1104,8 @@ void Weave::computeFunc(double scalesInit)
     int totalIter = 30;
     for (int iter = 0; iter < totalIter; iter ++)
     {
+        for (int i = 0; i < nfaces; i ++)
+            cout << "Scales " << i << " " << scales(i) << endl;
         vector<double> difVec;
         for (int i = 0; i < difVecUnscaled.size(); i ++)
             difVec.push_back(difVecUnscaled[i]*scales(i/3));
@@ -1146,21 +1149,26 @@ void Weave::computeFunc(double scalesInit)
         ones /= ones.norm();
         Eigen::VectorXd eigenVec(Lmat.rows());
         eigenVec.setRandom();
-        eigenVec += ones;
+        // eigenVec += ones;
         eigenVec /= eigenVec.norm();
-        // for (int k=0; k<Amat.outerSize(); ++k)
-        //   for (Eigen::SparseMatrix<double>::InnerIterator it(Amat,k); it; ++it)
-        //   {
-        //     cout << it.row() << " ";
-        //     cout << it.col() << " ";
-        //     cout << it.value() << " ";
-        //     cout << endl;
-        //   }
+        // for (int k=0; k<Lmat.outerSize(); ++k)
+        //   for (Eigen::SparseMatrix<double>::InnerIterator it(Lmat,k); it; ++it)
+        //     debugOut << it.row()+1 << endl;
+        // debugOut << "================";
+        // for (int k=0; k<Lmat.outerSize(); ++k)
+        //   for (Eigen::SparseMatrix<double>::InnerIterator it(Lmat,k); it; ++it)
+        //     debugOut << it.col()+1 << endl;
+        // debugOut << "================";
+        // for (int k=0; k<Lmat.outerSize(); ++k)
+        //   for (Eigen::SparseMatrix<double>::InnerIterator it(Lmat,k); it; ++it)
+        //     debugOut << it.value() << endl;
+        // debugOut << "================";
+
         for(int i=0; i<30; i++)
         {
             eigenVec = solverL.solve(eigenVec);
-            Eigen::VectorXd proj = eigenVec.dot(ones) * ones;
-            eigenVec -= proj;
+            // Eigen::VectorXd proj = eigenVec.dot(ones) * ones;
+            // eigenVec -= proj;
             eigenVec /= eigenVec.norm();
         }
         double eigenVal = eigenVec.transpose() * Lmat * eigenVec;
@@ -1185,9 +1193,11 @@ void Weave::computeFunc(double scalesInit)
             double curPred = curTheta[rowsL[i]] - curTheta[colsL[i]];
             if (curPred > M_PI) curPred -= 2*M_PI;
             if (curPred < -M_PI) curPred += 2*M_PI;
+            // cout << i << " " << curPred << endl;
             difVecPred.push_back(curPred);
         }
-        vector<double> bScales;
+        // vector<double> bScales;
+        Eigen::VectorXd bScales(nfaces);
         vector<double> diagAScales;
         for (int i = 0; i < rowsL.size(); i=i+3)
         {
@@ -1195,11 +1205,12 @@ void Weave::computeFunc(double scalesInit)
             double diagAVal = 0;
             for (int j = 0; j < 3; j ++)
             {
+                // cout << i+j  << " difVecPred " << difVecPred[i+j]
+                 // << " difVecUnscaled " << difVecUnscaled[i+j] << endl;
                 bVal += difVecPred[i+j] * difVecUnscaled[i+j];
                 diagAVal += difVecUnscaled[i+j] * difVecUnscaled[i+j];
-
             }
-            bScales.push_back(bVal);
+            bScales(i/3) = bVal;
             diagAScales.push_back(diagAVal);
         }
         // Construct A
@@ -1211,12 +1222,22 @@ void Weave::computeFunc(double scalesInit)
         AScalesMat.setFromTriplets(AScalesContent.begin(),AScalesContent.end());
         // Solve for scale
         Eigen::SimplicialLDLT<Eigen::SparseMatrix<double> > solverScales(AScalesMat);
-        scales = solverScales.solve(
-            Eigen::Map<Eigen::VectorXd, Eigen::Unaligned>(bScales.data(), bScales.size()));
+        Eigen::VectorXd curScales = solverScales.solve(bScales);
+        for (int i = 0; i < nfaces; i ++)
+            scales(i) = curScales(i);
+        // solverScales.solve(bScales);
+        // for (int i = 0; i < nfaces; i ++)
+            // cout << "diagAScales " << i << " " << diagAScales[i] << endl;
+        // for (int i = 0; i < nfaces; i ++)
+            // cout << "bScales " << i << " " << bScales(i) << endl;
+        // for (int i = 0; i < nfaces; i ++)
+            // cout << "Scales " << i << " " << scales(i) << endl;
         theta = curTheta;
     }
     for (int i = 0; i < nverts; i ++)
-        cout << theta[i] << endl;;
+        cout << theta[i] << endl;
+
+    debugOut.close();
 }
 
 Eigen::SparseMatrix<double> Weave::faceLaplacian()
