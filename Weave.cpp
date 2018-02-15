@@ -858,7 +858,6 @@ vector<long> Weave::_BFS_adj_list(vector<vector<long> > & adj_list, int startPoi
     queue<long> que;
     traversed.push_back(startPoint);
     que.push(startPoint);
-    long cnt = 0;
     while (que.size() > 0)
     {
         long curPoint = que.front();
@@ -878,11 +877,6 @@ vector<long> Weave::_BFS_adj_list(vector<vector<long> > & adj_list, int startPoi
                 continue;
             traversed.push_back(to_add);
             que.push(to_add);
-        }
-        cnt ++;
-        if (cnt > 100000){
-            cout << "++++++++++++++++++++++++++++";
-            break;
         }
     }
     return traversed;
@@ -930,7 +924,6 @@ void Weave::augmentField()
     Eigen::MatrixXd perm;
     perms = _augmentPs();
     Eigen::MatrixXd eye = Eigen::MatrixXd::Identity(nCover, nCover);
-
     // Compute points to glue
     vector<vector<long> > adj_list(nCover*nfaces*3);
     for (int e = 0; e < nEdges(); e++)
@@ -967,18 +960,11 @@ void Weave::augmentField()
         }
         else
         { // perm != I case
-            cout << "Non Identity Perm!" << endl;
             for (int l1 = 0; l1 < nCover; l1 ++)
             {
                 int l2 = -1;
                 for (int j = 0; j < nCover; j ++)
-                {
-                    if (perm(l1, j) == 1)
-                    {
-                        l2 = j;
-                        break;
-                    }
-                }
+                    if (perm(l1, j) == 1){ l2 = j; break; }
                 long v1f1_idx = v1f1 + f1Id*3 + l1*3*nfaces;
                 long v2f1_idx = v2f1 + f1Id*3 + l1*3*nfaces;
                 long v1f2_idx = v1f2 + f2Id*3 + l2*3*nfaces;
@@ -1000,7 +986,6 @@ void Weave::augmentField()
         if (toSearchFlag[i] == 0)
             continue;
         vector<long> gluePoint = _BFS_adj_list(adj_list, i);
-        // cout << gluePoint.size() << endl;
         gluePointList.push_back(gluePoint);
         for (int j = 0; j < gluePoint.size(); j ++)
             toSearchFlag[gluePoint[j]] = 0;
@@ -1017,7 +1002,6 @@ void Weave::augmentField()
         int atVid = encodedVid - layerId*nfaces*3 - 3*atFace;
         int vid = F(atFace, atVid);
         for (int j = 0; j < 3; j ++)
-            // VAug(i,j) = V(vid,j) + layerId;
             VAug(i,j) = V(vid,j);
         for (int j = 0; j < gluePointList[i].size(); j ++)
         { // Maintain a vid mapping
@@ -1045,8 +1029,6 @@ void Weave::augmentField()
     }
     igl::writeOBJ("debug.obj", VAug, FAug);
     cout << "finish augmenting the mesh" << endl;
-    // VAugmented = VAug;
-    // FAugmented = FAug;
     V = VAug;
     F = FAug;
     buildConnectivityStructures();
@@ -1104,8 +1086,6 @@ void Weave::computeFunc(double scalesInit)
     int totalIter = 30;
     for (int iter = 0; iter < totalIter; iter ++)
     {
-        // for (int i = 0; i < nfaces; i ++)
-            // cout << "Scales " << i << " " << scales(i) << endl;
         vector<double> difVec;
         for (int i = 0; i < difVecUnscaled.size(); i ++)
             difVec.push_back(difVecUnscaled[i]*scales(i/3));
@@ -1144,31 +1124,12 @@ void Weave::computeFunc(double scalesInit)
         Lmat -= Amat;
         // Eigen Decompose
         Eigen::SimplicialLDLT<Eigen::SparseMatrix<double> > solverL(Lmat);
-        Eigen::VectorXd ones(Lmat.rows());
-        ones.setConstant(1.0);
-        ones /= ones.norm();
         Eigen::VectorXd eigenVec(Lmat.rows());
         eigenVec.setRandom();
-        // eigenVec += ones;
         eigenVec /= eigenVec.norm();
-        // for (int k=0; k<Lmat.outerSize(); ++k)
-        //   for (Eigen::SparseMatrix<double>::InnerIterator it(Lmat,k); it; ++it)
-        //     debugOut << it.row()+1 << endl;
-        // debugOut << "================";
-        // for (int k=0; k<Lmat.outerSize(); ++k)
-        //   for (Eigen::SparseMatrix<double>::InnerIterator it(Lmat,k); it; ++it)
-        //     debugOut << it.col()+1 << endl;
-        // debugOut << "================";
-        // for (int k=0; k<Lmat.outerSize(); ++k)
-        //   for (Eigen::SparseMatrix<double>::InnerIterator it(Lmat,k); it; ++it)
-        //     debugOut << it.value() << endl;
-        // debugOut << "================";
-
-        for(int i=0; i<30; i++)
+        for(int i=0; i<10; i++)
         {
             eigenVec = solverL.solve(eigenVec);
-            // Eigen::VectorXd proj = eigenVec.dot(ones) * ones;
-            // eigenVec -= proj;
             eigenVec /= eigenVec.norm();
         }
         double eigenVal = eigenVec.transpose() * Lmat * eigenVec;
@@ -1193,20 +1154,17 @@ void Weave::computeFunc(double scalesInit)
             double curPred = curTheta[rowsL[i]] - curTheta[colsL[i]];
             if (curPred > M_PI) curPred -= 2*M_PI;
             if (curPred < -M_PI) curPred += 2*M_PI;
-            // cout << i << " " << curPred << endl;
             difVecPred.push_back(curPred);
         }
-        // vector<double> bScales;
         Eigen::VectorXd bScales(nfaces);
         vector<double> diagAScales;
+        // TODO: AScalesMat is constant
         for (int i = 0; i < rowsL.size(); i=i+3)
         {
             double bVal = 0;
             double diagAVal = 0;
             for (int j = 0; j < 3; j ++)
             {
-                // cout << i+j  << " difVecPred " << difVecPred[i+j]
-                 // << " difVecUnscaled " << difVecUnscaled[i+j] << endl;
                 bVal += difVecPred[i+j] * difVecUnscaled[i+j];
                 diagAVal += difVecUnscaled[i+j] * difVecUnscaled[i+j];
             }
@@ -1225,18 +1183,10 @@ void Weave::computeFunc(double scalesInit)
         Eigen::VectorXd curScales = solverScales.solve(bScales);
         for (int i = 0; i < nfaces; i ++)
             scales(i) = curScales(i);
-        // solverScales.solve(bScales);
-        // for (int i = 0; i < nfaces; i ++)
-            // cout << "diagAScales " << i << " " << diagAScales[i] << endl;
-        // for (int i = 0; i < nfaces; i ++)
-            // cout << "bScales " << i << " " << bScales(i) << endl;
-        // for (int i = 0; i < nfaces; i ++)
-            // cout << "Scales " << i << " " << scales(i) << endl;
         theta = curTheta;
     }
     for (int i = 0; i < nverts; i ++)
-        cout << theta[i] << endl;
-
+        debugOut << theta[i] << endl;
     debugOut.close();
 }
 
