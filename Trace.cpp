@@ -90,7 +90,7 @@ void Trace::loadSampledCurves(const std::string &filename)
 
 
      
-        if (npoints > 80 && npoints < 250 && counter < 50)
+        if (npoints > 80 && npoints < 250 && counter < 50 || true)
         {
             counter++;
             curves.push_back(curve);
@@ -102,6 +102,35 @@ void Trace::loadSampledCurves(const std::string &filename)
     curve_file.close();
     normal_file.close();
 }
+
+
+void Trace::loadGeneratedCurves(std::vector<std::vector<Eigen::Vector3d> > isoLines, 
+                                std::vector<std::vector<Eigen::Vector3d> > isoNormal)
+{
+
+    curves.clear();
+    normals.clear();
+    bending.clear();
+    modes.clear();
+    for (int i = 0; i < isoLines.size(); i++)
+    {
+        double npoints = isoLines[i].size();
+        Eigen::MatrixXd curve = Eigen::MatrixXd::Zero(npoints, 3);
+        Eigen::MatrixXd normal = Eigen::MatrixXd::Zero(npoints, 3);
+        Eigen::VectorXd bend = Eigen::VectorXd::Zero(npoints); // Not implemented yet
+        for (int j = 0; j < npoints; j++)
+        {
+            curve.row(j) = isoLines[i][j];
+            normal.row(j) = isoNormal[i][j];
+
+        }
+        curves.push_back(curve);
+        normals.push_back(normal);
+        bending.push_back(bend);
+        modes.push_back(Trace_Mode::FIELD);
+    }
+}
+
 
 double angle(Eigen::Vector3d v, Eigen::Vector3d w, Eigen::Vector3d n)
 {
@@ -141,60 +170,57 @@ void Trace::logRibbonsToFile(std::string foldername, std::string filename, const
 
  
  
-    int stepstoextend = 40;
-    int backoff = 3; // The very ends of curves seem generally bad.  Taking a few steps to back off
+    int stepstoextend = 20;
+    int backoff = 5; // The very ends of curves seem generally bad.  Taking a few steps to back off
 
-    for (int rev = 0; rev < 2; rev++) 
-    {
-        for (int i = 0; i < curves.size(); i++)
-        { 
-            int len = curves[i].rows();
-            int cols = curves[i].cols();
-            curves[i].conservativeResize(len + stepstoextend - backoff, cols);
-            normals[i].conservativeResize(len + stepstoextend - backoff, cols);
+    for (int i = 0; i < curves.size(); i++)
+    { 
+        int len = curves[i].rows();
+        int cols = curves[i].cols();
+        curves[i].conservativeResize(len + stepstoextend - backoff, cols);
+        normals[i].conservativeResize(len + stepstoextend - backoff, cols);
 
-            Eigen::Vector3d endpoint = curves[i].row(len-1 - backoff);
-            Eigen::Vector3d prevpoint = curves[i].row(len-2 - backoff);
-            Eigen::Vector3d curr_dir = endpoint - prevpoint;
-            // hack-y way of figuring out the edge of the end-point 
-            point.row(0) = prevpoint + curr_dir * .01;
+        Eigen::Vector3d endpoint = curves[i].row(len-1 - backoff);
+        Eigen::Vector3d prevpoint = curves[i].row(len-2 - backoff);
+        Eigen::Vector3d curr_dir = endpoint - prevpoint;
+        // hack-y way of figuring out the edge of the end-point 
+        point.row(0) = prevpoint + curr_dir * .01;
 
-            curr_dir *= 1000.0; // Assumes mesh is roughly deluanay
+        curr_dir *= 1000.0; // Assumes mesh is roughly deluanay
 
-            tree.squared_distance(wv.V,wv.F,point,sqrD,nearFace,C);
-            int curr_face_id = nearFace(0);
+        tree.squared_distance(wv.V,wv.F,point,sqrD,nearFace,C);
+        int curr_face_id = nearFace(0);
 
-            TracePoint tp;
-            startTraceFromPoint(wv, curr_face_id, point.row(0), curr_dir, tp);
-    //        std::cout << point.row(0) - prevpoint << " should be same \n";
-            int curr_edge_id = tp.edge_id;
-            getNextTracePoint(wv, curr_face_id, tp.edge_id, prevpoint, tp.op_v_id, curr_dir, tp); 
-            std::cout << tp.point - endpoint << " endpoints should be same \n";
+        TracePoint tp;
+        startTraceFromPoint(wv, curr_face_id, point.row(0), curr_dir, tp);
+//        std::cout << point.row(0) - prevpoint << " should be same \n";
+        int curr_edge_id = tp.edge_id;
+        getNextTracePoint(wv, curr_face_id, tp.edge_id, prevpoint, tp.op_v_id, curr_dir, tp); 
+//        std::cout << tp.point - endpoint << " endpoints should be same \n";
 
-            for (int j = 0; j < stepstoextend; j++)
-            {
-                curr_dir = mapVectorToAdjacentFace(wv.F, wv.V, wv.edgeVerts,
-                                                   tp.edge_id, curr_face_id, tp.face_id, curr_dir);
-                curr_face_id = tp.face_id;  
-                curves[i].row(len + j - backoff)  = tp.point;
-                normals[i].row(len + j - backoff) = tp.n;
+        for (int j = 0; j < stepstoextend; j++)
+        {
+            curr_dir = mapVectorToAdjacentFace(wv.F, wv.V, wv.edgeVerts,
+                                               tp.edge_id, curr_face_id, tp.face_id, curr_dir);
+            curr_face_id = tp.face_id;  
+            curves[i].row(len + j - backoff)  = tp.point;
+            normals[i].row(len + j - backoff) = tp.n;
 
-                getNextTracePoint(wv, curr_face_id, tp.edge_id, tp.point, tp.op_v_id, curr_dir, tp); 
-            }
+            getNextTracePoint(wv, curr_face_id, tp.edge_id, tp.point, tp.op_v_id, curr_dir, tp); 
+        }
 
-            Eigen::MatrixXd revcurve = curves[i];
-            Eigen::MatrixXd revnorm = normals[i];
-            int c_len = curves[i].rows();
-            for (int r = 0; r < c_len; r++)
-            {
-                revcurve.row(r) = curves[i].row(c_len - r - 1);
-                revnorm.row(r) = normals[i].row(c_len - r - 1);
-            }
-            curves[i] = revcurve;
-            normals[i] = revnorm;
-    
-        }   
-    }
+        Eigen::MatrixXd revcurve = curves[i];
+        Eigen::MatrixXd revnorm = normals[i];
+        int c_len = curves[i].rows();
+        for (int r = 0; r < c_len; r++)
+        {
+            revcurve.row(r) = curves[i].row(c_len - r - 1);
+            revnorm.row(r) = normals[i].row(c_len - r - 1);
+        }
+        curves[i] = revcurve;
+        normals[i] = revnorm;
+
+    }   
 
     // Cut strips at areas of high curvature.
 
@@ -202,7 +228,7 @@ void Trace::logRibbonsToFile(std::string foldername, std::string filename, const
     std::vector<Eigen::MatrixXd> splitnormals;
 
     double maxcurvature = 200;
-    double minrodlen = 70;
+    double minrodlen = 20;
 
     for(int i=0; i<curves.size(); i++)
     {
@@ -296,6 +322,7 @@ void Trace::logRibbonsToFile(std::string foldername, std::string filename, const
             if (seg_length > max_length)
             {
                 max_length = seg_length;
+                max_length = 0.;
             }
         }
 

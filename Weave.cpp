@@ -713,6 +713,7 @@ int Weave::extractIsoline(const Eigen::MatrixXd &V, const Eigen::MatrixXi &F, co
             }
             isoNormal.push_back(curISONormal);
             isoLines.push_back(curISOLine);
+            std::cout << "trace size is 1\n";
         }
         if(traces.size() == 2)
         {
@@ -777,6 +778,7 @@ int Weave::extractIsoline(const Eigen::MatrixXd &V, const Eigen::MatrixXi &F, co
             }
             isoNormal.push_back(curISONormal);
             isoLines.push_back(curISOLine);
+            std::cout << "trace size is 2\n";
         }
     }
     delete[] visited;

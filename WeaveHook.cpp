@@ -323,6 +323,7 @@ void WeaveHook::drawISOLines()
         // Eigen::MatrixXd line_ends  = path.block(1, 0, curPath.size() - 1, 3);
         // viewer.data.add_edges( line_starts, line_ends, red);
     }
+    trace->loadGeneratedCurves(weave->isoLines, weave->isoNormal);
 }
 
 void WeaveHook::deserializeVectorField()

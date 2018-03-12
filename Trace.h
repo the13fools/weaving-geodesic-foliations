@@ -39,6 +39,8 @@ public:
     std::vector< Eigen::VectorXd > bending;
 
     void loadSampledCurves(const std::string &filename);
+    void loadGeneratedCurves(std::vector<std::vector<Eigen::Vector3d> > isoLines, 
+                                std::vector<std::vector<Eigen::Vector3d> > isoNormal);
 
     void traceCurve(const Weave &vw, const Trace_Mode trace_state, int traceIdx, int sign, int faceId, int steps);
     void popLastCurve();
