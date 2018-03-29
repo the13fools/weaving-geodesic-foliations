@@ -1,4 +1,5 @@
 #include "Weave.h"
+
 #include <math.h>
 #include <igl/read_triangle_mesh.h>
 #include <map>
@@ -623,7 +624,6 @@ bool Weave::crosses(double isoval, double val1, double val2, double minval, doub
 } 
 
 
-
 int Weave::extractIsoline(const Eigen::MatrixXd &V, const Eigen::MatrixXi &F, const Eigen::MatrixXi &faceNeighbors, const Eigen::VectorXd &func, double isoval, double minval, double maxval)
 {
     int nfaces = F.rows();
@@ -633,12 +633,16 @@ int Weave::extractIsoline(const Eigen::MatrixXd &V, const Eigen::MatrixXi &F, co
 
     int ntraces = 0;
 
+    // Iterate between faces until encountering a zero level set.  
+    // Trace out the level set in both directions from this face (marking faces as visited)
+    // Save isoline to centerline
     for(int i=0; i<nfaces; i++)
     {
         if(visited[i])
             continue;
         visited[i] = true;
         std::vector<std::vector<Eigen::Vector3d> > traces;
+        std::vector<std::vector<Eigen::Vector3d> > normals;
         std::vector<std::vector<std::pair<int, int> > > traces_vids;
         for(int j=0; j<3; j++)
         {
@@ -648,40 +652,60 @@ int Weave::extractIsoline(const Eigen::MatrixXd &V, const Eigen::MatrixXi &F, co
             if(crosses(isoval, func[vp1], func[vp2], minval, maxval, bary))
             {
                 std::vector<Eigen::Vector3d> trace;
+                std::vector<Eigen::Vector3d> norm;
                 std::vector<std::pair<int, int> > trace_vid;
                 trace.push_back( (1.0 - bary) * V.row(vp1) + bary * V.row(vp2) );
                 trace_vid.push_back(std::make_pair(vp1, vp2));
                 int prevface = i;
                 int curface = faceNeighbors(i, j);
+       //         norm.push_back(faceNormal(prevface));
                 while(curface != -1 && !visited[curface])
                 {
                     visited[curface] = true;
-                    bool found = false;
                     for(int k=0; k<3; k++)
                     {
                         if(faceNeighbors(curface, k) == prevface)
                             continue;
-                    int vp1 = F(curface, (k+1)%3);
-                    int vp2 = F(curface, (k+2)%3);
+                        int vp1 = F(curface, (k+1)%3);
+                        int vp2 = F(curface, (k+2)%3);
                         double bary;
                         if(crosses(isoval, func[vp1], func[vp2], minval, maxval, bary))
                         {
                             trace.push_back( (1.0 - bary) * V.row(vp1) + bary * V.row(vp2) );
                             trace_vid.push_back(std::make_pair(vp1, vp2));
+                            norm.push_back(faceNormal(curface));
                             prevface = curface;
                             curface = faceNeighbors(curface, k);
-                            found = true;
                             break;
                         }                       
                     }
                 }
                 traces.push_back(trace);
+                normals.push_back(norm);
                 traces_vids.push_back(trace_vid);
             }
         }
         assert(traces.size() == traces_vids.size());
         assert(traces.size() < 3);
-        if(traces.size() == 1)
+
+        
+        if(traces.size() == 2)
+        {
+            ntraces++;
+            vector<Eigen::Vector3d> curISONormal;
+            vector<Eigen::Vector3d> curISOLine;
+            int nterms = traces[0].size() + traces[1].size();
+            std::cout << nterms << " 0 0 " << nterms << " 0 0 " << std::endl;
+            for(int j=0; j < traces[0].size(); j++)
+            {
+                curISOLine.push_back(traces[0][j]);
+            }
+            isoNormal.push_back(normals[0]);
+            isoLines.push_back(curISOLine);
+            std::cout << "trace size is 2\n";
+
+        }
+/*        if(traces.size() == 1)
         {
             ntraces++;
             vector<Eigen::Vector3d> curISONormal;
@@ -713,7 +737,7 @@ int Weave::extractIsoline(const Eigen::MatrixXd &V, const Eigen::MatrixXi &F, co
             }
             isoNormal.push_back(curISONormal);
             isoLines.push_back(curISOLine);
-            std::cout << "trace size is 1\n";
+            std::cerr << "trace size is 1\n";
         }
         if(traces.size() == 2)
         {
@@ -779,7 +803,7 @@ int Weave::extractIsoline(const Eigen::MatrixXd &V, const Eigen::MatrixXi &F, co
             isoNormal.push_back(curISONormal);
             isoLines.push_back(curISOLine);
             std::cout << "trace size is 2\n";
-        }
+        }*/
     }
     delete[] visited;
     return ntraces;
@@ -1033,6 +1057,8 @@ void Weave::augmentField()
     cout << "finish augmenting the mesh" << endl;
     V = VAug;
     F = FAug;
+    nFields_unaugmented = nFields_;
+    nFields_ = 1; // set global field count to 1 on augmented mesh
     buildConnectivityStructures();
     buildGeometricStructures();
     augmented = true;
@@ -1040,6 +1066,8 @@ void Weave::augmentField()
 
 void Weave::computeFunc(double scalesInit)
 {
+    nFields_ = nFields_unaugmented; // hack hack hack
+
     std::ofstream debugOut("debug.txt");
     int nfaces = nFaces();
     int nverts = nVerts();
@@ -1085,7 +1113,7 @@ void Weave::computeFunc(double scalesInit)
     // Eigen::SparseMatrix<double> faceLapMat = faceLaplacian();
     Eigen::VectorXd scales(nfaces);
     scales.setConstant(scalesInit);
-    int totalIter = 30;
+    int totalIter = 3;
     for (int iter = 0; iter < totalIter; iter ++)
     {
         vector<double> difVec;
@@ -1190,6 +1218,8 @@ void Weave::computeFunc(double scalesInit)
     for (int i = 0; i < nverts; i ++)
         debugOut << theta[i] << endl;
     debugOut.close();
+
+    nFields_ = 1; // hack hack hack
 }
 
 Eigen::SparseMatrix<double> Weave::faceLaplacian()

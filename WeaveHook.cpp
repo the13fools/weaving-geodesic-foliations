@@ -25,13 +25,13 @@ void WeaveHook::setFaceColors(igl::viewer::Viewer &viewer)
                 Z(i) = .7;
                 break;
             case F1_ENERGY:
-                Z(i) = log(curFaceEnergies(i,0));
+                Z(i) = log(curFaceEnergies(i,3));
                 break;  
             case F2_ENERGY:
-                Z(i) = log(curFaceEnergies(i,1));
+                Z(i) = log(curFaceEnergies(i,4));
                 break;  
             case F3_ENERGY:
-                Z(i) = log(curFaceEnergies(i,2));
+                Z(i) = log(curFaceEnergies(i,6));
                 break;  
             case TOT_ENERGY:
                 Z(i) = log(curFaceEnergies.row(i).norm());
@@ -142,6 +142,7 @@ void WeaveHook::drawTraceCenterlines(igl::viewer::Viewer &viewer)
         int rows = trace->curves[i].rows();
         Eigen::MatrixXd s1 = trace->curves[i].block(0, 0, rows - 1, 3);
         Eigen::MatrixXd s2 = trace->curves[i].block(1, 0, rows - 1, 3);
+        Eigen::MatrixXd norms = trace->normals[i].block(0, 0, rows - 1, 3);
          
         switch (trace->modes[i])
         {
@@ -150,6 +151,8 @@ void WeaveHook::drawTraceCenterlines(igl::viewer::Viewer &viewer)
                 break;
             case FIELD:
                 viewer.data.add_edges(s1, s2, green);
+             ///   cout << s1.rows() << " " << trace->normals[i].rows() << "\n";
+                viewer.data.add_edges(s1, s1 + norms, red);
                 if( showBending )
                 {
                     Eigen::MatrixXd bend_colors = Eigen::MatrixXd::Zero(s2.rows(),3);

@@ -12,7 +12,7 @@ void faceEnergies(const Weave &weave, SolverParams params, Eigen::MatrixXd &E)
     int nedges = weave.nEdges();
     int m = weave.nFields();
     int nfaces = weave.nFaces();
-    E.resize(nfaces, m);
+    E.resize(nfaces, m + 4);
     E.setZero();
 
     Eigen::VectorXd r;
@@ -36,6 +36,16 @@ void faceEnergies(const Weave &weave, SolverParams params, Eigen::MatrixXd &E)
             }
         }
     }
+
+    for (int i = 0; i < nfaces; i++)
+    {
+        E(i, m)     = weave.v(i, 0).norm();
+        E(i, m + 1) = weave.beta(i, 0).transpose() * weave.Js.block<2,2>(2*i,0) * weave.v(i, 0);
+        E(i, m + 2) = weave.beta(i, 0).normalized().transpose() * weave.Js.block<2,2>(2*i,0) * weave.v(i, 0).normalized();
+        E(i, m + 3) = weave.beta(i, 0).norm() ;
+        E(i, m + 1) = weave.alpha(i, 0).norm() ;
+  //      std::cout << E(i, m + 1) << '\n';
+    } 
 }
 
 void GNmetric(const Weave &weave, Eigen::SparseMatrix<double> &M)

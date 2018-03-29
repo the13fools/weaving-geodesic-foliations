@@ -45,7 +45,9 @@ public:
     void traceCurve(const Weave &vw, const Trace_Mode trace_state, int traceIdx, int sign, int faceId, int steps);
     void popLastCurve();
     void logRibbonsToFile(std::string foldername, std::string filename, const Weave &wv);
-    void computeIntersections(int curveIdx1, int curveIdx2, std::vector<Collision> &collisions, std::vector<Eigen::MatrixXd> &curves);
+    void computeIntersections(int curveIdx1, int curveIdx2, 
+                              const std::vector<Eigen::MatrixXd> &splitcurves, 
+                                    std::vector<Collision> &collisions);
     void save(const std::string &filename);
     void load(const std::string &filename);
 

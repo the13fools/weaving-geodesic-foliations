@@ -170,7 +170,7 @@ void Trace::logRibbonsToFile(std::string foldername, std::string filename, const
 
  
  
-    int stepstoextend = 20;
+    int stepstoextend = 10;
     int backoff = 5; // The very ends of curves seem generally bad.  Taking a few steps to back off
 
     for (int i = 0; i < curves.size(); i++)
@@ -205,6 +205,7 @@ void Trace::logRibbonsToFile(std::string foldername, std::string filename, const
             curr_face_id = tp.face_id;  
             curves[i].row(len + j - backoff)  = tp.point;
             normals[i].row(len + j - backoff) = tp.n;
+            std::cout << normals[i] << "\n";
 
             getNextTracePoint(wv, curr_face_id, tp.edge_id, tp.point, tp.op_v_id, curr_dir, tp); 
         }
@@ -219,7 +220,6 @@ void Trace::logRibbonsToFile(std::string foldername, std::string filename, const
         }
         curves[i] = revcurve;
         normals[i] = revnorm;
-
     }   
 
     // Cut strips at areas of high curvature.
@@ -227,8 +227,8 @@ void Trace::logRibbonsToFile(std::string foldername, std::string filename, const
     std::vector<Eigen::MatrixXd> splitcurves;
     std::vector<Eigen::MatrixXd> splitnormals;
 
-    double maxcurvature = 200;
-    double minrodlen = 20;
+    double maxcurvature = 2000; // angle - currently disabled
+    double minrodlen = 2;
 
     for(int i=0; i<curves.size(); i++)
     {
@@ -291,7 +291,7 @@ void Trace::logRibbonsToFile(std::string foldername, std::string filename, const
 
 
 
-    // Split each segment into k peices
+
 
 
 
@@ -302,7 +302,7 @@ void Trace::logRibbonsToFile(std::string foldername, std::string filename, const
     {
         for (int j = i; j < splitcurves.size(); j++)
         {
-            computeIntersections(i, j, collisions, splitcurves);
+            computeIntersections(i, j, splitcurves, collisions);
         }
     }
 
@@ -310,6 +310,9 @@ void Trace::logRibbonsToFile(std::string foldername, std::string filename, const
     std::vector<Eigen::VectorXd> desc_maps;
     std::vector< std::vector<Eigen::Vector3d> > desc_curves; //eeew
     std::vector< std::vector<Eigen::Vector3d> > desc_normals;
+
+    double decimation_factor = 1.; // make this bigger and add intelligent subdivision
+
     for (int curveId = 0; curveId < splitcurves.size(); curveId++)
     {
         Eigen::MatrixXd curve = splitcurves[curveId];
@@ -322,7 +325,7 @@ void Trace::logRibbonsToFile(std::string foldername, std::string filename, const
             if (seg_length > max_length)
             {
                 max_length = seg_length;
-                max_length = 0.;
+        //        max_length = 0.;
             }
         }
 
@@ -338,7 +341,7 @@ void Trace::logRibbonsToFile(std::string foldername, std::string filename, const
             Eigen::Vector3d curr_point = curve.row(i);
             double seg_length = (prev_point - curr_point).norm();
             desc_mapping(i-1) = seg_counter;
-            if (seg_length > max_length)
+            if (seg_length > max_length / decimation_factor)
             {
                 seg_counter++;
                 cnew.push_back(curve.row(i));
@@ -374,7 +377,7 @@ void Trace::logRibbonsToFile(std::string foldername, std::string filename, const
     myfile << desc_curves.size() << std::endl;;
     myfile << desc_collisions.size() << std::endl;;
   //  myfile << 0 << std::endl;;
-    myfile << "0.1"  << std::endl;;
+    myfile << "0.001"  << std::endl;;
     myfile << "1e+08"  << std::endl;;
     myfile << "1"  << std::endl  << std::endl  << std::endl;;
 
@@ -476,7 +479,9 @@ int getOpVIdFromEdge(const Weave &wv, int curr_edge, int faceId)
     return -1;
 }
 
-void Trace::computeIntersections(int curveIdx1, int curveIdx2, std::vector<Collision> &collisions, std::vector<Eigen::MatrixXd> &splitcurves)
+void Trace::computeIntersections(int curveIdx1, int curveIdx2, 
+                                 const std::vector<Eigen::MatrixXd> &splitcurves, 
+                                 std::vector<Collision> &collisions)
 {
     Eigen::MatrixXd c1 = splitcurves[curveIdx1];
     Eigen::MatrixXd c2 = splitcurves[curveIdx2];

@@ -54,6 +54,7 @@ public:
     ////////////////////////
 
     int nFields_;
+    int nFields_unaugmented;
     Eigen::VectorXd vectorFields;    // the vector fields, unrolled into a vector:
                                      // first 2m|F| entries: first vector on face 1, second vector on face 1, third vector on face 1, ..., last vector on face m
                                      // next 2m|F| entries: first beta vector on face 1, ...
