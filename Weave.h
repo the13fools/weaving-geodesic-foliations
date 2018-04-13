@@ -87,6 +87,7 @@ public:
 
     Eigen::Vector3d faceNormal(int face) const;
     void normalizeFields(); // make all vectors unit-length
+    bool fixFields;  // Do not allow vectors to change in optimization.  
     void createVisualizationEdges(Eigen::MatrixXd &edgePts, Eigen::MatrixXd &edgeVecs, Eigen::MatrixXi &edgeSegs, Eigen::MatrixXd &colors);
     void createVisualizationCuts(Eigen::MatrixXd &cutPts1, Eigen::MatrixXd &cutPts2);
 

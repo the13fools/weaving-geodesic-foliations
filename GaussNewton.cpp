@@ -42,8 +42,8 @@ void faceEnergies(const Weave &weave, SolverParams params, Eigen::MatrixXd &E)
         E(i, m)     = weave.v(i, 0).norm();
         E(i, m + 1) = weave.beta(i, 0).transpose() * weave.Js.block<2,2>(2*i,0) * weave.v(i, 0);
         E(i, m + 2) = weave.beta(i, 0).normalized().transpose() * weave.Js.block<2,2>(2*i,0) * weave.v(i, 0).normalized();
-        E(i, m + 3) = weave.beta(i, 0).norm() ;
-        E(i, m + 1) = weave.alpha(i, 0).norm() ;
+        E(i, m + 3) = weave.beta(i, 0)[0];
+        E(i, m + 1) = weave.alpha(i, 0) ;
   //      std::cout << E(i, m + 1) << '\n';
     } 
 }
@@ -52,9 +52,10 @@ void GNmetric(const Weave &weave, Eigen::SparseMatrix<double> &M)
 {
     int nhandles = weave.nHandles();
     int nedges = weave.nEdges();
+    int nfaces = weave.nFaces();
     int m = weave.nFields();
     int intedges = weave.numInteriorEdges();
-    int numterms = 2*nhandles + 4 * intedges * m;
+    int numterms = 2*nhandles + 5 * intedges * m;
     M.resize(numterms, numterms);
 
     std::vector<Eigen::Triplet<double> > Mcoeffs;
@@ -96,26 +97,58 @@ void GNmetric(const Weave &weave, Eigen::SparseMatrix<double> &M)
             }
         }
     }
+
+    for (int e = 0; e < nedges; e++)
+    {
+        if(weave.E(e,0) == -1 || weave.E(e,1) == -1)
+            continue;
+        for (int i = 0; i < m; i++)
+        {
+                Mcoeffs.push_back(Triplet<double>(term, term, 1));
+                term += 1;
+        }
+    }
+
+    // for (int f = 0; f < nfaces; f++)
+    // {
+    //     for (int field = 0; field < m; field++)
+    //     {
+    //         Eigen::Matrix2d BTB = weave.Bs[f].transpose() * weave.Bs[f];
+    //         for (int j = 0; j < 2; j++)
+    //         {
+    //             for (int k = 0; k < 2; k++)
+    //             {
+    //                 Mcoeffs.push_back(Triplet<double>(term + j, term + k, 1));
+    //             }
+    //         }
+    //         term += 2;
+    //     }
+    // }
+
     M.setFromTriplets(Mcoeffs.begin(), Mcoeffs.end());
 }
 
+// Here we define the energy of field optimization operation. 
 void GNEnergy(const Weave &weave, SolverParams params, Eigen::VectorXd &E)
 {
     int nhandles = weave.nHandles();
     int nedges = weave.nEdges();
+    int nfaces = weave.nFaces();
     int m = weave.nFields();
     int intedges = weave.numInteriorEdges();
-    int nterms = 2 * nhandles + 4 * intedges*m;
+    int nterms = 2 * nhandles + 5 * intedges*m;
     E.resize(nterms);
     E.setZero();
 
+    // Energy for aligning with the user prescribed handles
     for(int i=0; i<nhandles; i++)
     { 
         int field = weave.handles[i].field;
         int face = weave.handles[i].face;
         Vector2d dir = weave.handles[i].dir;
         for (int coeff = 0; coeff < 2; coeff++)
-            E[2 * i + coeff] = (weave.v(face, field) - dir)[coeff];
+            if (!weave.fixFields)
+                E[2 * i + coeff] = (weave.v(face, field) - dir)[coeff];
     }
 
     int term = 2*nhandles;
@@ -151,16 +184,53 @@ void GNEnergy(const Weave &weave, SolverParams params, Eigen::VectorXd &E)
                 }
             }
         }
-    }    
+    } 
+
+    // Curl free term?
+    for (int e = 0; e < nedges; e++)
+    {
+        if(weave.E(e,0) == -1 || weave.E(e,1) == -1)
+            continue;
+        for (int i = 0; i < m; i++)
+        {
+                int f = weave.E(e, 0);
+                int g = weave.E(e, 1);
+                Eigen::Vector3d edge = weave.V.row(weave.edgeVerts(e, 0)) - weave.V.row(weave.edgeVerts(e, 1));
+                Eigen::Matrix2d Jf = weave.Js.block<2, 2>(2 * f, 0);
+                Eigen::Matrix2d Jg = weave.Js.block<2, 2>(2 * g, 0);
+                Eigen::Vector2d vif = weave.v(f, i);
+                Eigen::Vector2d vpermut(0, 0);
+                Eigen::MatrixXi permut = weave.Ps[e];
+                for (int field = 0; field < m; field++)
+                {
+                    vpermut += permut(i, field) * weave.v(g, field);  // Ask about this, v confuse
+                }
+                E[term] = (weave.Bs[f] * (vif)).dot(edge) - (weave.Bs[g] * ( vpermut)).dot(edge);
+                E[term] *= params.curlreg;
+                term++;
+        }
+    }   
+
+    // for (int f = 0; f < nfaces; f++)
+    // {
+    //     for (int i = 0; i < m; i++)
+    //     {
+    //         Eigen::Vector2d b = weave.beta(f, m);
+    //         E[term] = b[1] * params.curlreg; // Expose handle, this is the curl free parameter.
+    //         E[term + 1] = 0;//(b[1] * b[1] - 1.);
+    //         term += 2;
+    //     }
+    // }
 }
 
 void GNGradient(const Weave &weave, SolverParams params, Eigen::SparseMatrix<double> &J)
 {
     int nhandles = weave.nHandles();
     int nedges = weave.nEdges();
+    int nfaces = weave.nFaces();
     int m = weave.nFields();
     int intedges = weave.numInteriorEdges();
-    int nterms = 2 * nhandles + 4 * intedges*m;
+    int nterms = 2 * nhandles + 5 * intedges*m;
     J.resize(nterms, weave.vectorFields.size());
 
     std::vector<Eigen::Triplet<double> > Jcoeffs;
@@ -171,7 +241,8 @@ void GNGradient(const Weave &weave, SolverParams params, Eigen::SparseMatrix<dou
         int face = weave.handles[i].face;
         for (int coeff = 0; coeff < 2; coeff++)
         {
-            Jcoeffs.push_back(Triplet<double>(2 * i + coeff, weave.vidx(face, field) + coeff, 1.0));
+            if (!weave.fixFields)
+                Jcoeffs.push_back(Triplet<double>(2 * i + coeff, weave.vidx(face, field) + coeff, 1.0));
         }
     }
 
@@ -212,27 +283,73 @@ void GNGradient(const Weave &weave, SolverParams params, Eigen::SparseMatrix<dou
                     dE += innervec;
                     for (int k = 0; k < 2; k++)
                     {
-                        Jcoeffs.push_back(Triplet<double>(term, weave.vidx(f, i) + k, dE[k]));
+                        if (!weave.fixFields)
+                            Jcoeffs.push_back(Triplet<double>(term, weave.vidx(f, i) + k, dE[k]));
                     }
                     for (int field = 0; field < m; field++)
                     {
                         dE = -permut(i, field) * Tgf.transpose() * innervec;
                         for (int k = 0; k < 2; k++)
                         {
-                            Jcoeffs.push_back(Triplet<double>(term, weave.vidx(g, field) + k, dE[k]));
+                            if (!weave.fixFields)
+                                Jcoeffs.push_back(Triplet<double>(term, weave.vidx(g, field) + k, dE[k]));
                         }
                     }
                     Jcoeffs.push_back(Triplet<double>(term, weave.alphaidx(f, i), innervec.dot(vif) * vif.dot(cdiff)));
                     dE = (Jf * vif).dot(cdiff) * innervec;
                     for (int k = 0; k < 2; k++)
                     {
-                        Jcoeffs.push_back(Triplet<double>(term, weave.betaidx(f, i) + k, dE[k]));
+                            Jcoeffs.push_back(Triplet<double>(term, weave.betaidx(f, i) + k, dE[k]));
                     }
                     term++;
                 }
             }
         }
     }
+
+    for (int e = 0; e < nedges; e++)
+    {
+        if(weave.E(e,0) == -1 || weave.E(e,1) == -1)
+            continue;
+        for (int i = 0; i < m; i++)
+        {
+                int f = weave.E(e, 0);
+                int g = weave.E(e, 1);
+                Eigen::Vector3d edge = weave.V.row(weave.edgeVerts(e, 0)) - weave.V.row(weave.edgeVerts(e, 1));
+                Eigen::Matrix2d Jf = weave.Js.block<2, 2>(2 * f, 0);
+                Eigen::Matrix2d Jg = weave.Js.block<2, 2>(2 * g, 0);
+                Eigen::Vector2d vif = weave.v(f, i);
+                Eigen::Vector2d b0(1, 0);
+                Eigen::Vector2d b1(0, 1);
+                Eigen::MatrixXi permut = weave.Ps[e];
+                for (int k = 0; k < 2; k++)
+                {
+                    Jcoeffs.push_back(Triplet<double>(term, weave.vidx(f, i) + k, (edge.transpose() * weave.Bs[f] )[k] * params.curlreg));
+                }
+
+                for (int field = 0; field < m; field++)
+                {
+                    Eigen::Vector2d dE = -permut(i, field) * (edge.transpose() * weave.Bs[g] )* params.curlreg;
+                    for (int k = 0; k < 2; k++)
+                    {
+                        Jcoeffs.push_back(Triplet<double>(term, weave.vidx(g, field) + k, dE[k]));
+                    }
+                }
+                
+                term++;
+        }
+    } 
+    // for (int f = 0; f < nfaces; f++)
+    // {
+    //     for (int i = 0; i < m; i++)
+    //     {
+    //   //      Eigen::Vector2d b = weave.beta(f, m);
+    //         Jcoeffs.push_back(Triplet<double>(term, weave.betaidx(f, i),  params.curlreg));
+    //         Jcoeffs.push_back(Triplet<double>(term + 1, weave.betaidx(f, i),  0)); //b[1] * b[1] - 1.));
+    //         term += 2;
+    //     }
+    // }
+
     J.setFromTriplets(Jcoeffs.begin(), Jcoeffs.end());
 }
 
@@ -267,6 +384,12 @@ void oneStep(Weave &weave, SolverParams params)
     GNEnergy(weave, params, r);
     Eigen::SparseMatrix<double> M;
     GNmetric(weave, M);
+  
+    Eigen::VectorXd vectorFields_fix;   
+    if (weave.fixFields)
+    {
+        vectorFields_fix = weave.vectorFields;
+    }
 
     std::cout << "original energy: " << 0.5 * r.transpose() * M * r << std::endl;
     std::cout << "Building matrix" << std::endl;
@@ -276,7 +399,8 @@ void oneStep(Weave &weave, SolverParams params)
     std::vector<Eigen::Triplet<double> > coeffs;
     int nfaces = weave.nFaces();
     int m = weave.nFields();
-    for (int i = 2 * nfaces*m; i < 5 * nfaces*m; i++)
+   // for (int i = 2 * nfaces*m; i < 5 * nfaces*m; i++)
+    for (int i = 0; i < 5 * nfaces*m; i++)
         coeffs.push_back(Eigen::Triplet<double>(i, i, params.lambdareg));
     optMat.setFromTriplets(coeffs.begin(), coeffs.end());
     optMat += J.transpose() * M * J;
@@ -290,6 +414,20 @@ void oneStep(Weave &weave, SolverParams params)
     solver.factorize(optMat);
     Eigen::VectorXd update = solver.solve(rhs);
     lineSearch(weave, params, update);
+
+    if (weave.fixFields)
+    { 
+        int nfaces = weave.nFaces();
+        int m = weave.nFields();
+        for (int i = 0; i < nfaces; i++)
+        {
+            for (int j = 0; j < m; j++)
+            {
+                int vid = weave.vidx(i, j);
+                weave.vectorFields.segment<2>(vid) = vectorFields_fix.segment<2>(vid);
+            }
+        }
+    }
     
     GNEnergy(weave, params, r);
     std::cout << "Done, new energy: " << 0.5 * r.transpose()*M*r << std::endl;

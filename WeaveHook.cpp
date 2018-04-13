@@ -25,13 +25,13 @@ void WeaveHook::setFaceColors(igl::viewer::Viewer &viewer)
                 Z(i) = .7;
                 break;
             case F1_ENERGY:
-                Z(i) = log(curFaceEnergies(i,3));
+                Z(i) = log(curFaceEnergies(i,0));
                 break;  
             case F2_ENERGY:
-                Z(i) = log(curFaceEnergies(i,4));
+                Z(i) = log(curFaceEnergies(i,1));
                 break;  
             case F3_ENERGY:
-                Z(i) = log(curFaceEnergies(i,6));
+                Z(i) = log(curFaceEnergies(i,2));
                 break;  
             case TOT_ENERGY:
                 Z(i) = log(curFaceEnergies.row(i).norm());

@@ -10,6 +10,7 @@ struct SolverParams
 {
     double lambdacompat; // weight of compatibility term
     double lambdareg;    // Tilhonov regularization
+    double curlreg; // Weight on the curl component of v
     Eigen::VectorXd edgeWeights;
 };
 

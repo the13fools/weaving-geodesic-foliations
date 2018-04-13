@@ -58,6 +58,15 @@ Weave::Weave(const std::string &objname, int m)
         Ps[i].setIdentity();
     }
     augmented = false;
+     
+    // int nfaces = nFaces();
+    // for (int i = 0; i < nfaces; i++)
+    // {
+    //     for (int j = 0; j < m; j++)
+    //     {
+    //         vectorFields.segment<2>(vidx(i, j)) = ;
+    //     }
+    // }
 }
 
 Weave::~Weave()

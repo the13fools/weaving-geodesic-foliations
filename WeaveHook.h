@@ -64,9 +64,14 @@ public:
         viewer.ngui->addVariable("Shading", shading_state, true)
             ->setItems({ "None", "F1 Energy", "F2 Energy", "F3 Energy", "Total Energy", "FUN_VAL" });
 
+//        viewer.ngui->addVariable("Fun Val Cover", funvalcover);
+        viewer.ngui->addButton("Normalize Fields", std::bind(&WeaveHook::normalizeFields, this));
+        viewer.ngui->addVariable("Fix Fields", weave->fixFields);
+
         viewer.ngui->addGroup("Solver Parameters");
         viewer.ngui->addVariable("Compatilibity Lambda", params.lambdacompat);
         viewer.ngui->addVariable("Tikhonov Reg", params.lambdareg);
+        viewer.ngui->addVariable("V curl reg", params.curlreg);
         viewer.ngui->addButton("Reassign Permutations", std::bind(&WeaveHook::reassignPermutations, this));
         viewer.ngui->addButton("Remove Singularities", std::bind(&WeaveHook::removeSingularities, this));
         viewer.ngui->addButton("Augment Field", std::bind(&WeaveHook::augmentField, this));
@@ -195,7 +200,9 @@ public:
         curFaceEnergies = Eigen::MatrixXd::Zero(3, 3);
         selectedVertices.clear();
         renderSelectedVertices.clear();
-        params.edgeWeights = Eigen::VectorXd::Constant(weave->nEdges(), 1);        
+        params.edgeWeights = Eigen::VectorXd::Constant(weave->nEdges(), 1);    
+
+        weave->fixFields = false;    
     }
 
     virtual void updateRenderGeometry()
