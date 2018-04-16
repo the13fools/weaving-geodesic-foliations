@@ -1078,6 +1078,7 @@ void Weave::computeFunc(double scalesInit)
     nFields_ = nFields_unaugmented; // hack hack hack
 
     std::ofstream debugOut("debug.txt");
+    std::ofstream debugVectsOut("debug.field");
     int nfaces = nFaces();
     int nverts = nVerts();
     cout << "nfaces: " << nfaces << endl;
@@ -1113,6 +1114,7 @@ void Weave::computeFunc(double scalesInit)
             faceVec = Bs[fId] * v(fId, 0); // The original vec
         faceVec = faceVec.cross(faceNormal(fId));
         faceVec /= faceVec.norm();
+        debugVectsOut << faceVec.transpose() << endl;
         difVecUnscaled.push_back(e01.dot(faceVec));
         difVecUnscaled.push_back(e12.dot(faceVec));
         difVecUnscaled.push_back(e20.dot(faceVec));
@@ -1122,7 +1124,7 @@ void Weave::computeFunc(double scalesInit)
     // Eigen::SparseMatrix<double> faceLapMat = faceLaplacian();
     Eigen::VectorXd scales(nfaces);
     scales.setConstant(scalesInit);
-    int totalIter = 3;
+    int totalIter = 6;
     for (int iter = 0; iter < totalIter; iter ++)
     {
         vector<double> difVec;

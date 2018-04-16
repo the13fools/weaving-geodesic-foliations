@@ -118,16 +118,19 @@ void Trace::loadGeneratedCurves(std::vector<std::vector<Eigen::Vector3d> > isoLi
         Eigen::MatrixXd curve = Eigen::MatrixXd::Zero(npoints, 3);
         Eigen::MatrixXd normal = Eigen::MatrixXd::Zero(npoints, 3);
         Eigen::VectorXd bend = Eigen::VectorXd::Zero(npoints); // Not implemented yet
-        for (int j = 0; j < npoints; j++)
+        if ( npoints > 3 )
         {
-            curve.row(j) = isoLines[i][j];
-            normal.row(j) = isoNormal[i][j];
+            for (int j = 0; j < npoints; j++)
+            {
+                curve.row(j) = isoLines[i][j];
+                normal.row(j) = isoNormal[i][j];
 
+            }
+            curves.push_back(curve);
+            normals.push_back(normal);
+            bending.push_back(bend);
+            modes.push_back(Trace_Mode::FIELD);
         }
-        curves.push_back(curve);
-        normals.push_back(normal);
-        bending.push_back(bend);
-        modes.push_back(Trace_Mode::FIELD);
     }
 }
 
@@ -169,9 +172,9 @@ void Trace::logRibbonsToFile(std::string foldername, std::string filename, const
     tree.init(wv.V,wv.F);
 
  
- 
-    int stepstoextend = 10;
-    int backoff = 5; // The very ends of curves seem generally bad.  Taking a few steps to back off
+ // need to deal with boundary case
+    int stepstoextend = 0;
+    int backoff = 0; // The very ends of curves seem generally bad.  Taking a few steps to back off
 
     for (int i = 0; i < curves.size(); i++)
     { 

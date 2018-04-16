@@ -152,7 +152,7 @@ void WeaveHook::drawTraceCenterlines(igl::viewer::Viewer &viewer)
             case FIELD:
                 viewer.data.add_edges(s1, s2, green);
              ///   cout << s1.rows() << " " << trace->normals[i].rows() << "\n";
-                viewer.data.add_edges(s1, s1 + norms, red);
+//                viewer.data.add_edges(s1, s1 + norms, red);
                 if( showBending )
                 {
                     Eigen::MatrixXd bend_colors = Eigen::MatrixXd::Zero(s2.rows(),3);
