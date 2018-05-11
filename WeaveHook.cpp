@@ -152,7 +152,7 @@ void WeaveHook::drawTraceCenterlines(igl::viewer::Viewer &viewer)
             case FIELD:
                 viewer.data.add_edges(s1, s2, green);
              ///   cout << s1.rows() << " " << trace->normals[i].rows() << "\n";
-//                viewer.data.add_edges(s1, s1 + norms, red);
+//z                viewer.data.add_edges(s1, s1 + norms, red);
                 if( showBending )
                 {
                     Eigen::MatrixXd bend_colors = Eigen::MatrixXd::Zero(s2.rows(),3);
@@ -374,6 +374,11 @@ void WeaveHook::addCut()
     Cut c;    
     weave->shortestPath(idx1, idx2, c.path);
     weave->cuts.push_back(c);    
+  //  std::cout << "\n" << weave->edgeVerts(c.path[0].first, 1 - c.path[0].second ) << "\n";
+    for (int i = 0; i < c.path.size(); i++ )
+    {
+        std::cout << weave->edgeVerts(c.path[i].first, c.path[i].second) << "\n"; // " " <<  weave->edgeVerts.row(c.path[i].first);
+    }
 
     updateRenderGeometry();
 }

@@ -698,23 +698,23 @@ int Weave::extractIsoline(const Eigen::MatrixXd &V, const Eigen::MatrixXi &F, co
         assert(traces.size() < 3);
 
         
-        if(traces.size() == 2)
-        {
-            ntraces++;
-            vector<Eigen::Vector3d> curISONormal;
-            vector<Eigen::Vector3d> curISOLine;
-            int nterms = traces[0].size() + traces[1].size();
-            std::cout << nterms << " 0 0 " << nterms << " 0 0 " << std::endl;
-            for(int j=0; j < traces[0].size(); j++)
-            {
-                curISOLine.push_back(traces[0][j]);
-            }
-            isoNormal.push_back(normals[0]);
-            isoLines.push_back(curISOLine);
-            std::cout << "trace size is 2\n";
+        // if(traces.size() == 2)
+        // {
+        //     ntraces++;
+        //     vector<Eigen::Vector3d> curISONormal;
+        //     vector<Eigen::Vector3d> curISOLine;
+        //     int nterms = traces[0].size() + traces[1].size();
+        //     std::cout << nterms << " 0 0 " << nterms << " 0 0 " << std::endl;
+        //     for(int j=0; j < traces[0].size(); j++)
+        //     {
+        //         curISOLine.push_back(traces[0][j]);
+        //     }
+        //     isoNormal.push_back(normals[0]);
+        //     isoLines.push_back(curISOLine);
+        //     std::cout << "trace size is 2\n";
 
-        }
-/*        if(traces.size() == 1)
+        // }
+        if(traces.size() == 1)
         {
             ntraces++;
             vector<Eigen::Vector3d> curISONormal;
@@ -812,7 +812,7 @@ int Weave::extractIsoline(const Eigen::MatrixXd &V, const Eigen::MatrixXi &F, co
             isoNormal.push_back(curISONormal);
             isoLines.push_back(curISOLine);
             std::cout << "trace size is 2\n";
-        }*/
+        }
     }
     delete[] visited;
     return ntraces;

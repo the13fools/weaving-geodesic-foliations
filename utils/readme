@@ -1,0 +1,39 @@
+1.'Torus2': the mesh after cutting
+  'Torus2_ori': the original mesh
+   The different fields of Torus2:
+   Torus2.vertexPoss: a 3xnumV matrix that specifies the mesh vertices
+   Torus2.faceVIds: a 3xnumF matrix that specifies the mesh faces
+   call 'mesh_topology' to generate the rest of the fields
+   [Torus2.edges, Torus2.adjFaces, Torus2.faceEIds] = mesh_topology(Torus2);
+
+2. The input vector field is stored in
+   Torus2.faceVFs (note that it has to be rotated)
+   The following is a procedure for rotating the vector field
+   faceNormals = mesh_face_normal(Torus2);
+   Torus2.faceVFs = cross(faceNormals, Torus2.faceVFs);
+   Torus2_ori.faceVFs = Torus2.faceVFs
+
+3. Obtaining an un-normalized scalar field, and the corresponding function. This is done on the cut mesh
+   [scale_init, func_init] = function_fitting(Torus2, 1e-1);
+   '1e-1' controls the smoothness of the initial unormalized scalar field. 
+    What we learned is to use a smooth one. Step 7 will make it adaptive to thedata
+   N
+
+4. Use a pair of vertices to determine the right scale
+   fac = 2*pi/(func_init(6179)-func_init(6178));
+
+5. Scale the un-normalized scalar field
+   scale_altermin_opt = fac*scale_init;
+
+6. Initialize the mesh function
+   theta_altermin_opt = theta_initialization(Torus2_ori, scale_altermin_opt);
+
+7. Perform alterminating minimization, which is done on the original mesh
+   for i = 1:128
+     theta_altermin_opt = optimize_function(Torus2_ori, theta_altermin_opt, scale_altermin_opt);
+     scale_altermin_opt = optimize_scales(Torus2_ori, theta_altermin_opt, scale_altermin_opt, 1e-4);
+   end
+   where '1e-4' controls the smoothless of the regualrization 
+
+8. Visualize: 
+trisurf(Torus2_ori.faceVIds', Torus2_ori.vertexPoss(1,:), Torus2_ori.vertexPoss(2,:), Torus2_ori.vertexPoss(3,:), cos(theta_altermin_opt))

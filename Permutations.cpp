@@ -194,13 +194,14 @@ void findSingularVertices(const Weave &weave, std::vector<int> &topologicalSingu
         double totangle = 0;
 
         bool isboundary = false;
+        int iter = 0;
 
         while (true)
         {
             int edge = weave.faceEdges(curface, curspoke);
             int side = (weave.E(edge, 0) == curface) ? 0 : 1;
             int nextface = weave.E(edge, 1 - side);
-            if (nextface == -1)
+            if (nextface == -1 || curface == -1)
             {
                 isboundary = true;
                 break;
