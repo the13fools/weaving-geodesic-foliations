@@ -2,11 +2,193 @@
 #include "GaussNewton.h"
 #include <iostream>
 #include "Permutations.h"
+#include <igl/opengl/glfw/imgui/ImGuiHelpers.h>
+#include "ImGuiDouble.h"
 
 using namespace std;
 
+void WeaveHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
+{
+    ImGui::InputText("Mesh", meshName);
+    if (ImGui::CollapsingHeader("Visualization", ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        ImGui::InputDoubleScientific("Vector Scale", &vectorScale);
+        ImGui::Checkbox("Normalize Vectors", &normalizeVectors);
+        ImGui::Checkbox("Hide Vectors", &hideVectors);
+        ImGui::Combo("Shading", (int *)&shading_state, "None\0F1 Energy\0F2 Energy\0F3 Energy\0Total Energy\0FUN_VAL\0Connection\0");
+        if (ImGui::Button("Normalize Fields", ImVec2(-1, 0)))
+            normalizeFields();
+        ImGui::Checkbox("Fix Fields", &weave->fixFields);
+    }
+    if (ImGui::CollapsingHeader("Solver Parameters", ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        ImGui::InputDoubleScientific("Compatilibity Lambda", &params.lambdacompat);
+        ImGui::InputDoubleScientific("Tikhonov Reg", &params.lambdareg);
+        ImGui::InputDoubleScientific("V curl reg", &params.curlreg);
+        if (ImGui::Button("Reassign Permutations", ImVec2(-1, 0)))
+            reassignPermutations();
+        if (ImGui::Button("Remove Singularities", ImVec2(-1, 0)))
+            removeSingularities();
+        if (ImGui::Button("Augment Field", ImVec2(-1, 0)))        
+            augmentField();
+        ImGui::InputDoubleScientific("Initial Scales", &scalesInit);
+        if (ImGui::Button("Compute Function Value", ImVec2(-1, 0)))        
+            computeFunc();
+        ImGui::InputInt("Num Isolines", &numISOLines);
+        if (ImGui::Button("Draw Isolines", ImVec2(-1, 0)))        
+            drawISOLines();
+    }
+    if (ImGui::CollapsingHeader("Save/Load Field", ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        ImGui::InputText("Filename", vectorFieldName);
+        if (ImGui::Button("Save Field", ImVec2(-1, 0)))   
+            serializeVectorField();             
+        if (ImGui::Button("Load Field", ImVec2(-1, 0)))   
+            deserializeVectorField();
+        if (ImGui::Button("Export Field", ImVec2(-1, 0)))   
+            exportVectorField();
+    }
+    if (ImGui::CollapsingHeader("Add Cut", ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        if (ImGui::Button("Reset Cut Select", ImVec2(-1, 0)))   
+            resetCutSelection();
+        if (ImGui::Button("Add Cut", ImVec2(-1, 0)))   
+            addCut();
+        if (ImGui::Button("Remove Prev Cut", ImVec2(-1, 0)))   
+            removePrevCut();
+    }
+    
+    menu.callback_draw_custom_window = [&]()
+    {
+        // Define next window position + size
+        ImGui::SetNextWindowPos(ImVec2(180.f * menu.menu_scaling(), 10), ImGuiSetCond_FirstUseEver);
+        ImGui::SetNextWindowSize(ImVec2(200, 200), ImGuiSetCond_FirstUseEver);
+        ImGui::Begin(
+            "Handles", nullptr,
+            ImGuiWindowFlags_NoSavedSettings
+        );
+        
+        ImGui::InputInt("Face Location", &handleLocation, 0, 0);
+        ImGui::InputDoubleScientific("P0", &handleParams[0]);
+        ImGui::InputDoubleScientific("P1", &handleParams[1]);
+        ImGui::InputDoubleScientific("P2", &handleParams[2]);
+        ImGui::InputDoubleScientific("P3", &handleParams[3]);
+        ImGui::InputDoubleScientific("P4", &handleParams[4]);
+        ImGui::InputDoubleScientific("P5", &handleParams[5]);
+        
+        ImGui::End();
 
-void WeaveHook::setFaceColors(igl::viewer::Viewer &viewer)
+        ImGui::SetNextWindowPos(ImVec2(180.f * menu.menu_scaling(), 210), ImGuiSetCond_FirstUseEver);
+        ImGui::SetNextWindowSize(ImVec2(200, 300), ImGuiSetCond_FirstUseEver);
+
+        ImGui::Begin(
+            "Manipulate", nullptr,
+            ImGuiWindowFlags_NoSavedSettings
+        );
+        
+        if (ImGui::CollapsingHeader("Tracing Controls", ImGuiTreeNodeFlags_DefaultOpen))
+        {
+            ImGui::InputInt("Trace Face", &traceFaceId, 0, 0);
+            ImGui::InputInt("Trace Steps", &traceSteps, 0, 0);
+            ImGui::InputInt("Trace Field", &traceIdx, 0, 0);
+            ImGui::InputInt("Trace Sign", &traceSign, 0, 0);
+            ImGui::Combo("Trace Mode", (int *)&trace_state, "Geodesic\0Field\0\0");
+            ImGui::Checkbox("Show Bending", &showBending);
+            ImGui::InputText("Trace File", traceFile);
+            if (ImGui::Button("Save Traces", ImVec2(-1, 0)))
+                saveTraces();
+            if (ImGui::Button("Load Traces", ImVec2(-1, 0)))   
+                loadTraces();
+            if (ImGui::Button("Load Sampled Traces", ImVec2(-1, 0)))   
+                loadSampledTraces();
+        }
+        ImGui::End();
+    };
+            
+
+    if (ImGui::CollapsingHeader("Traces", ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        if (ImGui::Button("Draw Trace", ImVec2(-1, 0)))
+        {
+            isDrawTrace = true;
+        }
+        if (ImGui::Button("Delete Last Trace", ImVec2(-1, 0)))
+        {
+            isDeleteLastTrace = true;
+        }
+        if (ImGui::Button("Save Traces", ImVec2(-1, 0)))
+        {
+            isSaveTrace = true;
+        }
+    }
+
+}
+
+bool WeaveHook::mouseClicked(igl::opengl::glfw::Viewer &viewer, int button)
+{
+    int fid;
+    Eigen::Vector3f bc;
+    // Cast a ray in the view direction starting from the mouse position
+    double x = viewer.current_mouse_x;
+    double y = viewer.core.viewport(3) - viewer.current_mouse_y;
+    if (igl::unproject_onto_mesh(Eigen::Vector2f(x, y), viewer.core.view * viewer.core.model,
+        viewer.core.proj, viewer.core.viewport, this->weave->V, this->weave->F, fid, bc))
+    {
+        std::cout << fid << " - clicked on vertex #\n"; 
+        bool found = false;
+        for (int i = 0; i < (int)selectedVertices.size(); i++)
+        {
+            if(selectedVertices[i].first == fid)
+            { 
+                found = true;
+                if (selectedVertices[i].second < 2)
+                    selectedVertices[i].second++;
+                else
+                    selectedVertices.erase(selectedVertices.begin() + i);
+            }
+        }
+        if(!found && selectedVertices.size() < 2)
+        {
+            std::pair<int, int> newsel(fid, 0);
+            selectedVertices.push_back(newsel);
+        }
+        renderSelectedVertices.clear();
+        for (int i = 0; i < (int)selectedVertices.size(); i++)
+        {
+            renderSelectedVertices.push_back(weave->V.row(weave->F(selectedVertices[i].first, selectedVertices[i].second)));
+        }
+        return true;
+    }
+    return false;
+}
+
+void WeaveHook::initSimulation()
+{
+    if (weave)
+        delete weave;
+    weave = new Weave(meshName, 3);
+    Handle h;
+    h.face = 0;
+    h.dir << 1, 0;
+    h.field = 2;
+    weave->addHandle(h);
+    h.face = 0;
+    h.dir << 0, 1;
+    h.field = 1;
+    weave->addHandle(h);
+    h.face = 0;
+    h.dir << 1, -1;
+    h.field = 0;
+    weave->addHandle(h);
+    curFaceEnergies = Eigen::MatrixXd::Zero(3, 3);
+    selectedVertices.clear();
+    renderSelectedVertices.clear();
+    params.edgeWeights = Eigen::VectorXd::Constant(weave->nEdges(), 1);    
+
+    weave->fixFields = false;    
+}
+
+void WeaveHook::setFaceColors(igl::opengl::glfw::Viewer &viewer)
 { 
     int faces = weave->F.rows();
     // if ( curFaceEnergies.rows() != faces && shading_state != NONE) { return ; }
@@ -20,10 +202,7 @@ void WeaveHook::setFaceColors(igl::viewer::Viewer &viewer)
     for (int i = 0; i < faces; i++) 
     {
         switch(shading_state)
-        {
-            case NONE:
-                Z(i) = .7;
-                break;
+        {           
             case F1_ENERGY:
                 Z(i) = log(curFaceEnergies(i,0));
                 break;  
@@ -36,19 +215,29 @@ void WeaveHook::setFaceColors(igl::viewer::Viewer &viewer)
             case TOT_ENERGY:
                 Z(i) = log(curFaceEnergies.row(i).norm());
                 break;  
+            case NONE:
+            default:
+                Z(i) = .7;
+                break;
         }       
     }
+    
+    if (shading_state == CONNECTION_ENERGY)
+    {
+        weave->connectionEnergy(Z);
+    }
+    
     if (shading_state == FUN_VAL)
     {
         for (int i = 0; i < weave->nVerts(); i ++)
         {
             FVAL(i) = weave->theta[i];
-            viewer.data.set_face_based(false);
+            viewer.data().set_face_based(false);
         }
     }
     else
     {
-        viewer.data.set_face_based(true);
+        viewer.data().set_face_based(true);
     }
 
 
@@ -73,7 +262,7 @@ void WeaveHook::setFaceColors(igl::viewer::Viewer &viewer)
                     const Eigen::RowVector3d red(0.9,.1,.1), blue(0.1,.1,.9);
                     Eigen::MatrixXd line_starts = paths[i].block(0, 0, paths[i].rows() - 1, 3);
                     Eigen::MatrixXd line_ends  = paths[i].block(1, 0, paths[i].rows() - 1, 3);
-                    viewer.data.add_edges( line_starts, line_ends, red);
+                    viewer.data().add_edges( line_starts, line_ends, red);
                 }
             }
             break;
@@ -83,11 +272,11 @@ void WeaveHook::setFaceColors(igl::viewer::Viewer &viewer)
             break;
     }
     
-    viewer.data.set_colors(faceColors);
+    viewer.data().set_colors(faceColors);
 }
 
 
-void WeaveHook::showCutVertexSelection(igl::viewer::Viewer &viewer)
+void WeaveHook::showCutVertexSelection(igl::opengl::glfw::Viewer &viewer)
 {
     Eigen::RowVector3d teal(.1, .9, .9);
     int nsel = renderSelectedVertices.size();
@@ -98,21 +287,21 @@ void WeaveHook::showCutVertexSelection(igl::viewer::Viewer &viewer)
         P.row(i) = renderSelectedVertices[i];
         C.row(i) = teal;
     }
-    viewer.data.add_points(P, C);
+    viewer.data().add_points(P, C);
     
 }
 
-void WeaveHook::drawCuts(igl::viewer::Viewer &viewer)
+void WeaveHook::drawCuts(igl::opengl::glfw::Viewer &viewer)
 {
     Eigen::RowVector3d blue(0.9, .1, .9);
     Eigen::MatrixXd C(cutPos1.rows(), 3);
     for(int i=0; i<3; i++)
         C.col(i).setConstant(blue[i]);
-    viewer.data.add_edges(cutPos1, cutPos2, C);
+    viewer.data().add_edges(cutPos1, cutPos2, C);
     
 }
 
-void WeaveHook::drawTraceCenterlines(igl::viewer::Viewer &viewer)
+void WeaveHook::drawTraceCenterlines(igl::opengl::glfw::Viewer &viewer)
 {
     if (isDeleteLastTrace)
     {
@@ -147,10 +336,10 @@ void WeaveHook::drawTraceCenterlines(igl::viewer::Viewer &viewer)
         switch (trace->modes[i])
         {
             case GEODESIC:
-                viewer.data.add_edges(s1, s2, red);
+                viewer.data().add_edges(s1, s2, red);
                 break;
             case FIELD:
-                viewer.data.add_edges(s1, s2, green);
+                viewer.data().add_edges(s1, s2, green);
              ///   cout << s1.rows() << " " << trace->normals[i].rows() << "\n";
 //z                viewer.data.add_edges(s1, s1 + norms, red);
                 if( showBending )
@@ -158,14 +347,14 @@ void WeaveHook::drawTraceCenterlines(igl::viewer::Viewer &viewer)
                     Eigen::MatrixXd bend_colors = Eigen::MatrixXd::Zero(s2.rows(),3);
                     igl::ColorMapType viz_color = igl::COLOR_MAP_TYPE_JET;
                     igl::colormap(viz_color,trace->bending[i].tail(s2.rows()), true, bend_colors);
-                    viewer.data.add_points( s2, bend_colors );
+                    viewer.data().add_points( s2, bend_colors );
                 }
                 break;
         }
     }
 }
 
-void WeaveHook::updateSingularVerts(igl::viewer::Viewer &viewer)
+void WeaveHook::updateSingularVerts(igl::opengl::glfw::Viewer &viewer)
 {
 
 /*    nonIdentityEdges = Eigen::MatrixXd::Zero(weave->E.size(), 3);
@@ -189,14 +378,14 @@ void WeaveHook::updateSingularVerts(igl::viewer::Viewer &viewer)
 
     Eigen::RowVector3d green(.1, .9, .1);
     Eigen::RowVector3d blue(.1, .1, .9);
-    viewer.data.add_points( singularVerts_topo, green ); 
-    viewer.data.add_points( nonIdentityEdges, blue ); 
+    viewer.data().add_points( singularVerts_topo, green ); 
+    viewer.data().add_points( nonIdentityEdges, blue ); 
 }
 
-void WeaveHook::renderRenderGeometry(igl::viewer::Viewer &viewer)
+void WeaveHook::renderRenderGeometry(igl::opengl::glfw::Viewer &viewer)
 {
-    viewer.data.clear();
-    viewer.data.set_mesh(renderQ, renderF);
+    viewer.data().clear();
+    viewer.data().set_mesh(renderQ, renderF);
     int edges = edgeSegs.rows();
     Eigen::MatrixXd renderPts(2 * edges, 3);
     for (int i = 0; i < edges; i++)
@@ -212,7 +401,7 @@ void WeaveHook::renderRenderGeometry(igl::viewer::Viewer &viewer)
     }
     if (!hideVectors)
     {
-        viewer.data.set_edges(renderPts, edgeSegs, edgeColors);
+        viewer.data().set_edges(renderPts, edgeSegs, edgeColors);
     }
     setFaceColors(viewer);
     drawTraceCenterlines(viewer);

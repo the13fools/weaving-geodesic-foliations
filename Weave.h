@@ -59,7 +59,7 @@ public:
                                      // first 2m|F| entries: first vector on face 1, second vector on face 1, third vector on face 1, ..., last vector on face m
                                      // next 2m|F| entries: first beta vector on face 1, ...
                                      // next m|F| entries: first alpha on face 1, ...
-    std::vector<Eigen::MatrixXi> Ps; // for each edge i, maps indices from triangle E(i,1) to indices in triangle E(i,0), with sign. I.e. the vector on E(i,1) corresponding to vector j on E(i,0) is \sum_k Ps(j,k) v(E(i,1),k)
+    std::vector<Eigen::MatrixXi> Ps; // for each edge i, maps indices from triangle E(i,1) to indices in triangle E(i,0), with sign. I.e. the vector on E(i,1) corresponding to vector j on E(i,0) is \sum_k Ps[i](j,k) v(E(i,1),k)
     std::vector<Handle> handles; // handles on the vector fields
  
     std::vector<Cut> cuts; // list of cuts 
@@ -90,6 +90,11 @@ public:
     bool fixFields;  // Do not allow vectors to change in optimization.  
     void createVisualizationEdges(Eigen::MatrixXd &edgePts, Eigen::MatrixXd &edgeVecs, Eigen::MatrixXi &edgeSegs, Eigen::MatrixXd &colors);
     void createVisualizationCuts(Eigen::MatrixXd &cutPts1, Eigen::MatrixXd &cutPts2);
+    
+    // compute an energy on each face that measures the failure of the vector fields on that face to parallel transport to the
+    // equivalent vector on the neighboring faces, using the trivial connection between faces
+    // each value will be in the range [0, 3*m*PI].
+    void connectionEnergy(Eigen::VectorXd &energies);
 
     void removePointsFromMesh(std::vector<int> vIds);
 

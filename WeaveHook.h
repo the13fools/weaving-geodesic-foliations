@@ -15,7 +15,8 @@ enum Shading_Enum {
     F2_ENERGY,
     F3_ENERGY,
     TOT_ENERGY,
-    FUN_VAL
+    FUN_VAL,
+    CONNECTION_ENERGY
 };
 
 class WeaveHook : public PhysicsHook
@@ -54,113 +55,8 @@ public:
         trace = new Trace();
     }
 
-    virtual void initGUI(igl::viewer::Viewer &viewer)
-    {
-        viewer.ngui->addVariable("Mesh", meshName);
-        viewer.ngui->addGroup("Visualization");
-        viewer.ngui->addVariable("Vector Scale", vectorScale);
-        viewer.ngui->addVariable("Normalize Vectors", normalizeVectors);
-        viewer.ngui->addVariable("Hide Vectors", hideVectors);
-        viewer.ngui->addVariable("Shading", shading_state, true)
-            ->setItems({ "None", "F1 Energy", "F2 Energy", "F3 Energy", "Total Energy", "FUN_VAL" });
-
-//        viewer.ngui->addVariable("Fun Val Cover", funvalcover);
-        viewer.ngui->addButton("Normalize Fields", std::bind(&WeaveHook::normalizeFields, this));
-        viewer.ngui->addVariable("Fix Fields", weave->fixFields);
-
-        viewer.ngui->addGroup("Solver Parameters");
-        viewer.ngui->addVariable("Compatilibity Lambda", params.lambdacompat);
-        viewer.ngui->addVariable("Tikhonov Reg", params.lambdareg);
-        viewer.ngui->addVariable("V curl reg", params.curlreg);
-        viewer.ngui->addButton("Reassign Permutations", std::bind(&WeaveHook::reassignPermutations, this));
-        viewer.ngui->addButton("Remove Singularities", std::bind(&WeaveHook::removeSingularities, this));
-        viewer.ngui->addButton("Augment Field", std::bind(&WeaveHook::augmentField, this));
-        viewer.ngui->addVariable("The initial value of Scales", scalesInit);
-        viewer.ngui->addButton("Compute Function Value", std::bind(&WeaveHook::computeFunc, this));
-        viewer.ngui->addVariable("Number of ISO Lines", numISOLines);
-        viewer.ngui->addButton("Draw ISO Lines", std::bind(&WeaveHook::drawISOLines, this));
-
-        viewer.ngui->addGroup("Save/Load Field");
-        viewer.ngui->addVariable("Filename", vectorFieldName);
-        viewer.ngui->addButton("Save Field", std::bind(&WeaveHook::serializeVectorField, this));
-        viewer.ngui->addButton("Load Field", std::bind(&WeaveHook::deserializeVectorField, this));
-        viewer.ngui->addButton("Export Field", std::bind(&WeaveHook::exportVectorField, this));
-
-        viewer.ngui->addGroup("Add Cut");
-        viewer.ngui->addButton("Reset Cut Select", std::bind(&WeaveHook::resetCutSelection, this));
-        viewer.ngui->addButton("Add Cut", std::bind(&WeaveHook::addCut, this));
-        viewer.ngui->addButton("Remove Prev Cut", std::bind(&WeaveHook::removePrevCut, this));
-
-        viewer.ngui->addWindow(Eigen::Vector2i(300, 600), "Handles");
-        viewer.ngui->addVariable("Face location", handleLocation);
-        viewer.ngui->addVariable("P0", handleParams[0]);
-        viewer.ngui->addVariable("P1", handleParams[1]);
-        viewer.ngui->addVariable("P2", handleParams[2]);
-        viewer.ngui->addVariable("P3", handleParams[3]);
-        viewer.ngui->addVariable("P4", handleParams[4]);
-        viewer.ngui->addVariable("P5", handleParams[5]);
-
-
-
-        viewer.ngui->addWindow(Eigen::Vector2i(300, 10), "Manipulate");
-        viewer.ngui->addGroup("Tracing Controls");
-        viewer.ngui->addVariable("Trace Face", traceFaceId);
-        viewer.ngui->addVariable("Trace Steps", traceSteps);
-        viewer.ngui->addVariable("Trace Field", traceIdx);
-        viewer.ngui->addVariable("Trace Sign", traceSign);
-        viewer.ngui->addVariable("Trace Mode", trace_state, true)
-            ->setItems({ "Geodesic", "Field" });
-        viewer.ngui->addVariable("Show Bending", showBending);
-        viewer.ngui->addVariable("Trace File", traceFile);
-        viewer.ngui->addButton("Save Traces", std::bind(&WeaveHook::saveTraces, this));
-        viewer.ngui->addButton("Load Traces", std::bind(&WeaveHook::loadTraces, this));
-        viewer.ngui->addButton("Load Sampled Traces", std::bind(&WeaveHook::loadSampledTraces, this));
-        //     viewer.ngui->addVariable("Show Singularities", showSingularities);
-
-        viewer.callback_mouse_down =
-            [this](igl::viewer::Viewer& viewer, int, int)->bool
-        {
-            int fid;
-            Eigen::Vector3f bc;
-            // Cast a ray in the view direction starting from the mouse position
-            double x = viewer.current_mouse_x;
-            double y = viewer.core.viewport(3) - viewer.current_mouse_y;
-            if (igl::unproject_onto_mesh(Eigen::Vector2f(x, y), viewer.core.view * viewer.core.model,
-                viewer.core.proj, viewer.core.viewport, this->weave->V, this->weave->F, fid, bc))
-            {
-                std::cout << fid << " - clicked on vertex #\n"; 
-                bool found = false;
-                for (int i = 0; i < (int)selectedVertices.size(); i++)
-                {
-                    if(selectedVertices[i].first == fid)
-                    { 
-                        found = true;
-                        if (selectedVertices[i].second < 2)
-                            selectedVertices[i].second++;
-                        else
-                            selectedVertices.erase(selectedVertices.begin() + i);
-                    }
-                }
-                if(!found && selectedVertices.size() < 2)
-                {
-                    std::pair<int, int> newsel(fid, 0);
-                    selectedVertices.push_back(newsel);
-                }
-                renderSelectedVertices.clear();
-                for (int i = 0; i < (int)selectedVertices.size(); i++)
-                {
-                    renderSelectedVertices.push_back(weave->V.row(weave->F(selectedVertices[i].first, selectedVertices[i].second)));
-                }
-                return true;
-            }
-            return false;
-        };
-        std::cout << R"(Usage:
-	  [click]  Pick face on shape
-
-	)";
-
-    }
+    virtual void drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu);
+    virtual bool mouseClicked(igl::opengl::glfw::Viewer &viewer, int button);
 
     void reassignPermutations();
     void normalizeFields();
@@ -179,31 +75,7 @@ public:
     void loadSampledTraces();
     
     
-    virtual void initSimulation()
-    {
-        if (weave)
-            delete weave;
-        weave = new Weave(meshName, 3);
-        Handle h;
-        h.face = 0;
-        h.dir << 1, 0;
-        h.field = 2;
-        weave->addHandle(h);
-        h.face = 0;
-        h.dir << 0, 1;
-        h.field = 1;
-        weave->addHandle(h);
-        h.face = 0;
-        h.dir << 1, -1;
-        h.field = 0;
-        weave->addHandle(h);
-        curFaceEnergies = Eigen::MatrixXd::Zero(3, 3);
-        selectedVertices.clear();
-        renderSelectedVertices.clear();
-        params.edgeWeights = Eigen::VectorXd::Constant(weave->nEdges(), 1);    
-
-        weave->fixFields = false;    
-    }
+    virtual void initSimulation();
 
     virtual void updateRenderGeometry()
     {
@@ -231,15 +103,15 @@ public:
 
     virtual bool simulateOneStep();    
 
-    virtual void renderRenderGeometry(igl::viewer::Viewer &viewer);    
+    virtual void renderRenderGeometry(igl::opengl::glfw::Viewer &viewer);    
 
-    void setFaceColors(igl::viewer::Viewer &viewer);
+    void setFaceColors(igl::opengl::glfw::Viewer &viewer);
  
-    void drawTraceCenterlines(igl::viewer::Viewer &viewer);
-    void drawCuts(igl::viewer::Viewer &viewer);
+    void drawTraceCenterlines(igl::opengl::glfw::Viewer &viewer);
+    void drawCuts(igl::opengl::glfw::Viewer &viewer);
 
-    void showCutVertexSelection(igl::viewer::Viewer &viewer);
-    void updateSingularVerts(igl::viewer::Viewer &viewer);
+    void showCutVertexSelection(igl::opengl::glfw::Viewer &viewer);
+    void updateSingularVerts(igl::opengl::glfw::Viewer &viewer);
 private:
     std::string meshName;
     Weave *weave;
@@ -276,6 +148,10 @@ private:
     int traceSign;
     int traceFaceId;
     int traceSteps;
+    // nutton Variables for weave hook
+    bool isDrawTrace;
+    bool isDeleteLastTrace;
+    bool isSaveTrace;
     
     bool showBending;
     bool showSingularities;

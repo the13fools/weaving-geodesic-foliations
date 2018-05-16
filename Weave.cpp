@@ -1527,3 +1527,38 @@ int Weave::numInteriorEdges() const
     }
     return result;
 }
+
+void Weave::connectionEnergy(Eigen::VectorXd &energies)
+{
+    energies.resize(nFaces());
+    energies.setZero();
+    
+    int nedges = nEdges();
+    int nfields = nFields();
+    for(int i=0; i<nedges; i++)
+    {
+        if(E(i,0) == -1 || E(i,1) == -1)
+            continue;
+            
+        int face = E(i,0);
+        int opp = E(i,1);
+            
+        for(int j=0; j<nfields; j++)
+        {
+            Eigen::Vector2d vec = v(face, j);
+            Eigen::Vector2d oppvec(0,0);
+            for(int k=0; k<nfields; k++)
+                oppvec += Ps[i](j,k)*v(opp,k);
+            Eigen::Vector2d mappedvec = Ts.block<2,2>(2*i,0) * vec;
+            // mappedvec and oppvec now both live on face opp.
+            // compute the angle between them
+            
+            Eigen::Vector3d v1 = Bs[opp]*mappedvec;
+            Eigen::Vector3d v2 = Bs[opp]*oppvec;
+            Eigen::Vector3d n = faceNormal(opp);
+            double angle = 2.0 * atan2(v1.cross(v2).dot(n), v1.norm() * v2.norm() + v1.dot(v2));
+            energies[face] += fabs(angle);
+            energies[opp] += fabs(angle);
+        }
+    }
+}
