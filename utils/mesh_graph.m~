@@ -13,3 +13,12 @@ for fId = 1 : size(Torus.faceVIds, 2)
     G(v3Id, v2Id) = 1;
 end
 
+for e = 1:size(bound_faces)
+    for v1 = 1:3
+        for v2 = 1:3
+            if  Torus2_ori.faceVIds( boundary_faces(1, e), v1) == Torus2_ori.faceVIds( boundary_faces(2, e), v2) 
+            
+end 
+end
+end
+end

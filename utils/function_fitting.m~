@@ -36,8 +36,9 @@ OPT.lap = OPT.J'*OPT.J;
 % 
 L_reg = face_laplacian(Mesh);
 % OPT.afun = @(x) OPT.W'*x*OPT.W - OPT.W'*OPT.J * ( OPT.lap \( OPT.J' * x ) )*OPT.W + lambda * L_reg*x;
+% OPT.afun = @(x) OPT.W' * (OPT.W*x - OPT.J * ( OPT.lap \ ( OPT.J' * OPT.W*x ) ) + lambda * L_reg *OPT.W* x);
 OPT.afun = @(x) OPT.W' * (OPT.W*x - OPT.J * ( OPT.lap \ ( OPT.J' * OPT.W*x ))) + lambda * L_reg *x;
-[u, v] = eigs(OPT.afun, size(OPT.W, 2), 1, 'smallestreal');
+[blahu, blahv] = eigs(OPT.afun, size(OPT.W, 2), 1, 1e-10);
 
 %e = eigs(OPT.afun, 
 % 
@@ -69,13 +70,13 @@ OPT.afun = @(x) OPT.W' * (OPT.W*x - OPT.J * ( OPT.lap \ ( OPT.J' * OPT.W*x ))) +
 
 % L =  OPT.W' * ( eye(size(OPT.W, 1)) - OPT.J*pinv(full(OPT.J'*OPT.J))*OPT.J' )*OPT.W;
 
-% L =  OPT.W' * ( eye(size(OPT.W, 1)) - OPT.J*pinv(full(OPT.J'*OPT.J))*OPT.J' )*OPT.W;
+L =  OPT.W' * ( eye(size(OPT.W, 1)) - OPT.J*pinv(full(OPT.J'*OPT.J))*OPT.J' )*OPT.W;
 
-% [i,j,s] = find(OPT.W'*OPT.W);
+[i,j,s] = find(OPT.W'*OPT.W);
 % The Laplacian on the mesh faces
-% L_reg = face_laplacian(Mesh);
-% L = L + lambda*L_reg;
-% [u,v] = eigs(sparse(L), 1, 1e-10);
+L_reg = face_laplacian(Mesh);
+L = L + lambda*L_reg;
+[u,v] = eigs(sparse(L), 1, 1e-10);
 s = u;
 if sum(s) < 0
     s = -s;

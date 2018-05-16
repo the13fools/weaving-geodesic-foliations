@@ -257,7 +257,9 @@ function bundle = load_obj(filename)
       bundle.faceVIds = [bundle.faceVIds; bundle.faces{i}(:,1).'];  
   end
   
-  bundle.vertexPoss = bundle.vertex(:, 1:3);
+  bundle.faceVIds = bundle.faceVIds';
+  
+  bundle.vertexPoss = bundle.vertex(:, 1:3)';
 
   fclose(file);
 
