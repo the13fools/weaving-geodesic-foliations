@@ -23,6 +23,22 @@ void resetSimulation()
     hook->reset();
 }
 
+bool mouseDownCallback(igl::opengl::glfw::Viewer &viewer, int button, int modifier)
+{
+    if (!hook)
+        return false;
+
+    return hook->mouseClicked(viewer, button);
+}
+
+bool mouseUpCallback(igl::opengl::glfw::Viewer &viewer, int button, int modifier)
+{
+    if (!hook)
+        return false;
+
+    return hook->mouseReleased(viewer, button);
+}
+
 bool drawCallback(igl::opengl::glfw::Viewer &viewer)
 {
     if (!hook)
@@ -71,6 +87,8 @@ int main(int argc, char *argv[])
   viewer.core.is_animating = true;
   viewer.callback_key_pressed = keyCallback;
   viewer.callback_pre_draw = drawCallback;
+  viewer.callback_mouse_down = mouseDownCallback;
+  viewer.callback_mouse_up = mouseUpCallback;
 
   igl::opengl::glfw::imgui::ImGuiMenu menu;
   viewer.plugins.push_back(&menu);

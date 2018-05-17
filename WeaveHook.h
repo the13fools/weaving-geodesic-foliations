@@ -6,6 +6,7 @@
 #include "GaussNewton.h"
 #include "Trace.h"
 #include <string>
+#include "Surface.h"
 
 #include <igl/unproject_onto_mesh.h>
 
@@ -79,13 +80,13 @@ public:
 
     virtual void updateRenderGeometry()
     {
-        renderQ = weave->V;
-        renderF = weave->F;        
+        renderQ = weave->surf->data().V;
+        renderF = weave->surf->data().F;        
         weave->createVisualizationEdges(edgePts, edgeVecs, edgeSegs, edgeColors);
         weave->createVisualizationCuts(cutPos1, cutPos2);
-        faceColors.resize(weave->nFaces(), 3);
+        faceColors.resize(weave->surf->nFaces(), 3);
         faceColors.setConstant(0.3);
-        baseLength = weave->averageEdgeLength;
+        baseLength = weave->surf->data().averageEdgeLength;
         curFaceEnergies = tempFaceEnergies;
 
 
