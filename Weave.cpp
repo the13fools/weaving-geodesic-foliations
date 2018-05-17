@@ -15,7 +15,7 @@
 #include <igl/remove_unreferenced.h>
 #include <igl/writeOBJ.h>
 #include "Surface.h"
-
+#include "CoverMesh.h"
 
 Weave::Weave(const std::string &objname, int m)
 {
@@ -195,8 +195,13 @@ void Weave::serialize(std::ostream &ofs)
 
 void Weave::deserialize(std::istream &ifs)
 {
+    FieldSurface *newfs = FieldSurface::deserialize(ifs);
+    if (!newfs)
+        return;
+
     delete fs;
-    fs = FieldSurface::deserialize(ifs);
+    fs = newfs;
+
 
     handles.clear();
     int nhandles;
@@ -213,7 +218,7 @@ void Weave::deserialize(std::istream &ifs)
         h.dir[0] = d0;
         h.dir[1] = d1;
         handles.push_back(h);
-    }    
+    }
 
     cuts.clear();
     int ncuts;
@@ -324,4 +329,195 @@ void Weave::createVisualizationCuts(Eigen::MatrixXd &cutPts1, Eigen::MatrixXd &c
             idx++;
         }
     }
+}
+
+
+CoverMesh *Weave::createCover() const
+{
+    int nCover = fs->nFields() * 2;
+    int nfaces = fs->nFaces();
+    int nverts = fs->nVerts();
+    std::vector<Eigen::MatrixXd> perms;
+    Eigen::MatrixXd perm;
+    perms = _augmentPs();
+    Eigen::MatrixXd eye = Eigen::MatrixXd::Identity(nCover, nCover);
+    // Compute points to glue
+    vector<vector<long> > adj_list(nCover*nfaces*3);
+    for (int e = 0; e < fs->nEdges(); e++)
+    {
+        perm = perms[e];
+        int f1Id = fs->data().E(e, 0);
+        int f2Id = fs->data().E(e, 1);
+        if(f1Id == -1 || f2Id == -1)
+            continue;
+        int v1ID = fs->data().edgeVerts(e, 0);
+        int v2ID = fs->data().edgeVerts(e, 1);
+        int v1f1 = -1, v2f1 = -1, v1f2 = -1, v2f2 = -1;
+        for (int i = 0; i < 3; i ++)
+        { // find the vid at face (0,1,or 2)
+            if (fs->data().F(f1Id,i) == v1ID) v1f1 = i;
+            if (fs->data().F(f1Id,i) == v2ID) v2f1 = i;
+            if (fs->data().F(f2Id,i) == v1ID) v1f2 = i;
+            if (fs->data().F(f2Id,i) == v2ID) v2f2 = i;
+        }
+        assert((v1f1 != -1) && (v2f1 != -1) && (v1f2 != -1) && (v2f2 != -1));
+        if ((perm - eye).norm() == 0)
+        { // perm == I case
+            for (int l = 0; l < nCover; l ++)
+            {
+                long v1f1_idx = v1f1 + f1Id*3 + l*3*nfaces;
+                long v2f1_idx = v2f1 + f1Id*3 + l*3*nfaces;
+                long v1f2_idx = v1f2 + f2Id*3 + l*3*nfaces;
+                long v2f2_idx = v2f2 + f2Id*3 + l*3*nfaces;
+                adj_list[v1f1_idx].push_back(v1f2_idx);
+                adj_list[v1f2_idx].push_back(v1f1_idx);
+                adj_list[v2f1_idx].push_back(v2f2_idx);
+                adj_list[v2f2_idx].push_back(v2f1_idx);
+            }
+        }
+        else
+        { // perm != I case
+            for (int l1 = 0; l1 < nCover; l1 ++)
+            {
+                int l2 = -1;
+                for (int j = 0; j < nCover; j ++)
+                    if (perm(l1, j) == 1){ l2 = j; break; }
+                long v1f1_idx = v1f1 + f1Id*3 + l1*3*nfaces;
+                long v2f1_idx = v2f1 + f1Id*3 + l1*3*nfaces;
+                long v1f2_idx = v1f2 + f2Id*3 + l2*3*nfaces;
+                long v2f2_idx = v2f2 + f2Id*3 + l2*3*nfaces;
+                adj_list[v1f1_idx].push_back(v1f2_idx);
+                adj_list[v1f2_idx].push_back(v1f1_idx);
+                adj_list[v2f1_idx].push_back(v2f2_idx);
+                adj_list[v2f2_idx].push_back(v2f1_idx);
+            }
+        }
+    }
+    // Do some glueing
+    vector<vector<long> > gluePointList;
+    vector<bool> toSearchFlag(nCover*nfaces*3,1);
+    for (int i = 0; i < nCover*nfaces*3; i ++)
+    {
+        if (i % 5000 == 0)
+            cout << toSearchFlag[i] << " " << i << "/" << nCover*nfaces*3 << endl;
+        if (toSearchFlag[i] == 0)
+            continue;
+        vector<long> gluePoint = _BFS_adj_list(adj_list, i);
+        gluePointList.push_back(gluePoint);
+        for (int j = 0; j < gluePoint.size(); j ++)
+            toSearchFlag[gluePoint[j]] = 0;
+    }
+    int nNewPoints = gluePointList.size();
+    Eigen::MatrixXd VAug = Eigen::MatrixXd::Zero(nNewPoints, 3); // |gluePointList| x 3
+    vector<long> oldId2NewId(nCover*nverts);
+    vector<long> encodeDOldId2NewId(nCover*3*nfaces);
+    for (int i = 0; i < nNewPoints; i ++)
+    { // Assign a new Vertex for each group of glue vetices
+        long encodedVid = gluePointList[i][0];
+        int layerId = floor(encodedVid / (nfaces*3));
+        int atFace = floor((encodedVid - layerId*nfaces*3) / 3);
+        int atVid = encodedVid - layerId*nfaces*3 - 3*atFace;
+        int vid = fs->data().F(atFace, atVid);
+        for (int j = 0; j < 3; j ++)
+            VAug(i,j) = fs->data().V(vid,j);
+        for (int j = 0; j < gluePointList[i].size(); j ++)
+        { // Maintain a vid mapping
+            encodedVid = gluePointList[i][j];
+            layerId = floor(encodedVid / (nfaces*3));
+            atFace = floor((encodedVid - layerId*nfaces*3) / 3);
+            atVid = encodedVid - layerId*nfaces*3 - 3*atFace;
+            assert(vid == F(atFace, atVid));
+            oldId2NewId[vid + layerId*nverts] = i;
+            encodeDOldId2NewId[gluePointList[i][j]] = i;
+        }
+    }
+    Eigen::MatrixXi FAug = Eigen::MatrixXi::Zero(nCover*nfaces, 3);; // |gluePointList| x 3
+    for (int cId = 0; cId < nCover; cId ++)
+    {
+        for (int fId = 0; fId < nfaces; fId ++)
+        {
+            int id0 = (fId + cId*nfaces) * 3;
+            int id1 = (fId + cId*nfaces) * 3 + 1;
+            int id2 = (fId + cId*nfaces) * 3 + 2;
+            FAug(fId+cId*nfaces,0) = encodeDOldId2NewId[id0];
+            FAug(fId+cId*nfaces,1) = encodeDOldId2NewId[id1];
+            FAug(fId+cId*nfaces,2) = encodeDOldId2NewId[id2];
+        }
+    }
+    Eigen::MatrixXd flattenedField(nCover*nfaces, 2);
+    for (int cId = 0; cId < nCover; cId++)
+    {
+        for (int fId = 0; fId < nfaces; fId++)
+        {
+            int field = cId % fs->nFields();
+            double sign = (cId < fs->nFields() ? 1.0 : -1.0);
+            flattenedField.row(fId + cId * nfaces) = sign*fs->v(fId, field).transpose();
+        }
+    }
+    //igl::writeOBJ("debug.obj", VAug, FAug);
+    cout << "finish augmenting the mesh" << endl;
+    CoverMesh *ret = new CoverMesh(VAug, FAug, flattenedField, nCover);    
+    return ret;
+}
+
+
+std::vector<long> Weave::_BFS_adj_list(std::vector<std::vector<long> > & adj_list, int startPoint) const
+{
+    vector<long> traversed;
+    queue<long> que;
+    traversed.push_back(startPoint);
+    que.push(startPoint);
+    while (que.size() > 0)
+    {
+        long curPoint = que.front();
+        que.pop();
+        for (int j = 0; j < adj_list[curPoint].size(); j ++)
+        {
+            long to_add = adj_list[curPoint][j];
+            bool visited = false;
+            for (int i = 0; i < traversed.size(); i ++)
+            {
+                if (traversed[i] == to_add){
+                    visited = true;
+                    break;
+                }
+            }
+            if (visited)
+                continue;
+            traversed.push_back(to_add);
+            que.push(to_add);
+        }
+    }
+    return traversed;
+}
+
+std::vector<Eigen::MatrixXd> Weave::_augmentPs() const
+{
+    int nCover = fs->nFields() * 2;
+    int nfaces = fs->nFaces();
+    int nverts = fs->nVerts();
+    std::vector<Eigen::MatrixXd> perms;
+    Eigen::MatrixXd perm;
+    for (int e = 0; e < fs->nEdges(); e++)
+    {
+        perm = Eigen::MatrixXd::Zero(nCover, nCover);
+        for (int j = 0; j < fs->nFields(); j++) 
+        {
+            for (int k = 0; k < fs->nFields(); k++)
+            {
+                if( fs->Ps(e)(j, k) == 1 )
+                {
+                    perm(j,k) = 1;
+                    perm(j+3, k+3) = 1;
+                }
+                if( fs->Ps(e)(j, k) == -1 )
+                {
+                    perm(j,k+3) = 1;
+                    perm(j+3, k) = 1;
+                }
+            }
+        }
+        perms.push_back(perm);
+    }
+    return perms;
 }

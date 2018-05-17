@@ -9,6 +9,24 @@ typedef Eigen::Triplet<double> triplet;
 
 using namespace std;
 
+CoverMesh::CoverMesh(const Eigen::MatrixXd &V, const Eigen::MatrixXi &F, const Eigen::MatrixXd &field, int ncovers)
+{
+    fs = new FieldSurface(V, F, 1);
+    int nfaces = F.rows();
+    for (int i = 0; i < nfaces; i++)
+    {
+        fs->vectorFields.segment<2>(fs->vidx(i, 0)) = field.row(i).transpose();
+    }
+
+    theta.resize(fs->nVerts());
+    theta.setZero();
+}
+
+CoverMesh::~CoverMesh()
+{
+    delete fs;
+}
+
 double CoverMesh::barycentric(double val1, double val2, double target)
 {
     return (target-val1) / (val2-val1);
@@ -303,196 +321,8 @@ void CoverMesh::drawISOLines(int numISOLines)
     std::cout << ntraces << " 0 0 " << ntraces <<  " 0 0 " << std::endl;
 }
 
-
-vector<long> CoverMesh::_BFS_adj_list(vector<vector<long> > & adj_list, int startPoint)
-{
-    vector<long> traversed;
-    queue<long> que;
-    traversed.push_back(startPoint);
-    que.push(startPoint);
-    while (que.size() > 0)
-    {
-        long curPoint = que.front();
-        que.pop();
-        for (int j = 0; j < adj_list[curPoint].size(); j ++)
-        {
-            long to_add = adj_list[curPoint][j];
-            bool visited = false;
-            for (int i = 0; i < traversed.size(); i ++)
-            {
-                if (traversed[i] == to_add){
-                    visited = true;
-                    break;
-                }
-            }
-            if (visited)
-                continue;
-            traversed.push_back(to_add);
-            que.push(to_add);
-        }
-    }
-    return traversed;
-}
-
-std::vector<Eigen::MatrixXd> CoverMesh::_augmentPs()
-{
-    int nCover = fs->nFields() * 2;
-    int nfaces = fs->nFaces();
-    int nverts = fs->nVerts();
-    std::vector<Eigen::MatrixXd> perms;
-    Eigen::MatrixXd perm;
-    for (int e = 0; e < fs->nEdges(); e++)
-    {
-        perm = Eigen::MatrixXd::Zero(nCover, nCover);
-        for (int j = 0; j < fs->nFields(); j++) 
-        {
-            for (int k = 0; k < fs->nFields(); k++)
-            {
-                if( fs->Ps(e)(j, k) == 1 )
-                {
-                    perm(j,k) = 1;
-                    perm(j+3, k+3) = 1;
-                }
-                if( fs->Ps(e)(j, k) == -1 )
-                {
-                    perm(j,k+3) = 1;
-                    perm(j+3, k) = 1;
-                }
-            }
-        }
-        perms.push_back(perm);
-    }
-    return perms;
-}
-
-
-void CoverMesh::augmentField()
-{
-    std::cout << "Current fields number: " << fs->nFields() << endl;
-    int nCover = fs->nFields() * 2;
-    int nfaces = fs->nFaces();
-    int nverts = fs->nVerts();
-    std::vector<Eigen::MatrixXd> perms;
-    Eigen::MatrixXd perm;
-    perms = _augmentPs();
-    Eigen::MatrixXd eye = Eigen::MatrixXd::Identity(nCover, nCover);
-    // Compute points to glue
-    vector<vector<long> > adj_list(nCover*nfaces*3);
-    for (int e = 0; e < fs->nEdges(); e++)
-    {
-        perm = perms[e];
-        int f1Id = fs->data().E(e, 0);
-        int f2Id = fs->data().E(e, 1);
-        if(f1Id == -1 || f2Id == -1)
-            continue;
-        int v1ID = fs->data().edgeVerts(e, 0);
-        int v2ID = fs->data().edgeVerts(e, 1);
-        int v1f1 = -1, v2f1 = -1, v1f2 = -1, v2f2 = -1;
-        for (int i = 0; i < 3; i ++)
-        { // find the vid at face (0,1,or 2)
-            if (fs->data().F(f1Id,i) == v1ID) v1f1 = i;
-            if (fs->data().F(f1Id,i) == v2ID) v2f1 = i;
-            if (fs->data().F(f2Id,i) == v1ID) v1f2 = i;
-            if (fs->data().F(f2Id,i) == v2ID) v2f2 = i;
-        }
-        assert((v1f1 != -1) && (v2f1 != -1) && (v1f2 != -1) && (v2f2 != -1));
-        if ((perm - eye).norm() == 0)
-        { // perm == I case
-            for (int l = 0; l < nCover; l ++)
-            {
-                long v1f1_idx = v1f1 + f1Id*3 + l*3*nfaces;
-                long v2f1_idx = v2f1 + f1Id*3 + l*3*nfaces;
-                long v1f2_idx = v1f2 + f2Id*3 + l*3*nfaces;
-                long v2f2_idx = v2f2 + f2Id*3 + l*3*nfaces;
-                adj_list[v1f1_idx].push_back(v1f2_idx);
-                adj_list[v1f2_idx].push_back(v1f1_idx);
-                adj_list[v2f1_idx].push_back(v2f2_idx);
-                adj_list[v2f2_idx].push_back(v2f1_idx);
-            }
-        }
-        else
-        { // perm != I case
-            for (int l1 = 0; l1 < nCover; l1 ++)
-            {
-                int l2 = -1;
-                for (int j = 0; j < nCover; j ++)
-                    if (perm(l1, j) == 1){ l2 = j; break; }
-                long v1f1_idx = v1f1 + f1Id*3 + l1*3*nfaces;
-                long v2f1_idx = v2f1 + f1Id*3 + l1*3*nfaces;
-                long v1f2_idx = v1f2 + f2Id*3 + l2*3*nfaces;
-                long v2f2_idx = v2f2 + f2Id*3 + l2*3*nfaces;
-                adj_list[v1f1_idx].push_back(v1f2_idx);
-                adj_list[v1f2_idx].push_back(v1f1_idx);
-                adj_list[v2f1_idx].push_back(v2f2_idx);
-                adj_list[v2f2_idx].push_back(v2f1_idx);
-            }
-        }
-    }
-    // Do some glueing
-    vector<vector<long> > gluePointList;
-    vector<bool> toSearchFlag(nCover*nfaces*3,1);
-    for (int i = 0; i < nCover*nfaces*3; i ++)
-    {
-        if (i % 5000 == 0)
-            cout << toSearchFlag[i] << " " << i << "/" << nCover*nfaces*3 << endl;
-        if (toSearchFlag[i] == 0)
-            continue;
-        vector<long> gluePoint = _BFS_adj_list(adj_list, i);
-        gluePointList.push_back(gluePoint);
-        for (int j = 0; j < gluePoint.size(); j ++)
-            toSearchFlag[gluePoint[j]] = 0;
-    }
-    int nNewPoints = gluePointList.size();
-    Eigen::MatrixXd VAug = Eigen::MatrixXd::Zero(nNewPoints, 3); // |gluePointList| x 3
-    vector<long> oldId2NewId(nCover*nverts);
-    vector<long> encodeDOldId2NewId(nCover*3*nfaces);
-    for (int i = 0; i < nNewPoints; i ++)
-    { // Assign a new Vertex for each group of glue vetices
-        long encodedVid = gluePointList[i][0];
-        int layerId = floor(encodedVid / (nfaces*3));
-        int atFace = floor((encodedVid - layerId*nfaces*3) / 3);
-        int atVid = encodedVid - layerId*nfaces*3 - 3*atFace;
-        int vid = fs->data().F(atFace, atVid);
-        for (int j = 0; j < 3; j ++)
-            VAug(i,j) = fs->data().V(vid,j);
-        for (int j = 0; j < gluePointList[i].size(); j ++)
-        { // Maintain a vid mapping
-            encodedVid = gluePointList[i][j];
-            layerId = floor(encodedVid / (nfaces*3));
-            atFace = floor((encodedVid - layerId*nfaces*3) / 3);
-            atVid = encodedVid - layerId*nfaces*3 - 3*atFace;
-            assert(vid == F(atFace, atVid));
-            oldId2NewId[vid + layerId*nverts] = i;
-            encodeDOldId2NewId[gluePointList[i][j]] = i;
-        }
-    }
-    Eigen::MatrixXi FAug = Eigen::MatrixXi::Zero(nCover*nfaces, 3);; // |gluePointList| x 3
-    for (int cId = 0; cId < nCover; cId ++)
-    {
-        for (int fId = 0; fId < nfaces; fId ++)
-        {
-            int id0 = (fId + cId*nfaces) * 3;
-            int id1 = (fId + cId*nfaces) * 3 + 1;
-            int id2 = (fId + cId*nfaces) * 3 + 2;
-            FAug(fId+cId*nfaces,0) = encodeDOldId2NewId[id0];
-            FAug(fId+cId*nfaces,1) = encodeDOldId2NewId[id1];
-            FAug(fId+cId*nfaces,2) = encodeDOldId2NewId[id2];
-        }
-    }
-    igl::writeOBJ("debug.obj", VAug, FAug);
-    cout << "finish augmenting the mesh" << endl;
-    int oldfields = fs->nFields();
-    delete fs;
-    fs = new FieldSurface(VAug, FAug, 1);
-    nFields_unaugmented = oldfields;
-    augmented = true;
-}
-
 void CoverMesh::computeFunc(double scalesInit)
 {
-    // TODO fix
-    //nFields_ = nFields_unaugmented; // hack hack hack
-
     std::ofstream debugOut("debug.txt");
     std::ofstream debugVectsOut("debug.field");
     int nfaces = fs->nFaces();
@@ -502,7 +332,7 @@ void CoverMesh::computeFunc(double scalesInit)
     vector<int> rowsL;
     vector<int> colsL;
     vector<double> difVecUnscaled;
-    for (int fId = 0; fId < nfaces; fId ++)
+    for (int fId = 0; fId < nfaces; fId++)
     { // Compute rowsL, colsL, difVecUnscaled
         int vId0 = fs->data().F(fId, 0);
         int vId1 = fs->data().F(fId, 1);
@@ -516,18 +346,10 @@ void CoverMesh::computeFunc(double scalesInit)
         Eigen::Vector3d e12 = p1 - p2;
         Eigen::Vector3d e20 = p2 - p0;
         Eigen::Vector3d faceVec;
-        if (augmented)
+        if (true)
         {
-            int oriFId = fId % (nfaces / (fs->nFields() * 2));
-            int layerId = fId / (nfaces / (fs->nFields() * 2));
-            assert((layerId >= 0) && (layerId < nFields() * 2));
-            if (layerId >= 3)
-                faceVec = fs->data().Bs[oriFId] * fs->v(oriFId, layerId-3); // The original vec
-            else
-                faceVec = - fs->data().Bs[oriFId] * fs->v(oriFId, layerId); // The original vec
+            faceVec = fs->data().Bs[fId] * fs->v(fId, 0); // The original vec            
         }
-        else
-            faceVec = fs->data().Bs[fId] * fs->v(fId, 0); // The original vec
         faceVec = faceVec.cross(fs->faceNormal(fId));
         faceVec /= faceVec.norm();
         debugVectsOut << faceVec.transpose() << endl;
@@ -535,48 +357,48 @@ void CoverMesh::computeFunc(double scalesInit)
         difVecUnscaled.push_back(e12.dot(faceVec));
         difVecUnscaled.push_back(e20.dot(faceVec));
     }
-    assert((rowsL.size()==3*nfaces) && (colsL.size()==3*nfaces) && (difVecUnscaled.size()==3*nfaces));
+    assert((rowsL.size() == 3 * nfaces) && (colsL.size() == 3 * nfaces) && (difVecUnscaled.size() == 3 * nfaces));
 
     // Eigen::SparseMatrix<double> faceLapMat = faceLaplacian();
     Eigen::VectorXd scales(nfaces);
     scales.setConstant(scalesInit);
     int totalIter = 6;
-    for (int iter = 0; iter < totalIter; iter ++)
+    for (int iter = 0; iter < totalIter; iter++)
     {
         vector<double> difVec;
-        for (int i = 0; i < difVecUnscaled.size(); i ++)
-            difVec.push_back(difVecUnscaled[i]*scales(i/3));
+        for (int i = 0; i < difVecUnscaled.size(); i++)
+            difVec.push_back(difVecUnscaled[i] * scales(i / 3));
         std::vector<triplet> sparseContent;
-        for (int i = 0; i < rowsL.size(); i ++)
-            sparseContent.push_back(triplet(rowsL[i],colsL[i],1));
-        Eigen::SparseMatrix<double> TP (nverts, nverts);
-        Eigen::SparseMatrix<double> TPTran (nverts, nverts);
-        TP.setFromTriplets(sparseContent.begin(),sparseContent.end());
+        for (int i = 0; i < rowsL.size(); i++)
+            sparseContent.push_back(triplet(rowsL[i], colsL[i], 1));
+        Eigen::SparseMatrix<double> TP(nverts, nverts);
+        Eigen::SparseMatrix<double> TPTran(nverts, nverts);
+        TP.setFromTriplets(sparseContent.begin(), sparseContent.end());
         TPTran = TP.transpose();
         TP += TPTran;
         vector<int> degree;
-        for (int i = 0; i < nverts; i ++)
+        for (int i = 0; i < nverts; i++)
             degree.push_back(TP.row(i).sum());
         std::vector<triplet> AContent;
-        for (int i = 0; i < rowsL.size(); i ++)
+        for (int i = 0; i < rowsL.size(); i++)
         {
             double cVal = cos(difVec[i]);
             double sVal = sin(difVec[i]);
-            AContent.push_back(triplet(2*rowsL[i], 2*colsL[i], cVal));
-            AContent.push_back(triplet(2*rowsL[i], 2*colsL[i]+1, -sVal));
-            AContent.push_back(triplet(2*rowsL[i]+1, 2*colsL[i], sVal));
-            AContent.push_back(triplet(2*rowsL[i]+1, 2*colsL[i]+1, cVal));
+            AContent.push_back(triplet(2 * rowsL[i], 2 * colsL[i], cVal));
+            AContent.push_back(triplet(2 * rowsL[i], 2 * colsL[i] + 1, -sVal));
+            AContent.push_back(triplet(2 * rowsL[i] + 1, 2 * colsL[i], sVal));
+            AContent.push_back(triplet(2 * rowsL[i] + 1, 2 * colsL[i] + 1, cVal));
         }
-        Eigen::SparseMatrix<double> Amat (2*nverts, 2*nverts);
-        Eigen::SparseMatrix<double> Amat_tran (2*nverts, 2*nverts);
-        Amat.setFromTriplets(AContent.begin(),AContent.end());
+        Eigen::SparseMatrix<double> Amat(2 * nverts, 2 * nverts);
+        Eigen::SparseMatrix<double> Amat_tran(2 * nverts, 2 * nverts);
+        Amat.setFromTriplets(AContent.begin(), AContent.end());
         Amat_tran = Amat.transpose();
         Amat += Amat_tran;
         //
         std::vector<triplet> LContent;
-        for (int i = 0; i < 2*nverts; i ++)
-            LContent.push_back(triplet(i,i,degree[int(i/2)]));
-        Eigen::SparseMatrix<double> Lmat (2*nverts, 2*nverts);
+        for (int i = 0; i < 2 * nverts; i++)
+            LContent.push_back(triplet(i, i, degree[int(i / 2)]));
+        Eigen::SparseMatrix<double> Lmat(2 * nverts, 2 * nverts);
         Lmat.setFromTriplets(LContent.begin(), LContent.end());
         Lmat -= Amat;
         // Eigen Decompose
@@ -584,19 +406,19 @@ void CoverMesh::computeFunc(double scalesInit)
         Eigen::VectorXd eigenVec(Lmat.rows());
         eigenVec.setRandom();
         eigenVec /= eigenVec.norm();
-        for(int i=0; i<10; i++)
+        for (int i = 0; i < 10; i++)
         {
             eigenVec = solverL.solve(eigenVec);
             eigenVec /= eigenVec.norm();
         }
         double eigenVal = eigenVec.transpose() * Lmat * eigenVec;
-        cout << "Current iteration = " << iter  << " currents error is: " << eigenVal << endl;
+        cout << "Current iteration = " << iter << " currents error is: " << eigenVal << endl;
         // Extract the function value
         vector<double> curTheta;
-        for (int i = 0; i < nverts; i ++)
+        for (int i = 0; i < nverts; i++)
         {
-            double curCos = eigenVec(2*i);
-            double curSin = eigenVec(2*i+1);
+            double curCos = eigenVec(2 * i);
+            double curSin = eigenVec(2 * i + 1);
             double normalizer = sqrt(curCos * curCos + curSin * curSin);
             double curFunc = acos(curCos / normalizer);
             if (curSin < 0)
@@ -606,48 +428,46 @@ void CoverMesh::computeFunc(double scalesInit)
         ////
         //// Re-compute face scales
         vector<double> difVecPred;
-        for (int i = 0; i < rowsL.size(); i ++)
+        for (int i = 0; i < rowsL.size(); i++)
         {
             double curPred = curTheta[rowsL[i]] - curTheta[colsL[i]];
-            if (curPred > M_PI) curPred -= 2*M_PI;
-            if (curPred < -M_PI) curPred += 2*M_PI;
+            if (curPred > M_PI) curPred -= 2 * M_PI;
+            if (curPred < -M_PI) curPred += 2 * M_PI;
             difVecPred.push_back(curPred);
         }
         Eigen::VectorXd bScales(nfaces);
         vector<double> diagAScales;
         // TODO: AScalesMat is constant
-        for (int i = 0; i < rowsL.size(); i=i+3)
+        for (int i = 0; i < rowsL.size(); i = i + 3)
         {
             double bVal = 0;
             double diagAVal = 0;
-            for (int j = 0; j < 3; j ++)
+            for (int j = 0; j < 3; j++)
             {
-                bVal += difVecPred[i+j] * difVecUnscaled[i+j];
-                diagAVal += difVecUnscaled[i+j] * difVecUnscaled[i+j];
+                bVal += difVecPred[i + j] * difVecUnscaled[i + j];
+                diagAVal += difVecUnscaled[i + j] * difVecUnscaled[i + j];
             }
-            bScales(i/3) = bVal;
+            bScales(i / 3) = bVal;
             diagAScales.push_back(diagAVal);
         }
         // Construct A
         // TODO mu and lambda
         std::vector<triplet> AScalesContent;
-        for (int i = 0; i < nfaces; i ++)
+        for (int i = 0; i < nfaces; i++)
             AScalesContent.push_back(triplet(i, i, diagAScales[i]));
-        Eigen::SparseMatrix<double> AScalesMat (nfaces, nfaces);
-        AScalesMat.setFromTriplets(AScalesContent.begin(),AScalesContent.end());
+        Eigen::SparseMatrix<double> AScalesMat(nfaces, nfaces);
+        AScalesMat.setFromTriplets(AScalesContent.begin(), AScalesContent.end());
         // Solve for scale
         Eigen::SimplicialLDLT<Eigen::SparseMatrix<double> > solverScales(AScalesMat);
         Eigen::VectorXd curScales = solverScales.solve(bScales);
-        for (int i = 0; i < nfaces; i ++)
+        for (int i = 0; i < nfaces; i++)
             scales(i) = curScales(i);
-        theta = curTheta;
+        for(int i=0; i<nverts; i++)
+            theta[i] = curTheta[i];
     }
-    for (int i = 0; i < nverts; i ++)
+    for (int i = 0; i < nverts; i++)
         debugOut << theta[i] << endl;
     debugOut.close();
-
-    // wtf is going on here?
-    //nFields_ = 1; // hack hack hack
 }
 
 Eigen::SparseMatrix<double> CoverMesh::faceLaplacian()
@@ -674,4 +494,38 @@ Eigen::SparseMatrix<double> CoverMesh::faceLaplacian()
     LFaceMat -= AFaceMat;
     // Eigen::SparseMatrix<double> LFaceMat;
     return LFaceMat;
+}
+
+
+void CoverMesh::createVisualizationEdges(Eigen::MatrixXd &edgePts, Eigen::MatrixXd &edgeVecs, Eigen::MatrixXi &edgeSegs, Eigen::MatrixXd &colors)
+{
+    int nfaces = fs->nFaces();
+    int m = fs->nFields();
+    edgePts.resize(m*nfaces, 3);
+    edgeVecs.resize(m*nfaces, 3);
+    edgeVecs.setZero();
+    edgeSegs.resize(m*nfaces, 2);
+    colors.resize(m*nfaces , 3);
+
+    Eigen::MatrixXd fcolors(m, 3);
+    for (int i = 0; i < m; i++)
+        fcolors.row(i).setZero();//heatmap(double(i), 0.0, double(m-1));
+
+    for (int i = 0; i < nfaces; i++)
+    {
+        Eigen::Vector3d centroid;
+        centroid.setZero();
+        for (int j = 0; j < 3; j++)
+            centroid += fs->data().V.row(fs->data().F(i, j));
+        centroid /= 3.0;
+
+        for (int j = 0; j < m; j++)
+        {
+            edgePts.row(m*i + j) = centroid;
+            edgeVecs.row(m*i + j) = fs->data().Bs[i] * fs->v(i, j);
+            edgeSegs(m*i + j, 0) = 2 * (m*i + j);
+            edgeSegs(m*i + j, 1) = 2 * (m*i + j) + 1;
+            colors.row(m*i + j) = fcolors.row(j);
+        }
+    }
 }

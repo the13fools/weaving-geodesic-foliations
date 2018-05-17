@@ -19,6 +19,8 @@ struct Cut
     std::vector<std::pair<int, int> > path; // (edge, orientation) list        
 };
 
+class CoverMesh;
+
 class Weave
 {
 public:
@@ -41,6 +43,7 @@ public:
     void createVisualizationCuts(Eigen::MatrixXd &cutPts1, Eigen::MatrixXd &cutPts2);
     
     void removePointsFromMesh(std::vector<int> vIds);
+    CoverMesh *Weave::createCover() const;
 
     void serialize(std::ostream &os);    
     void deserialize(std::istream &is);
@@ -48,7 +51,10 @@ public:
 
 private:
     // scale mesh to unit size
-    void centerAndScale(Eigen::MatrixXd &V);    
+    void centerAndScale(Eigen::MatrixXd &V);  
+
+    std::vector<long> _BFS_adj_list(std::vector<std::vector<long> > & relaxadj_list, int i) const;
+    std::vector<Eigen::MatrixXd> _augmentPs() const;
 };
 
 #endif

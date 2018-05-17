@@ -234,6 +234,8 @@ FieldSurface *FieldSurface::deserialize(std::istream &is)
     is.read((char *)&nfields, sizeof(int));
     int nperms;
     is.read((char *)&nperms, sizeof(int));
+    if (!is)
+        return NULL;
     for (int i = 0; i < nverts; i++)
     {
         for (int j = 0; j < 3; j++)
@@ -252,6 +254,8 @@ FieldSurface *FieldSurface::deserialize(std::istream &is)
             F(i, j) = tmp;
         }
     }
+    if (!is)
+        return NULL;
     FieldSurface *ret = new FieldSurface(V, F, nfields);
     for (int i = 0; i < 5 * nfaces*nfields; i++)
     {
@@ -270,6 +274,11 @@ FieldSurface *FieldSurface::deserialize(std::istream &is)
                 ret->Ps_[i](j, k) = tmp;
             }
         }
+    }
+    if (!is)
+    {
+        delete ret;
+        return NULL;
     }
     return ret;
 }
