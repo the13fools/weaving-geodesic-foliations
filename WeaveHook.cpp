@@ -46,8 +46,8 @@ void WeaveHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
             serializeVectorField();             
         if (ImGui::Button("Load Field", ImVec2(-1, 0)))   
             deserializeVectorField();
-        if (ImGui::Button("Export Field", ImVec2(-1, 0)))   
-            exportVectorField();
+        if (ImGui::Button("Load Field (Old Format)", ImVec2(-1, 0)))   
+            deserializeVectorFieldOld();
     }
     if (ImGui::CollapsingHeader("Cuts", ImGuiTreeNodeFlags_DefaultOpen))
     {
@@ -133,7 +133,7 @@ bool WeaveHook::mouseClicked(igl::opengl::glfw::Viewer &viewer, int button)
     double x = viewer.current_mouse_x;
     double y = viewer.core.viewport(3) - viewer.current_mouse_y;
     if (igl::unproject_onto_mesh(Eigen::Vector2f(x, y), viewer.core.view * viewer.core.model,
-        viewer.core.proj, viewer.core.viewport, this->weave->surf->data().V, this->weave->surf->data().F, fid, bc))
+        viewer.core.proj, viewer.core.viewport, this->weave->fs->data().V, this->weave->fs->data().F, fid, bc))
     {
         std::cout << fid << " - clicked on vertex #\n"; 
         bool found = false;
@@ -156,7 +156,7 @@ bool WeaveHook::mouseClicked(igl::opengl::glfw::Viewer &viewer, int button)
         renderSelectedVertices.clear();
         for (int i = 0; i < (int)selectedVertices.size(); i++)
         {
-            renderSelectedVertices.push_back(weave->surf->data().V.row(weave->surf->data().F(selectedVertices[i].first, selectedVertices[i].second)));
+            renderSelectedVertices.push_back(weave->fs->data().V.row(weave->fs->data().F(selectedVertices[i].first, selectedVertices[i].second)));
         }
         return true;
     }
@@ -184,21 +184,21 @@ void WeaveHook::initSimulation()
     curFaceEnergies = Eigen::MatrixXd::Zero(3, 3);
     selectedVertices.clear();
     renderSelectedVertices.clear();
-    params.edgeWeights = Eigen::VectorXd::Constant(weave->surf->nEdges(), 1);    
+    params.edgeWeights = Eigen::VectorXd::Constant(weave->fs->nEdges(), 1);    
 
     weave->fixFields = false;    
 }
 
 void WeaveHook::setFaceColors(igl::opengl::glfw::Viewer &viewer)
 { 
-    int faces = weave->surf->data().F.rows();
+    int faces = weave->fs->data().F.rows();
     // if ( curFaceEnergies.rows() != faces && shading_state != NONE) { return ; }
     // cout << "fuck" << endl;
 
     igl::ColorMapType viz_color = igl::COLOR_MAP_TYPE_MAGMA;
     
     Eigen::VectorXd Z(faces);
-    Eigen::VectorXd FVAL(weave->surf->nVerts());
+    Eigen::VectorXd FVAL(weave->fs->nVerts());
     
     for (int i = 0; i < faces; i++) 
     {
@@ -225,14 +225,15 @@ void WeaveHook::setFaceColors(igl::opengl::glfw::Viewer &viewer)
     
     if (shading_state == CONNECTION_ENERGY)
     {
-        weave->connectionEnergy(Z);
+        weave->fs->connectionEnergy(Z);
     }
     
     if (shading_state == FUN_VAL)
     {
-        for (int i = 0; i < weave->surf->nVerts(); i ++)
+        for (int i = 0; i < weave->fs->nVerts(); i ++)
         {
-            FVAL(i) = weave->theta[i];
+            //TOOD
+            FVAL(i) = 0;// weave->theta[i];
             viewer.data().set_face_based(false);
         }
     }
@@ -251,13 +252,11 @@ void WeaveHook::setFaceColors(igl::opengl::glfw::Viewer &viewer)
             showCutVertexSelection(viewer);     
             break;
         case FUN_VAL:
-            faceColors.resize(weave->surf->nVerts(), 3);
+            faceColors.resize(weave->fs->nVerts(), 3);
             igl::colormap(viz_color,FVAL, true, faceColors);
             cout << "drawLine " << drawLine << endl;
             if (drawLine)
             {
-                cout << paths.size() << endl;;
-                cout << weave->isoLines.size() << endl;;
                 for (int i = 0; i < paths.size(); i ++)
                 {
                     const Eigen::RowVector3d red(0.9,.1,.1), blue(0.1,.1,.9);
@@ -268,7 +267,7 @@ void WeaveHook::setFaceColors(igl::opengl::glfw::Viewer &viewer)
             }
             break;
         default:
-            faceColors.resize(weave->surf->nFaces(), 3);
+            faceColors.resize(weave->fs->nFaces(), 3);
             igl::colormap(viz_color,Z, true, faceColors);
             break;
     }
@@ -412,7 +411,7 @@ void WeaveHook::renderRenderGeometry(igl::opengl::glfw::Viewer &viewer)
 
 bool WeaveHook::simulateOneStep()
 {
-    params.edgeWeights.resize(weave->surf->nEdges());
+    params.edgeWeights.resize(weave->fs->nEdges());
     params.edgeWeights.setConstant(1.0);
     for (int i = 0; i < (int)weave->cuts.size(); i++)
     {
@@ -445,24 +444,24 @@ void WeaveHook::reassignPermutations()
     singularVerts_topo = Eigen::MatrixXd::Zero(topsingularities.size(), 3);
     for (int i = 0; i < topsingularities.size(); i++)
     {
-        singularVerts_topo.row(i) = weave->surf->data().V.row(topsingularities[i]);
+        singularVerts_topo.row(i) = weave->fs->data().V.row(topsingularities[i]);
     }
 
-    nonIdentityEdges = Eigen::MatrixXd::Zero(weave->surf->data().E.size(), 3);
-    for (int i = 0; i < weave->Ps.size(); i++)
+    nonIdentityEdges = Eigen::MatrixXd::Zero(weave->fs->data().E.size(), 3);
+    for (int i = 0; i < weave->fs->Ps_.size(); i++)
     {
         bool id = true;
         for (int j = 0; j < 3; j++)
         {
-            if (weave->Ps[i](j, j) != 1)
+            if (weave->fs->Ps(i)(j, j) != 1)
             {
                 id = false;
             }
         }
         if (!id)
         {
-            nonIdentityEdges.row(i) = (weave->surf->data().V.row(weave->surf->data().edgeVerts(i, 0)) +
-                weave->surf->data().V.row(weave->surf->data().edgeVerts(i, 1))) * .5;
+            nonIdentityEdges.row(i) = (weave->fs->data().V.row(weave->fs->data().edgeVerts(i, 0)) +
+                weave->fs->data().V.row(weave->fs->data().edgeVerts(i, 1))) * .5;
 
         }
     }
@@ -470,36 +469,36 @@ void WeaveHook::reassignPermutations()
 
 void WeaveHook::normalizeFields()
 {
-    weave->normalizeFields();
+    weave->fs->normalizeFields();
     updateRenderGeometry();
 }
 
 void WeaveHook::serializeVectorField()
 {
-    weave->serialize(vectorFieldName);
-}
-
-void WeaveHook::exportVectorField()
-{
-    weave->serialize_forexport(vectorFieldName);
+    std::string rawname = vectorFieldName.substr(0, vectorFieldName.find_last_of("."));
+    std::ofstream ofs(rawname + ".rlx", ios::binary);
+    weave->serialize(ofs);
 }
 
 void WeaveHook::augmentField()
 {
-    weave->augmentField();
+    //TODO
+    //weave->augmentField();
     updateRenderGeometry();
 }
 
 void WeaveHook::computeFunc()
 {
-    weave->computeFunc(scalesInit);
+    //TODO
+    //weave->computeFunc(scalesInit);
 }
 
 void WeaveHook::drawISOLines()
 {
     paths.clear();
     drawLine = true;
-    weave->drawISOLines(numISOLines);
+    //TODO
+    /*weave->drawISOLines(numISOLines);
     for (int p_cnt = 0; p_cnt < weave->isoLines.size(); p_cnt ++)
     {
         std::vector<Eigen::Vector3d> curPath = weave->isoLines[p_cnt];
@@ -516,12 +515,20 @@ void WeaveHook::drawISOLines()
         // Eigen::MatrixXd line_ends  = path.block(1, 0, curPath.size() - 1, 3);
         // viewer.data.add_edges( line_starts, line_ends, red);
     }
-    trace->loadGeneratedCurves(weave->isoLines, weave->isoNormal);
+    trace->loadGeneratedCurves(weave->isoLines, weave->isoNormal);*/
 }
 
 void WeaveHook::deserializeVectorField()
 {
-    weave->deserialize(vectorFieldName);
+    std::ifstream ifs(vectorFieldName, ios::binary);
+    weave->deserialize(ifs);
+    updateRenderGeometry();
+}
+
+void WeaveHook::deserializeVectorFieldOld()
+{
+    std::ifstream ifs(vectorFieldName);
+    weave->deserializeOldRelaxFile(ifs);
     updateRenderGeometry();
 }
 
@@ -555,19 +562,19 @@ void WeaveHook::addCut()
     if (selectedVertices.size() < 2)
         return;
 
-    idx1 = weave->surf->data().F(selectedVertices[0].first, selectedVertices[0].second);
-    idx2 = weave->surf->data().F(selectedVertices[1].first, selectedVertices[1].second);
+    idx1 = weave->fs->data().F(selectedVertices[0].first, selectedVertices[0].second);
+    idx2 = weave->fs->data().F(selectedVertices[1].first, selectedVertices[1].second);
 
     if (idx1 == idx2)
         return;
 
     Cut c;    
-    weave->surf->shortestPath(idx1, idx2, c.path);
+    weave->fs->shortestPath(idx1, idx2, c.path);
     weave->cuts.push_back(c);    
-    for (int i = 0; i < c.path.size(); i++ )
+    /*for (int i = 0; i < c.path.size(); i++ )
     {
-        std::cout << weave->surf->data().edgeVerts(c.path[i].first, c.path[i].second) << "\n"; // " " <<  weave->edgeVerts.row(c.path[i].first);
-    }
+        std::cout << weave->fs->data().edgeVerts(c.path[i].first, c.path[i].second) << "\n"; // " " <<  weave->edgeVerts.row(c.path[i].first);
+    }*/
 
     updateRenderGeometry();
 }

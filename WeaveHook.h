@@ -62,8 +62,8 @@ public:
     void reassignPermutations();
     void normalizeFields();
     void serializeVectorField();
-    void deserializeVectorField();
-    void exportVectorField();
+    void deserializeVectorField();    
+    void deserializeVectorFieldOld();
     void augmentField();
     void computeFunc();
     void drawISOLines();
@@ -80,13 +80,13 @@ public:
 
     virtual void updateRenderGeometry()
     {
-        renderQ = weave->surf->data().V;
-        renderF = weave->surf->data().F;        
+        renderQ = weave->fs->data().V;
+        renderF = weave->fs->data().F;        
         weave->createVisualizationEdges(edgePts, edgeVecs, edgeSegs, edgeColors);
         weave->createVisualizationCuts(cutPos1, cutPos2);
-        faceColors.resize(weave->surf->nFaces(), 3);
+        faceColors.resize(weave->fs->nFaces(), 3);
         faceColors.setConstant(0.3);
-        baseLength = weave->surf->data().averageEdgeLength;
+        baseLength = weave->fs->data().averageEdgeLength;
         curFaceEnergies = tempFaceEnergies;
 
 
