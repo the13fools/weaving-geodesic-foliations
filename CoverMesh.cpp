@@ -3,6 +3,7 @@
 #include "FieldSurface.h"
 #include <queue>
 #include <igl/writeOBJ.h>
+#include <Eigen/Dense>
 
 typedef Eigen::Triplet<double> triplet;
 # define M_PI           3.14159265358979323846

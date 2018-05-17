@@ -37,7 +37,7 @@ public:
     FieldSurface *removePointsFromMesh(std::vector<int> vIds, std::map<int, int> &faceMap) const; 
     
     void serialize(std::ostream &ofs) const;
-    static FieldSurface *FieldSurface::deserialize(std::istream &is);
+    static FieldSurface *deserialize(std::istream &is);
 
     // compute an energy on each face that measures the failure of the vector fields on that face to parallel transport to the
     // equivalent vector on the neighboring faces, using the trivial connection between faces

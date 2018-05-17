@@ -43,7 +43,7 @@ public:
     void createVisualizationCuts(Eigen::MatrixXd &cutPts1, Eigen::MatrixXd &cutPts2);
     
     void removePointsFromMesh(std::vector<int> vIds);
-    CoverMesh *Weave::createCover() const;
+    CoverMesh *createCover() const;
 
     void serialize(std::ostream &os);    
     void deserialize(std::istream &is);
