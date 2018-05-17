@@ -1,3 +1,13 @@
+%%%%% MAKE SURE cvx_begin IS INITIALIZED !!! %%%%%%
+
+strname = 'anuerism_holes';
+
+Torus2 = [];
+Torus2 = load_obj(strjoin({strname,'_cut.obj'},{''}));
+Torus2_ori = [];
+Torus2_ori = load_obj(strjoin({strname,'.obj'},{''}));
+Torus2.faceVFs = load(strjoin({strname,'.field'},{''}))';
+
 1.'Torus2': the mesh after cutting
   'Torus2_ori': the original mesh
    The different fields of Torus2:
@@ -5,13 +15,14 @@
    Torus2.faceVIds: a 3xnumF matrix that specifies the mesh faces
    call 'mesh_topology' to generate the rest of the fields
    [Torus2.edges, Torus2.adjFaces, Torus2.faceEIds] = mesh_topology(Torus2);
+   [Torus2_ori.edges, Torus2_ori.adjFaces, Torus2_ori.faceEIds] = mesh_topology(Torus2_ori);
 
 2. The input vector field is stored in
    Torus2.faceVFs (note that it has to be rotated)
    The following is a procedure for rotating the vector field
    faceNormals = mesh_face_normal(Torus2);
    Torus2.faceVFs = cross(faceNormals, Torus2.faceVFs);
-   Torus2_ori.faceVFs = Torus2.faceVFs
+   Torus2_ori.faceVFs = Torus2.faceVFs;
 
 3. Obtaining an un-normalized scalar field, and the corresponding function. This is done on the cut mesh
    [scale_init, func_init] = function_fitting(Torus2, 1e-1);
@@ -19,9 +30,49 @@
     What we learned is to use a smooth one. Step 7 will make it adaptive to thedata
    N
 
-4. Use a pair of vertices to determine the right scale
-   fac = 2*pi/(func_init(6179)-func_init(6178));
+4a. Bound by aliasing fequency on boundary: 
+boundary = find(~Torus2.adjFaces(2,:));
+bound_edges = Torus2.edges(:, boundary);
+bound_diff = abs(func_init(bound_edges(1, :)) - func_init(bound_edges(2, :)) ); 
+fac = 1.*pi / max(bound_diff)
 
+4b. Bound by aliasing frequncy on whole mesh:
+bound_edges = Torus2.edges(:,:);
+bound_diff = abs(func_init(bound_edges(1, :)) - func_init(bound_edges(2, :)) ); 
+fac = 1.*pi / max(bound_diff)
+
+4c. Bound by period jump:
+boundary = find(~Torus2.adjFaces(2,:));
+boundary_faces = Torus2.adjFaces(1,boundary);
+bound_edges = Torus2.edges(:, boundary);
+
+[sharedVals,idxsIntoA] = intersect(unique([Torus2_ori.adjFaces(1,:) Torus2_ori.adjFaces(2,:)]),boundary_faces)
+bound_faces = [ Torus2_ori.adjFaces(1, idxsIntoA); Torus2_ori.adjFaces(2, idxsIntoA) ]; 
+bound_faces = bound_faces(:, find(bound_faces(2,:)));
+bound_vmap = zeros( 2, size(bound_faces,2) );
+for e = 1:size(bound_faces,2)
+    for v1 = 1:3
+        for v2 = 1:3
+        %    sprintf( '%d', e )
+            if  Torus2_ori.faceVIds( v1, bound_faces(1, e)) == Torus2_ori.faceVIds( v2, bound_faces(2, e)) 
+                bound_vmap(1, e) = v1;
+                bound_vmap(2, e) = v2;
+            end 
+        end
+    end
+end
+
+% bound_diff = abs(func_init( [ Torus2.faceVIds(bound_vmap(1, :); bound_faces(1, :) ] )) - func_init([ Torus2.faceVIds(bound_vmap(2, :); bound_faces(1, :) ])) ); 
+bound_diff = abs(func_init(diag(Torus2.faceVIds(bound_vmap(1, :), bound_faces(1,:) ))) - func_init(diag(Torus2.faceVIds(bound_vmap(2, :), bound_faces(2,:) ))) ); 
+fac = 2*pi / median(bound_diff(find(bound_diff)))
+
+
+sort(bound_diff(find(bound_diff)))
+
+
+4. Use a pair of vertices to determine the right scale
+   fac = 2*pi/abs(func_init(6179)-func_init(6178));
+33956
 5. Scale the un-normalized scalar field
    scale_altermin_opt = fac*scale_init;
 
@@ -29,11 +80,28 @@
    theta_altermin_opt = theta_initialization(Torus2_ori, scale_altermin_opt);
 
 7. Perform alterminating minimization, which is done on the original mesh
+   scale_altermin_opt = fac*scale_init;
+   theta_altermin_opt = theta_initialization(Torus2_ori, scale_altermin_opt);
    for i = 1:128
      theta_altermin_opt = optimize_function(Torus2_ori, theta_altermin_opt, scale_altermin_opt);
      scale_altermin_opt = optimize_scales(Torus2_ori, theta_altermin_opt, scale_altermin_opt, 1e-4);
    end
+
+
    where '1e-4' controls the smoothless of the regualrization 
 
-8. Visualize: 
+
+8. Save: 
+costheta = cos(theta_altermin_opt)';
+save(strjoin({strname,'.theta'},{''}), "costheta", '-ascii');
+
+9. Visualize: 
 trisurf(Torus2_ori.faceVIds', Torus2_ori.vertexPoss(1,:), Torus2_ori.vertexPoss(2,:), Torus2_ori.vertexPoss(3,:), cos(theta_altermin_opt))
+
+numfaces = size(Torus2_ori.faceVIds, 2)
+trisurf(Torus2_ori.faceVIds(:,1:numfaces/6)', Torus2_ori.vertexPoss(1,:), Torus2_ori.vertexPoss(2,:), Torus2_ori.vertexPoss(3,:), cos(theta_altermin_opt));
+trisurf(Torus2_ori.faceVIds(:,numfaces/6:2*numfaces/6)', Torus2_ori.vertexPoss(1,:), Torus2_ori.vertexPoss(2,:), Torus2_ori.vertexPoss(3,:), cos(theta_altermin_opt));
+trisurf(Torus2_ori.faceVIds(:,2*numfaces/6:3*numfaces/6)', Torus2_ori.vertexPoss(1,:), Torus2_ori.vertexPoss(2,:), Torus2_ori.vertexPoss(3,:), cos(theta_altermin_opt));
+trisurf(Torus2_ori.faceVIds(:,3*numfaces/6:4*numfaces/6)', Torus2_ori.vertexPoss(1,:), Torus2_ori.vertexPoss(2,:), Torus2_ori.vertexPoss(3,:), cos(theta_altermin_opt));
+trisurf(Torus2_ori.faceVIds(:,4*numfaces/6:5*numfaces/6)', Torus2_ori.vertexPoss(1,:), Torus2_ori.vertexPoss(2,:), Torus2_ori.vertexPoss(3,:), cos(theta_altermin_opt));
+trisurf(Torus2_ori.faceVIds(:,5*numfaces/6:6*numfaces/6)', Torus2_ori.vertexPoss(1,:), Torus2_ori.vertexPoss(2,:), Torus2_ori.vertexPoss(3,:), cos(theta_altermin_opt));
