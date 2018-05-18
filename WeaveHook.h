@@ -113,6 +113,7 @@ public:
     void showCutVertexSelection(igl::opengl::glfw::Viewer &viewer);
     void updateSingularVerts(igl::opengl::glfw::Viewer &viewer);
 private:
+    void clear();
     std::string meshName;
     Weave *weave;
     CoverMesh *cover;

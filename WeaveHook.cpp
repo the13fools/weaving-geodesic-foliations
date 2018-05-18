@@ -185,13 +185,10 @@ bool WeaveHook::mouseClicked(igl::opengl::glfw::Viewer &viewer, int button)
     return false;
 }
 
-void WeaveHook::initSimulation()
+void WeaveHook::clear()
 {
-    if (weave)
-        delete weave;
     if (cover)
         delete cover;
-    weave = new Weave(meshName, 3);    
     cover = NULL;
     gui_mode = GUIMode_Enum::WEAVE;
     Handle h;
@@ -221,6 +218,14 @@ void WeaveHook::initSimulation()
     weave->fixFields = false;    
 }
 
+void WeaveHook::initSimulation()
+{
+    if (weave)
+        delete weave;
+    weave = new Weave(meshName, 3);    
+    clear();    
+}
+
 void WeaveHook::setFaceColorsCover(igl::opengl::glfw::Viewer &viewer)
 {
     int faces = cover->fs->data().F.rows();
@@ -232,11 +237,12 @@ void WeaveHook::setFaceColorsCover(igl::opengl::glfw::Viewer &viewer)
     Eigen::VectorXd Z(faces);
     Z.setConstant(0.7);
 
-    Eigen::VectorXd FVAL(cover->fs->nVerts());
+    int nsplitverts = cover->splitMesh().nVerts();
+    Eigen::VectorXd FVAL(nsplitverts);
 
     if (cover_shading_state == FUN_VAL)
     {
-        for (int i = 0; i < cover->fs->nVerts(); i++)
+        for (int i = 0; i < nsplitverts; i++)
         {            
             FVAL(i) = cover->theta[cover->visMeshToCoverMesh(i)];            
         }
@@ -629,6 +635,7 @@ void WeaveHook::drawISOLines()
 
 void WeaveHook::deserializeVectorField()
 {
+    clear();
     std::ifstream ifs(vectorFieldName, ios::binary);
     weave->deserialize(ifs);
     updateRenderGeometry();

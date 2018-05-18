@@ -37,6 +37,7 @@ public:
     void computeFunc(double globalScale);
     double renderScale() {return renderScale_;}
     void initializeS(double reg);
+    const Surface &splitMesh() const;
     
     // maps indices of vertices on the visualization mesh to corresponding "parent" vertices on the cover mesh
     int visMeshToCoverMesh(int vertid);

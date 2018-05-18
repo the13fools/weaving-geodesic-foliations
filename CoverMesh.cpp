@@ -678,6 +678,7 @@ void CoverMesh::initializeS(double reg)
     // loop over the connected components
     for(int component = 0; component < ncomponents; component++)
     {
+        std::cout << "Component " << component << ": " << componentsizes[component] << " faces" << std::endl;
         // faces for just this connected component
         Eigen::VectorXi compFacesToGlobal(componentsizes[component]);
         Eigen::MatrixXi compF(componentsizes[component], 3);
@@ -762,7 +763,8 @@ void CoverMesh::initializeS(double reg)
         Eigen::SparseMatrix<double> Lreg = Lint + reg*Lface;
         std::cout << "Solving eigenproblem..." << std::endl;
         // find values of S on this connected component
-        Eigen::VectorXd componentS;
+        Eigen::VectorXd componentS;        
+
         double eval = inversePowerIteration(Lreg, componentS, 1000);
         std::cout << "Smallest eigenvalue: " << eval << std::endl;
         
@@ -895,4 +897,9 @@ void CoverMesh::initializeSplitMesh(const Eigen::VectorXi &oldToNewVertMap)
             }
         }
     }    
+}
+
+const Surface &CoverMesh::splitMesh() const
+{
+    return *data_.splitMesh;
 }

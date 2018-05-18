@@ -398,8 +398,6 @@ CoverMesh *Weave::createCover() const
     vector<bool> toSearchFlag(nCover*nfaces*3,1);
     for (int i = 0; i < nCover*nfaces*3; i ++)
     {
-        if (i % 5000 == 0)
-            cout << toSearchFlag[i] << " " << i << "/" << nCover*nfaces*3 << endl;
         if (toSearchFlag[i] == 0)
             continue;
         vector<long> gluePoint = _BFS_adj_list(adj_list, i);
@@ -427,7 +425,6 @@ CoverMesh *Weave::createCover() const
             layerId = floor(encodedVid / (nfaces*3));
             atFace = floor((encodedVid - layerId*nfaces*3) / 3);
             atVid = encodedVid - layerId*nfaces*3 - 3*atFace;
-            assert(vid == F(atFace, atVid));
             oldId2NewId[vid + layerId*nverts] = i;
             encodeDOldId2NewId[gluePointList[i][j]] = i;
         }
