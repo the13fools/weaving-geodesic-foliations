@@ -550,7 +550,7 @@ void WeaveHook::reassignPermutations()
         singularVerts_topo.row(i) = weave->fs->data().V.row(topsingularities[i]);
     }
 
-    nonIdentityEdges = Eigen::MatrixXd::Zero(weave->fs->data().E.size(), 3);
+    std::vector<Eigen::Vector3d> centers;
     for (int i = 0; i < weave->fs->Ps_.size(); i++)
     {
         bool id = true;
@@ -563,11 +563,15 @@ void WeaveHook::reassignPermutations()
         }
         if (!id)
         {
-            nonIdentityEdges.row(i) = (weave->fs->data().V.row(weave->fs->data().edgeVerts(i, 0)) +
-                weave->fs->data().V.row(weave->fs->data().edgeVerts(i, 1))) * .5;
+            Eigen::Vector3d midpt = (weave->fs->data().V.row(weave->fs->data().edgeVerts(i, 0)) + weave->fs->data().V.row(weave->fs->data().edgeVerts(i, 1))) * .5;
+            centers.push_back(midpt);
 
         }
     }
+    int ncenters = centers.size();
+    nonIdentityEdges.resize(ncenters, 3);
+    for(int i=0; i<ncenters; i++)
+        nonIdentityEdges.row(i) = centers[i];
 }
 
 void WeaveHook::normalizeFields()
