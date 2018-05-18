@@ -132,9 +132,10 @@ void WeaveHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
 
         if (ImGui::CollapsingHeader("Cover Controls", ImGuiTreeNodeFlags_DefaultOpen))
         {
-            ImGui::InputDoubleScientific("Initial Scales", &scalesInit);
+            ImGui::InputDoubleScientific("Regularization", &initSReg);
             if (ImGui::Button("Initialize S", ImVec2(-1,0)))
                 initializeS();
+            ImGui::InputDoubleScientific("Global Rescaling", &globalSScale);
             if (ImGui::Button("Compute Function Value", ImVec2(-1, 0)))
                 computeFunc();
             ImGui::InputInt("Num Isolines", &numISOLines);
@@ -597,7 +598,8 @@ void WeaveHook::augmentField()
 void WeaveHook::computeFunc()
 {
     if(cover)
-        cover->computeFunc(scalesInit);
+        cover->computeFunc(globalSScale);
+    updateRenderGeometry();
 }
 
 void WeaveHook::drawISOLines()
@@ -749,6 +751,6 @@ void WeaveHook::updateRenderGeometry()
 
 void WeaveHook::initializeS()
 {
-    if(cover) cover->initializeS();
+    if(cover) cover->initializeS(initSReg);
     updateRenderGeometry();
 }

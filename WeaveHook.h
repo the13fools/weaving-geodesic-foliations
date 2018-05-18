@@ -70,6 +70,9 @@ public:
 
         drawLine = false;
         trace = new Trace();
+        
+        initSReg = 1e-4;
+        globalSScale = 1.0;
     }
 
     virtual void drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu);
@@ -176,7 +179,8 @@ private:
     bool drawLine;
     std::vector<Eigen::MatrixXd> paths;
     int numISOLines;
-    double scalesInit;
+    double initSReg;
+    double globalSScale;
 };
 
 #endif

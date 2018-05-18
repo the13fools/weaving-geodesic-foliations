@@ -340,7 +340,7 @@ void CoverMesh::drawISOLines(int numISOLines)
     std::cout << ntraces << " 0 0 " << ntraces <<  " 0 0 " << std::endl;
 }
 
-void CoverMesh::computeFunc(double scalesInit)
+void CoverMesh::computeFunc(double globalScale)
 {
     std::ofstream debugOut("debug.txt");
     std::ofstream debugVectsOut("debug.field");
@@ -379,8 +379,7 @@ void CoverMesh::computeFunc(double scalesInit)
     assert((rowsL.size() == 3 * nfaces) && (colsL.size() == 3 * nfaces) && (difVecUnscaled.size() == 3 * nfaces));
 
     // Eigen::SparseMatrix<double> faceLapMat = faceLaplacian();
-    Eigen::VectorXd scales(nfaces);
-    scales.setConstant(scalesInit);
+    Eigen::VectorXd scales = globalScale * s;
     int totalIter = 6;
     for (int iter = 0; iter < totalIter; iter++)
     {
@@ -595,7 +594,7 @@ int CoverMesh::visMeshToCoverMesh(int vertid)
     return data_.splitToCoverVerts[vertid];
 }
 
-void CoverMesh::initializeS()
+void CoverMesh::initializeS(double reg)
 {
     theta.resize(fs->nVerts());
     theta.setZero();
@@ -722,8 +721,6 @@ void CoverMesh::initializeS()
             edgeMetricInvCoeffs.push_back(Eigen::Triplet<double>(i, i, 1.0/edgeMetric.coeff(i,i)));
         Eigen::SparseMatrix<double> edgeMetricInv(nedges, nedges);
         edgeMetricInv.setFromTriplets(edgeMetricInvCoeffs.begin(), edgeMetricInvCoeffs.end());
-    
-        double reg = 1e-4;
     
         // edge gradient matrices
         std::vector<Eigen::Triplet<double> > DCoeffs;    

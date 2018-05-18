@@ -34,9 +34,9 @@ public:
     void createVisualization(Eigen::MatrixXd &V, Eigen::MatrixXi &F, Eigen::MatrixXd &edgePts, Eigen::MatrixXd &edgeVecs, Eigen::MatrixXi &edgeSegs, Eigen::MatrixXd &colors, 
         Eigen::MatrixXd &cutPts1, Eigen::MatrixXd &cutPts2, Eigen::MatrixXd &cutColors);
 
-    void computeFunc(double scalesInit);
+    void computeFunc(double globalScale);
     double renderScale() {return renderScale_;}
-    void initializeS();
+    void initializeS(double reg);
     
     // maps indices of vertices on the visualization mesh to corresponding "parent" vertices on the cover mesh
     int visMeshToCoverMesh(int vertid);
