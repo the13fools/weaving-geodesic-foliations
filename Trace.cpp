@@ -2,6 +2,7 @@
 #include "VectorUtils.h"
 #include "Distance.h"
 #include "Weave.h"
+#include "Surface.h"
 
 #include <fstream>
 #include <iostream>
@@ -169,7 +170,7 @@ void Trace::logRibbonsToFile(std::string foldername, std::string filename, const
     Eigen::MatrixXd point = Eigen::MatrixXd::Zero(1,3); 
     igl::AABB<Eigen::MatrixXd,3> tree; 
    
-    tree.init(wv.V,wv.F);
+    tree.init(wv.surf->data().V,wv.surf->data().F);
 
  
  // need to deal with boundary case
@@ -191,7 +192,7 @@ void Trace::logRibbonsToFile(std::string foldername, std::string filename, const
 
         curr_dir *= 1000.0; // Assumes mesh is roughly deluanay
 
-        tree.squared_distance(wv.V,wv.F,point,sqrD,nearFace,C);
+        tree.squared_distance(wv.surf->data().V,wv.surf->data().F,point,sqrD,nearFace,C);
         int curr_face_id = nearFace(0);
 
         TracePoint tp;
@@ -203,7 +204,7 @@ void Trace::logRibbonsToFile(std::string foldername, std::string filename, const
 
         for (int j = 0; j < stepstoextend; j++)
         {
-            curr_dir = mapVectorToAdjacentFace(wv.F, wv.V, wv.edgeVerts,
+            curr_dir = mapVectorToAdjacentFace(wv.surf->data().F, wv.surf->data().V, wv.surf->data().edgeVerts,
                                                tp.edge_id, curr_face_id, tp.face_id, curr_dir);
             curr_face_id = tp.face_id;  
             curves[i].row(len + j - backoff)  = tp.point;
@@ -444,17 +445,17 @@ int getOpVId(const Weave &wv, const Eigen::Vector3d prev_point, int faceId)
 {
     for (int j = 0; j < 3; j++)
     {
-        if(wv.faceNeighbors(faceId, j) == -1)
+        if(wv.surf->data().faceNeighbors(faceId, j) == -1)
             continue;
-	Eigen::VectorXi e = wv.edgeVerts.row(wv.faceNeighbors(faceId, j));
-	Eigen::Vector3d e_test =  wv.V.row( e(0) ) - wv.V.row( e(1) );
+	Eigen::VectorXi e = wv.surf->data().edgeVerts.row(wv.surf->data().faceNeighbors(faceId, j));
+	Eigen::Vector3d e_test =  wv.surf->data().V.row( e(0) ) - wv.surf->data().V.row( e(1) );
 	e_test.normalize();
-        Eigen::Vector3d point_test = wv.V.row( e(0) );
+        Eigen::Vector3d point_test = wv.surf->data().V.row( e(0) );
         point_test = ( prev_point - point_test );
         point_test.normalize();
 	if ( e_test.dot( point_test ) > .99 )
 	{
-	    Eigen::VectorXi e_next = wv.edgeVerts.row(wv.faceNeighbors(faceId, (j + 1) % 3 ));
+	    Eigen::VectorXi e_next = wv.surf->data().edgeVerts.row(wv.surf->data().faceNeighbors(faceId, (j + 1) % 3 ));
 	    if (e_next(0) == e(0) || e_next(0) == e(1) )
 	    {
 		    return e_next(1);
@@ -470,12 +471,12 @@ int getOpVId(const Weave &wv, const Eigen::Vector3d prev_point, int faceId)
 
 int getOpVIdFromEdge(const Weave &wv, int curr_edge, int faceId)
 {
-    Eigen::Vector2i e = wv.edgeVerts.row(curr_edge);
+    Eigen::Vector2i e = wv.surf->data().edgeVerts.row(curr_edge);
     for (int i = 0; i < 3; i++)
     {
-        if (wv.F(faceId, i) != e(0) && wv.F(faceId, i) != e(1))
+        if (wv.surf->data().F(faceId, i) != e(0) && wv.surf->data().F(faceId, i) != e(1))
         {
-            return wv.F(faceId, i);
+            return wv.surf->data().F(faceId, i);
         }
     }
     assert(false);
@@ -526,9 +527,9 @@ void Trace::startTraceFromPoint(const Weave &wv,
 
     for (int i = 0; i < 3; i++)
     {
-        int next_edge_id = wv.faceEdges(curr_face_id, i);
-        Eigen::Vector3d op_v1 = wv.V.row(wv.edgeVerts(next_edge_id, 0));
-        Eigen::Vector3d op_v2 = wv.V.row(wv.edgeVerts(next_edge_id, 1));
+        int next_edge_id = wv.surf->data().faceEdges(curr_face_id, i);
+        Eigen::Vector3d op_v1 = wv.surf->data().V.row(wv.surf->data().edgeVerts(next_edge_id, 0));
+        Eigen::Vector3d op_v2 = wv.surf->data().V.row(wv.surf->data().edgeVerts(next_edge_id, 1));
 
         double p0bary, p1bary, q0bary, q1bary;
         Eigen::Vector3d dist = Distance::edgeEdgeDistance(startpoint,
@@ -555,23 +556,23 @@ void Trace::getNextTracePoint(const Weave &wv,
                               const Eigen::Vector3d curr_dir, TracePoint &nextTrace)
 {
 
-        Eigen::Vector3d op_vertex = wv.V.row(op_v_id);
+        Eigen::Vector3d op_vertex = wv.surf->data().V.row(op_v_id);
         Eigen::Vector3d split = op_vertex - prev_point;
 
         double split_len = split.norm();
         split = split / split_len;
-        Eigen::Vector3d n = faceNormal(wv.F, wv.V, curr_face_id);
+        Eigen::Vector3d n = faceNormal(wv.surf->data().F, wv.surf->data().V, curr_face_id);
         Eigen::Vector3d perp = split.cross(n);
         nextTrace.n = n;
 
         int op_edge_id = -1;
         for (int j = 0; j < 3; j++)
         {
-            Eigen::Vector2i e = wv.edgeVerts.row(wv.faceEdges(curr_face_id, j));
+            Eigen::Vector2i e = wv.surf->data().edgeVerts.row(wv.surf->data().faceEdges(curr_face_id, j));
 
             if (e(0) == op_v_id || e(1) == op_v_id)
             {
-                Eigen::Vector3d e_test = (wv.V.row(e(0)) + wv.V.row(e(1))) * .5;
+                Eigen::Vector3d e_test = (wv.surf->data().V.row(e(0)) + wv.surf->data().V.row(e(1))) * .5;
                 e_test -= prev_point;
                 if (e_test.dot(perp) * curr_dir.dot(perp) > 0.)
                 {
@@ -589,9 +590,9 @@ void Trace::getNextTracePoint(const Weave &wv,
         }
 
         // Find intersection point.
-        int next_edge_id = wv.faceEdges(curr_face_id, op_edge_id);
-        Eigen::Vector3d op_v1 = wv.V.row(wv.edgeVerts(next_edge_id, 0));
-        Eigen::Vector3d op_v2 = wv.V.row(wv.edgeVerts(next_edge_id, 1));
+        int next_edge_id = wv.surf->data().faceEdges(curr_face_id, op_edge_id);
+        Eigen::Vector3d op_v1 = wv.surf->data().V.row(wv.surf->data().edgeVerts(next_edge_id, 0));
+        Eigen::Vector3d op_v2 = wv.surf->data().V.row(wv.surf->data().edgeVerts(next_edge_id, 1));
 
         double p0bary, p1bary, q0bary, q1bary;
         Eigen::Vector3d dist = Distance::edgeEdgeDistance(prev_point,
@@ -599,10 +600,10 @@ void Trace::getNextTracePoint(const Weave &wv,
             op_v1, op_v2,
             p0bary, p1bary, q0bary, q1bary);
 
-        int next_face_id = wv.E(next_edge_id, 0);
+        int next_face_id = wv.surf->data().E(next_edge_id, 0);
         if (next_face_id == curr_face_id)
         {
-            next_face_id = wv.E(next_edge_id, 1);
+            next_face_id = wv.surf->data().E(next_edge_id, 1);
         }
         nextTrace.face_id = next_face_id;
         nextTrace.edge_id = next_edge_id;
@@ -624,19 +625,19 @@ void Trace::traceCurve(const Weave &wv, const Trace_Mode trace_state,
 {
     Eigen::MatrixXd curve = Eigen::MatrixXd::Zero(steps, 3);
     Eigen::MatrixXd normal = Eigen::MatrixXd::Zero(steps, 3);
-    curve.row(0) = (1. / 3. * wv.V.row(wv.F(faceId, 0)) +
-        1. / 3. * wv.V.row(wv.F(faceId, 1)) +
-        1. / 3. * wv.V.row(wv.F(faceId, 2)));
-    normal.row(0) = (faceNormal(wv.F, wv.V, faceId));
+    curve.row(0) = (1. / 3. * wv.surf->data().V.row(wv.surf->data().F(faceId, 0)) +
+        1. / 3. * wv.surf->data().V.row(wv.surf->data().F(faceId, 1)) +
+        1. / 3. * wv.surf->data().V.row(wv.surf->data().F(faceId, 2)));
+    normal.row(0) = (faceNormal(wv.surf->data().F, wv.surf->data().V, faceId));
 
 
     
     int curr_dir_idx = abs(traceIdx);
     double coeff_dir = sign > 0 ? 1 : -1;
-    Eigen::Vector3d curr_dir = coeff_dir * wv.Bs[faceId] * wv.v(faceId, curr_dir_idx);
+    Eigen::Vector3d curr_dir = coeff_dir * wv.surf->data().Bs[faceId] * wv.v(faceId, curr_dir_idx);
 
     // assumes roughly delaunay    
-    curr_dir = curr_dir.normalized() * wv.averageEdgeLength * 1000.;
+    curr_dir = curr_dir.normalized() * wv.surf->data().averageEdgeLength * 1000.;
 
     int curr_face_id = faceId;
 
@@ -644,7 +645,7 @@ void Trace::traceCurve(const Weave &wv, const Trace_Mode trace_state,
     startpoint.setZero();
     for (int i = 0; i < 3; i++)
     {
-        startpoint += wv.V.row(wv.F(faceId, i));
+        startpoint += wv.surf->data().V.row(wv.surf->data().F(faceId, i));
     }
     startpoint /= 3.0;
 
@@ -683,15 +684,15 @@ void Trace::traceCurve(const Weave &wv, const Trace_Mode trace_state,
         switch (trace_state)
         {
         case GEODESIC:
-            curr_dir = mapVectorToAdjacentFace(wv.F, wv.V, wv.edgeVerts,
+            curr_dir = mapVectorToAdjacentFace(wv.surf->data().F, wv.surf->data().V, wv.surf->data().edgeVerts,
                            tp.edge_id, curr_face_id, tp.face_id, curr_dir);
             
 	    break;
         case FIELD:
-	        Eigen::Vector3d parTransport = mapVectorToAdjacentFace(wv.F, wv.V, wv.edgeVerts,
+	        Eigen::Vector3d parTransport = mapVectorToAdjacentFace(wv.surf->data().F, wv.surf->data().V, wv.surf->data().edgeVerts,
 		                                   tp.edge_id, curr_face_id, tp.face_id, curr_dir);
 	        Eigen::MatrixXi perm = wv.Ps[tp.edge_id];
-            if (tp.face_id == wv.E(tp.edge_id, 1))
+            if (tp.face_id == wv.surf->data().E(tp.edge_id, 1))
             {
                 perm.transposeInPlace();
             }
@@ -706,12 +707,12 @@ void Trace::traceCurve(const Weave &wv, const Trace_Mode trace_state,
                     {
                         coeff_dir *= -1.;
                     }
-                    curr_dir = wv.Bs[tp.face_id] * wv.v(tp.face_id, idx);
+                    curr_dir = wv.surf->data().Bs[tp.face_id] * wv.v(tp.face_id, idx);
                     curr_dir_idx = idx;
                     break;
                 }
             }
-            curr_dir = coeff_dir * curr_dir.normalized() * wv.averageEdgeLength * 1000.;
+            curr_dir = coeff_dir * curr_dir.normalized() * wv.surf->data().averageEdgeLength * 1000.;
 	        bend(i) = curr_dir.normalized().dot( parTransport.normalized() );
             break;
         }

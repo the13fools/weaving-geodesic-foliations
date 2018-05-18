@@ -14,6 +14,7 @@
 #include <set>
 #include <igl/remove_unreferenced.h>
 #include <igl/writeOBJ.h>
+#include "Surface.h"
 
 typedef Eigen::Triplet<double> triplet;
 # define M_PI           3.14159265358979323846
@@ -21,7 +22,8 @@ typedef Eigen::Triplet<double> triplet;
 Weave::Weave(const std::string &objname, int m)
 {
     Eigen::MatrixXd Vtmp;
-    if (!igl::read_triangle_mesh(objname, Vtmp, F))
+    Eigen::MatrixXi Ftmp;
+    if (!igl::read_triangle_mesh(objname, Vtmp, Ftmp))
     {
         std::cerr << "Couldn't load mesh " << objname << std::endl;
         exit(-1);
@@ -31,49 +33,33 @@ Weave::Weave(const std::string &objname, int m)
         std::cerr << "Mesh must 3D" << std::endl;
         exit(-1);
     }
-    V.resize(Vtmp.rows(), 3);
-    //wtf
-    for (int i = 0; i < 3; i++)
-    {
-        V.col(i) = Vtmp.col(i);
-    }
-
-    centerAndScale();
-    buildConnectivityStructures();
-    buildGeometricStructures();
-
+    
+    centerAndScale(Vtmp);
+    surf = new Surface(Vtmp, Ftmp);
     // initialize vector fields
     nFields_ = m;
-    vectorFields.resize(5*F.rows()*m);
+    vectorFields.resize(5*surf->data().F.rows()*m);
     vectorFields.setZero();
-    vectorFields.segment(0, 2 * F.rows()*m).setRandom();
+    vectorFields.segment(0, 2 * surf->data().F.rows()*m).setRandom();
     normalizeFields();
 
     // initialize permutation matrices
-    int nedges = nEdges();
+    int nedges = surf->nEdges();
     Ps.resize(nedges);
     for (int i = 0; i < nedges; i++)
     {
         Ps[i].resize(m, m);
         Ps[i].setIdentity();
     }
-    augmented = false;
-     
-    // int nfaces = nFaces();
-    // for (int i = 0; i < nfaces; i++)
-    // {
-    //     for (int j = 0; j < m; j++)
-    //     {
-    //         vectorFields.segment<2>(vidx(i, j)) = ;
-    //     }
-    // }
+    augmented = false;     
 }
 
 Weave::~Weave()
 {    
+    delete surf;
 }
 
-void Weave::centerAndScale()
+void Weave::centerAndScale(Eigen::MatrixXd &V)
 {
     Eigen::Vector3d centroid(0, 0, 0);
     for (int i = 0; i < V.rows(); i++)
@@ -92,233 +78,6 @@ void Weave::centerAndScale()
     }
 }
 
-void Weave::buildConnectivityStructures()
-{
-    std::map<std::pair<int, int>, Eigen::Vector2i > edgemap;
-    int nfaces = nFaces();
-    for (int i = 0; i < nfaces; i++)
-    {
-        for (int j = 0; j < 3; j++)
-        {
-            int nextj = (j + 1) % 3;
-            int v1 = F(i, j);
-            int v2 = F(i, nextj);
-            int idx = 0;
-            if (v1 > v2)
-            {
-                idx = 1;
-                std::swap(v1, v2);
-            }
-            std::pair<int, int> p(v1,v2);
-            std::map<std::pair<int, int>, Eigen::Vector2i >::iterator it = edgemap.find(p);
-            if(it == edgemap.end())
-            {
-                Eigen::Vector2i edge(-1,-1);
-                edge[idx] = i;
-                edgemap[p] = edge;
-            }
-            else
-            {
-                edgemap[p][idx] = i;
-            }
-        }
-    }
-
-    E.resize(edgemap.size(), 2);
-    faceEdges.resize(nfaces, 3);
-    edgeVerts.resize(edgemap.size(), 2);
-    int idx = 0;
-    for (std::map<std::pair<int, int>, Eigen::Vector2i >::iterator it = edgemap.begin(); it != edgemap.end(); ++it)
-    {
-        E(idx, 0) = it->second[0];
-        E(idx, 1) = it->second[1];
-        edgeVerts(idx, 0) = it->first.first;
-        edgeVerts(idx, 1) = it->first.second;
-        idx++;
-    }
-    faceEdges.resize(nfaces, 3);
-    faceEdges.setConstant(-1);
-    faceNeighbors.resize(nfaces, 3);
-    faceNeighbors.setConstant(-1);
-    faceWings.resize(nfaces, 3);
-    faceWings.setConstant(-1);
-    int nedges = nEdges();
-    for (int edge = 0; edge < nedges; edge++)
-    {
-        for(int side = 0; side<2; side++)
-        {
-            if(E(edge,side) == -1)
-                 continue;
-            for(int j=0; j<3; j++)
-                 if(F(E(edge,side), j) != edgeVerts(edge,0) && F(E(edge,side), j) != edgeVerts(edge,1))
-                     faceEdges(E(edge, side), j) = edge;           
-        }
-        if(E(edge,0) == -1 || E(edge,1) == -1)
-            continue;
-        Eigen::Vector3i face1 = F.row(E(edge, 0));
-        Eigen::Vector3i face2 = F.row(E(edge, 1));
-        int idx1 = -1;
-        for (int i = 0; i < 3; i++)
-        {
-            bool ok = true;
-            for (int j = 0; j < 3; j++)
-            {
-                if (face2[j] == face1[i])
-                    ok = false;
-            }
-            if (ok)
-                idx1 = i;
-        }
-        int idx2 = -1;
-        for (int i = 0; i < 3; i++)
-        {
-            bool ok = true;
-            for (int j = 0; j < 3; j++)
-            {
-                if (face1[j] == face2[i])
-                    ok = false;
-            }
-            if (ok)
-                idx2 = i;
-        }
-        faceNeighbors(E(edge, 0), idx1) = E(edge, 1);
-        faceNeighbors(E(edge, 1), idx2) = E(edge, 0);
-        faceWings(E(edge, 0), idx1) = face2[idx2];
-        faceWings(E(edge, 1), idx2) = face1[idx1];
-    }
-
-    vertEdges.resize(V.rows());
-    for(int i=0; i<nedges; i++)
-    {
-        vertEdges[edgeVerts(i,0)].push_back(i);
-        vertEdges[edgeVerts(i,1)].push_back(i);
-    }
-}
-
-Eigen::Vector3d Weave::faceNormal(int face) const
-{
-    Eigen::Vector3d e1 = (V.row(F(face, 1)) - V.row(F(face, 0)));
-    Eigen::Vector3d e2 = (V.row(F(face, 2)) - V.row(F(face, 0)));
-    Eigen::Vector3d result = e1.cross(e2);
-    result /= result.norm();
-    return result;
-}
-
-void Weave::buildGeometricStructures()
-{
-    // compute barycentric matrices and Js
-    int nfaces = nFaces();
-    Bs.resize(nfaces);
-    Js.resize(2 * nfaces, 2);
-
-    averageEdgeLength = 0;
-
-    for (int i = 0; i < nfaces; i++)
-    {
-        Eigen::Vector3d v0 = V.row(F(i, 0));
-        Eigen::Vector3d v1 = V.row(F(i, 1));
-        Eigen::Vector3d v2 = V.row(F(i, 2));
-        Bs[i].col(0) = v1 - v0;
-        Bs[i].col(1) = v2 - v0;
-
-        averageEdgeLength += (v2 - v1).norm();
-        averageEdgeLength += (v2 - v0).norm();
-        averageEdgeLength += (v1 - v0).norm();
-
-        Eigen::Vector3d n = (v1 - v0).cross(v2 - v0);
-        n /= n.norm();
-
-        Eigen::Matrix2d BTB = Bs[i].transpose() * Bs[i];
-        Eigen::Matrix<double, 3, 2> ncrossB;
-        ncrossB.col(0) = n.cross(v1 - v0);
-        ncrossB.col(1) = n.cross(v2 - v0);
-        Js.block<2, 2>(2 * i, 0) = BTB.inverse() * Bs[i].transpose() * ncrossB;
-    }
-
-    averageEdgeLength /= (3.0 * nfaces);
-
-    // compute cDiffs and transition matrices
-    int nedges = nEdges();
-    cDiffs.resize(2 * nedges, 2);
-    Ts.resize(2 * nedges, 4);
-    for (int edgeidx = 0; edgeidx < nedges; edgeidx++)
-    {        
-        //collect neighboring face indices
-        int face1 = E(edgeidx, 0);
-        int face2 = E(edgeidx, 1);
-
-        if(face1 == -1 || face2 == -1)
-            continue;
-
-        int v1 = edgeVerts(edgeidx, 0);
-        int v2 = edgeVerts(edgeidx, 1);
-
-        Eigen::Vector3d n1 = faceNormal(face1);
-        Eigen::Vector3d n2 = faceNormal(face2);
-        // collect: (1) the midpoint of the common edge, (2) unit vector in direction of common edge,
-        // (3) the face normals, (4) the centroid of neighboring faces
-
-        Eigen::Vector3d midpt = 0.5 * (V.row(v1) + V.row(v2));
-        Eigen::Vector3d commone = V.row(v2) - V.row(v1);
-        commone /= commone.norm();
-        Eigen::Vector3d centroids[2];
-        centroids[0].setZero();
-        centroids[1].setZero();
-
-        for (int i = 0; i < 3; i++)
-        {
-            centroids[0] += V.row(F(face1, i));
-            centroids[1] += V.row(F(face2, i));
-        }
-
-        centroids[0] /= 3.0;
-        centroids[1] /= 3.0;
-
-        //rotate each centroid into the plane of the opposite triangle and compute ci minus c
-
-        Eigen::Vector3d t1 = n1.cross(commone);
-        Eigen::Vector3d t2 = n2.cross(commone);
-        Eigen::Vector3d diff2 = centroids[1] - midpt;
-        double alpha = commone.dot(diff2);
-        double beta = t2.dot(diff2);
-
-        Eigen::Matrix2d BTB1 = Bs[face1].transpose() * Bs[face1];
-        Eigen::Matrix2d BTB2 = Bs[face2].transpose() * Bs[face2];
-
-        cDiffs.row(2 * edgeidx) = BTB1.inverse() * Bs[face1].transpose() * (midpt + alpha * commone + beta * t1 - centroids[0]);
-        Eigen::Vector3d diff1 = centroids[0] - midpt;
-        alpha = commone.dot(diff1);
-        beta = t1.dot(diff1);
-        cDiffs.row(2 * edgeidx + 1) = BTB2.inverse() * Bs[face2].transpose() * (midpt + alpha*commone + beta * t2 - centroids[1]);
-
-        Eigen::Vector3d e1 = V.row(F(face1, 1)) - V.row(F(face1, 0));
-        Eigen::Vector3d e2 = V.row(F(face1, 2)) - V.row(F(face1, 0));
-
-        double alpha1 = commone.dot(e1);
-        double beta1 = t1.dot(e1);
-        Eigen::Vector3d newe1 = alpha1*commone + beta1 * t2;
-        Ts.block<2, 1>(2 * edgeidx, 0) = BTB2.inverse() * Bs[face2].transpose() * newe1;
-
-        double alpha2 = commone.dot(e2);
-        double beta2 = t1.dot(e2);
-        Eigen::Vector3d newe2 = alpha2*commone + beta2*t2;
-        Ts.block<2, 1>(2 * edgeidx, 1) = BTB2.inverse() * Bs[face2].transpose() * newe2;
-
-        e1 = V.row(F(face2, 1)) - V.row(F(face2, 0));
-        e2 = V.row(F(face2, 2)) - V.row(F(face2, 0));
-
-        alpha1 = commone.dot(e1);
-        beta1 = t2.dot(e1);
-        newe1 = alpha1 * commone + beta1 * t1;
-        Ts.block<2, 1>(2 * edgeidx, 2) = BTB1.inverse() * Bs[face1].transpose() * newe1;
-
-        alpha2 = commone.dot(e2);
-        beta2 = t2.dot(e2);
-        newe2 = alpha2*commone + beta2*t1;
-        Ts.block<2, 1>(2 * edgeidx, 3) = BTB1.inverse() * Bs[face1].transpose() * newe2;
-    }
-}
-
 int Weave::vidx(int face, int field) const
 {
     return (2 * nFields()*face + 2 * field);
@@ -331,7 +90,7 @@ Eigen::Vector2d Weave::v(int face, int field) const
 
 int Weave::betaidx(int face, int field) const
 {
-    return 2 * nFields()*nFaces() + 2 * nFields()*face + 2 * field;
+    return 2 * nFields()*surf->nFaces() + 2 * nFields()*face + 2 * field;
 }
 Eigen::Vector2d Weave::beta(int face, int field) const
 {
@@ -340,7 +99,7 @@ Eigen::Vector2d Weave::beta(int face, int field) const
 
 int Weave::alphaidx(int face, int field) const
 {
-    return 4 * nFields()*nFaces() + nFields()*face + field;
+    return 4 * nFields()*surf->nFaces() + nFields()*face + field;
 }
 
 double Weave::alpha(int face, int field) const
@@ -350,7 +109,7 @@ double Weave::alpha(int face, int field) const
 
 void Weave::createVisualizationEdges(Eigen::MatrixXd &edgePts, Eigen::MatrixXd &edgeVecs, Eigen::MatrixXi &edgeSegs, Eigen::MatrixXd &colors)
 {
-    int nfaces = nFaces();
+    int nfaces = surf->nFaces();
     int m = nFields();
     int nhandles = nHandles();
     edgePts.resize(m*nfaces + nhandles, 3);
@@ -368,13 +127,13 @@ void Weave::createVisualizationEdges(Eigen::MatrixXd &edgePts, Eigen::MatrixXd &
         Eigen::Vector3d centroid;
         centroid.setZero();
         for (int j = 0; j < 3; j++)
-            centroid += V.row(F(i, j));
+            centroid += surf->data().V.row(surf->data().F(i, j));
         centroid /= 3.0;
 
         for (int j = 0; j < m; j++)
         {
             edgePts.row(m*i + j) = centroid;
-            edgeVecs.row(m*i + j) = Bs[i] * v(i, j);
+            edgeVecs.row(m*i + j) = surf->data().Bs[i] * v(i, j);
             edgeSegs(m*i + j, 0) = 2 * (m*i + j);
             edgeSegs(m*i + j, 1) = 2 * (m*i + j) + 1;
             colors.row(m*i + j) = fcolors.row(j);
@@ -386,12 +145,12 @@ void Weave::createVisualizationEdges(Eigen::MatrixXd &edgePts, Eigen::MatrixXd &
         Eigen::Vector3d centroid;
         centroid.setZero();
         for (int j = 0; j < 3; j++)
-            centroid += V.row(F(handles[i].face, j));
+            centroid += surf->data().V.row(surf->data().F(handles[i].face, j));
         centroid /= 3.0;
 
         Eigen::Vector3d white(1, 1, 1);
         edgePts.row(m*nfaces + i) = centroid;
-        edgeVecs.row(m*nfaces + i) = Bs[handles[i].face] * handles[i].dir;
+        edgeVecs.row(m*nfaces + i) = surf->data().Bs[handles[i].face] * handles[i].dir;
         edgeSegs(m*nfaces + i, 0) = 2 * m*nfaces + 2 * i;
         edgeSegs(m*nfaces + i, 1) = 2 * m*nfaces + 2 * i + 1;
         colors.row(m*nfaces + i).setConstant(1.0);
@@ -400,12 +159,12 @@ void Weave::createVisualizationEdges(Eigen::MatrixXd &edgePts, Eigen::MatrixXd &
 
 bool Weave::addHandle(Handle h)
 {
-    if (h.face < 0 || h.face > nFaces())
+    if (h.face < 0 || h.face > surf->nFaces())
         return false;
     if(h.field < 0 || h.field > nFields())
         return false;
 
-    Eigen::Vector3d extrinsic = Bs[h.face] * h.dir;
+    Eigen::Vector3d extrinsic = surf->data().Bs[h.face] * h.dir;
     double mag = extrinsic.norm();
     h.dir /= mag;
     handles.push_back(h);
@@ -414,14 +173,14 @@ bool Weave::addHandle(Handle h)
 
 void Weave::normalizeFields()
 {
-    int nfaces = nFaces();
+    int nfaces = surf->nFaces();
     int m = nFields();
     for (int i = 0; i < nfaces; i++)
     {
         for (int j = 0; j < m; j++)
         {
             Eigen::Vector2d vif = v(i, j);
-            double norm = sqrt(vif.transpose() * Bs[i].transpose() * Bs[i] * vif);
+            double norm = sqrt(vif.transpose() * surf->data().Bs[i].transpose() * surf->data().Bs[i] * vif);
             vectorFields.segment<2>(vidx(i, j)) /= norm;
         }
     }
@@ -434,19 +193,19 @@ void Weave::removePointsFromMesh(std::vector<int> vIds)
     std::set<int> facesToDelete;
     
     std::map<std::pair<int, int>, int> edgeMap;
-    for (int e = 0; e < nEdges(); e++) 
+    for (int e = 0; e < surf->nEdges(); e++) 
     { 
-        std::pair<int, int> p(edgeVerts(e,0), edgeVerts(e,1));
+        std::pair<int, int> p(surf->data().edgeVerts(e,0), surf->data().edgeVerts(e,1));
         edgeMap[p] = e; 
     }
    
     for (int v = 0; v < vIds.size(); v++)
     {
-        for (int f = 0; f < nFaces(); f++)
+        for (int f = 0; f < surf->nFaces(); f++)
         {
             for (int j = 0; j < 3; j++) 
             {
-                if ( F(f, j) == vIds[v] ) 
+                if ( surf->data().F(f, j) == vIds[v] ) 
                     facesToDelete.insert(f);       
             }
         }
@@ -465,7 +224,7 @@ void Weave::removePointsFromMesh(std::vector<int> vIds)
 
     int fieldIdx = 0;
     int faceIdIdx = 0;
-    int newNFaces = nFaces() - faceIds.size();
+    int newNFaces = surf->nFaces() - faceIds.size();
     Eigen::VectorXd vectorFields_clean = Eigen::VectorXd::Zero( 5*nFields()*newNFaces );
     Eigen::MatrixXi F_temp = Eigen::MatrixXi::Zero(newNFaces, 3); 
  
@@ -485,12 +244,12 @@ void Weave::removePointsFromMesh(std::vector<int> vIds)
         vectorFields_clean.segment(2*i*nFields(), 2*nFields()) = vectorFields.segment(2*fieldIdx*nFields(), 2*nFields());
         // beta
         vectorFields_clean.segment(2*i*nFields() + 2*newNFaces*nFields(), 2*nFields()) 
-            = vectorFields.segment(2*fieldIdx*nFields() + 2*nFaces()*nFields(), 2*nFields() );
+            = vectorFields.segment(2*fieldIdx*nFields() + 2*surf->nFaces()*nFields(), 2*nFields() );
         // alpha
         vectorFields_clean.segment(i*nFields() + 4*newNFaces*nFields(), nFields()) 
-            = vectorFields.segment(fieldIdx * nFields() + 4*nFaces()*nFields(), nFields() );
+            = vectorFields.segment(fieldIdx * nFields() + 4*surf->nFaces()*nFields(), nFields() );
         // faces 
-        F_temp.row(i) = F.row(fieldIdx);
+        F_temp.row(i) = surf->data().F.row(fieldIdx);
         fieldIdx++;
     }
 
@@ -509,26 +268,22 @@ void Weave::removePointsFromMesh(std::vector<int> vIds)
         }
         handles[h].face = handles[h].face - shift;
     }
-
-    Eigen::MatrixXd V_temp = V;
+    
     Eigen::MatrixXd V_new;
     Eigen::MatrixXi F_new;
     Eigen::VectorXi marked; 
     Eigen::VectorXi vertMap; 
      
-    igl::remove_unreferenced(V_temp, F_temp, V_new, F_new, marked, vertMap);
-    V = V_new;
-    F = F_new;
-
-
-    buildConnectivityStructures();
-    buildGeometricStructures();
+    igl::remove_unreferenced(surf->data().V, F_temp, V_new, F_new, marked, vertMap);
+    
+    delete surf;
+    surf = new Surface(V_new, F_new);
 
     std::vector<Eigen::MatrixXi> Ps_new;
-    for( int i = 0; i < nEdges(); i++) 
+    for( int i = 0; i < surf->nEdges(); i++) 
     {
-        int v0 = vertMap( edgeVerts(i, 0) );
-        int v1 = vertMap( edgeVerts(i, 1) );
+        int v0 = vertMap( surf->data().edgeVerts(i, 0) );
+        int v1 = vertMap( surf->data().edgeVerts(i, 1) );
         if ( v0 > v1 ) 
         { 
             std::swap(v0, v1);
@@ -563,7 +318,7 @@ void Weave::serialize(const std::string &filename)
         ofs << vectorFields[i] << std::endl;;
     }
 
-    int nedges = nEdges();
+    int nedges = surf->nEdges();
     int nfields = nFields();
     ofs << nedges << " " << nfields << std::endl;
 
@@ -587,7 +342,7 @@ void Weave::serialize(const std::string &filename)
         ofs << handles[i].face << " " << handles[i].field << " " << handles[i].dir[0] << " " << handles[i].dir[1] << std::endl;
     }
 
-    igl::writeOBJ(rawname + ".obj", V, F);
+    igl::writeOBJ(rawname + ".obj", surf->data().V, surf->data().F);
 
 }
 
@@ -682,7 +437,7 @@ int Weave::extractIsoline(const Eigen::MatrixXd &V, const Eigen::MatrixXi &F, co
                         {
                             trace.push_back( (1.0 - bary) * V.row(vp1) + bary * V.row(vp2) );
                             trace_vid.push_back(std::make_pair(vp1, vp2));
-                            norm.push_back(faceNormal(curface));
+                            norm.push_back(surf->faceNormal(curface));
                             prevface = curface;
                             curface = faceNeighbors(curface, k);
                             break;
@@ -824,8 +579,8 @@ void Weave::drawISOLines(int numISOLines)
     double maxval = M_PI;
     double numlines = numISOLines;
 
-    int nfaces = nFaces();
-    int nverts = nVerts();
+    int nfaces = surf->nFaces();
+    int nverts = surf->nVerts();
     
     std::map<std::pair<int, int>, Eigen::Vector2i > edgemap;
     for (int i = 0; i < nfaces; i++)
@@ -833,8 +588,8 @@ void Weave::drawISOLines(int numISOLines)
         for (int j = 0; j < 3; j++)
         {
             int nextj = (j + 1) % 3;
-            int v1 = F(i, j);
-            int v2 = F(i, nextj);
+            int v1 = surf->data().F(i, j);
+            int v2 = surf->data().F(i, nextj);
             int idx = 0;
             if (v1 > v2)
             {
@@ -860,8 +615,8 @@ void Weave::drawISOLines(int numISOLines)
     {
         for(int j=0; j<3; j++)
         {
-            int vp1 = F(i,(j+1)%3);
-            int vp2 = F(i,(j+2)%3);
+            int vp1 = surf->data().F(i,(j+1)%3);
+            int vp2 = surf->data().F(i,(j+2)%3);
             if(vp1 > vp2) std::swap(vp1, vp2);
             std::map<std::pair<int, int>, Eigen::Vector2i >::iterator it = edgemap.find(std::pair<int,int>(vp1, vp2));
             if(it == edgemap.end())
@@ -879,7 +634,7 @@ void Weave::drawISOLines(int numISOLines)
     for(int i=0; i<numlines; i++)
     {
         double isoval = minval + (maxval-minval) * double(i)/double(numlines);
-        ntraces += extractIsoline(V, F, faceNeighbors, 
+        ntraces += extractIsoline(surf->data().V, surf->data().F, faceNeighbors, 
             Eigen::Map<Eigen::VectorXd, Eigen::Unaligned>(theta.data(), theta.size()), 
             isoval, minval, maxval);
     }
@@ -920,11 +675,11 @@ vector<long> Weave::_BFS_adj_list(vector<vector<long> > & adj_list, int startPoi
  std::vector<Eigen::MatrixXd> Weave::_augmentPs()
  {
     int nCover = nFields() * 2;
-    int nfaces = nFaces();
-    int nverts = nVerts();
+    int nfaces = surf->nFaces();
+    int nverts = surf->nVerts();
     std::vector<Eigen::MatrixXd> perms;
     Eigen::MatrixXd perm;
-    for (int e = 0; e < nEdges(); e++)
+    for (int e = 0; e < surf->nEdges(); e++)
     {
         perm = Eigen::MatrixXd::Zero(nCover, nCover);
         for (int j = 0; j < nFields(); j++) 
@@ -953,30 +708,30 @@ void Weave::augmentField()
 {
     std::cout << "Current fields number: " << nFields() << endl;
     int nCover = nFields() * 2;
-    int nfaces = nFaces();
-    int nverts = nVerts();
+    int nfaces = surf->nFaces();
+    int nverts = surf->nVerts();
     std::vector<Eigen::MatrixXd> perms;
     Eigen::MatrixXd perm;
     perms = _augmentPs();
     Eigen::MatrixXd eye = Eigen::MatrixXd::Identity(nCover, nCover);
     // Compute points to glue
     vector<vector<long> > adj_list(nCover*nfaces*3);
-    for (int e = 0; e < nEdges(); e++)
+    for (int e = 0; e < surf->nEdges(); e++)
     {
         perm = perms[e];
-        int f1Id = E(e, 0);
-        int f2Id = E(e, 1);
+        int f1Id = surf->data().E(e, 0);
+        int f2Id = surf->data().E(e, 1);
         if(f1Id == -1 || f2Id == -1)
             continue;
-        int v1ID = edgeVerts(e, 0);
-        int v2ID = edgeVerts(e, 1);
+        int v1ID = surf->data().edgeVerts(e, 0);
+        int v2ID = surf->data().edgeVerts(e, 1);
         int v1f1 = -1, v2f1 = -1, v1f2 = -1, v2f2 = -1;
         for (int i = 0; i < 3; i ++)
         { // find the vid at face (0,1,or 2)
-            if (F(f1Id,i) == v1ID) v1f1 = i;
-            if (F(f1Id,i) == v2ID) v2f1 = i;
-            if (F(f2Id,i) == v1ID) v1f2 = i;
-            if (F(f2Id,i) == v2ID) v2f2 = i;
+            if (surf->data().F(f1Id,i) == v1ID) v1f1 = i;
+            if (surf->data().F(f1Id,i) == v2ID) v2f1 = i;
+            if (surf->data().F(f2Id,i) == v1ID) v1f2 = i;
+            if (surf->data().F(f2Id,i) == v2ID) v2f2 = i;
         }
         assert((v1f1 != -1) && (v2f1 != -1) && (v1f2 != -1) && (v2f2 != -1));
         if ((perm - eye).norm() == 0)
@@ -1035,9 +790,9 @@ void Weave::augmentField()
         int layerId = floor(encodedVid / (nfaces*3));
         int atFace = floor((encodedVid - layerId*nfaces*3) / 3);
         int atVid = encodedVid - layerId*nfaces*3 - 3*atFace;
-        int vid = F(atFace, atVid);
+        int vid = surf->data().F(atFace, atVid);
         for (int j = 0; j < 3; j ++)
-            VAug(i,j) = V(vid,j);
+            VAug(i,j) = surf->data().V(vid,j);
         for (int j = 0; j < gluePointList[i].size(); j ++)
         { // Maintain a vid mapping
             encodedVid = gluePointList[i][j];
@@ -1064,12 +819,10 @@ void Weave::augmentField()
     }
     igl::writeOBJ("debug.obj", VAug, FAug);
     cout << "finish augmenting the mesh" << endl;
-    V = VAug;
-    F = FAug;
+    delete surf;
+    surf = new Surface(VAug, FAug);
     nFields_unaugmented = nFields_;
-    nFields_ = 1; // set global field count to 1 on augmented mesh
-    buildConnectivityStructures();
-    buildGeometricStructures();
+    nFields_ = 1; // set global field count to 1 on augmented mesh    
     augmented = true;
 }
 
@@ -1079,8 +832,8 @@ void Weave::computeFunc(double scalesInit)
 
     std::ofstream debugOut("debug.txt");
     std::ofstream debugVectsOut("debug.field");
-    int nfaces = nFaces();
-    int nverts = nVerts();
+    int nfaces = surf->nFaces();
+    int nverts = surf->nVerts();
     cout << "nfaces: " << nfaces << endl;
     cout << "nverts: " << nverts << endl;
     vector<int> rowsL;
@@ -1088,14 +841,14 @@ void Weave::computeFunc(double scalesInit)
     vector<double> difVecUnscaled;
     for (int fId = 0; fId < nfaces; fId ++)
     { // Compute rowsL, colsL, difVecUnscaled
-        int vId0 = F(fId, 0);
-        int vId1 = F(fId, 1);
-        int vId2 = F(fId, 2);
+        int vId0 = surf->data().F(fId, 0);
+        int vId1 = surf->data().F(fId, 1);
+        int vId2 = surf->data().F(fId, 2);
         rowsL.push_back(vId0); rowsL.push_back(vId1); rowsL.push_back(vId2);
         colsL.push_back(vId1); colsL.push_back(vId2); colsL.push_back(vId0);
-        Eigen::Vector3d p0 = V.row(vId0);
-        Eigen::Vector3d p1 = V.row(vId1);
-        Eigen::Vector3d p2 = V.row(vId2);
+        Eigen::Vector3d p0 = surf->data().V.row(vId0);
+        Eigen::Vector3d p1 = surf->data().V.row(vId1);
+        Eigen::Vector3d p2 = surf->data().V.row(vId2);
         Eigen::Vector3d e01 = p0 - p1;
         Eigen::Vector3d e12 = p1 - p2;
         Eigen::Vector3d e20 = p2 - p0;
@@ -1106,13 +859,13 @@ void Weave::computeFunc(double scalesInit)
             int layerId = fId / (nfaces / (nFields() * 2));
             assert((layerId >= 0) && (layerId < nFields() * 2));
             if (layerId >= 3)
-                faceVec = Bs[oriFId] * v(oriFId, layerId-3); // The original vec
+                faceVec = surf->data().Bs[oriFId] * v(oriFId, layerId-3); // The original vec
             else
-                faceVec = - Bs[oriFId] * v(oriFId, layerId); // The original vec
+                faceVec = - surf->data().Bs[oriFId] * v(oriFId, layerId); // The original vec
         }
         else
-            faceVec = Bs[fId] * v(fId, 0); // The original vec
-        faceVec = faceVec.cross(faceNormal(fId));
+            faceVec = surf->data().Bs[fId] * v(fId, 0); // The original vec
+        faceVec = faceVec.cross(surf->faceNormal(fId));
         faceVec /= faceVec.norm();
         debugVectsOut << faceVec.transpose() << endl;
         difVecUnscaled.push_back(e01.dot(faceVec));
@@ -1235,13 +988,13 @@ void Weave::computeFunc(double scalesInit)
 
 Eigen::SparseMatrix<double> Weave::faceLaplacian()
 { // Only augment vector
-    int nfaces = nFaces();
+    int nfaces = surf->nFaces();
     // TODO: boundary
     // ids = find(min(adjFaces) > 0);
     // adjFaces = adjFaces(:, ids);
     std::vector<triplet> AContent;
-    for (int i = 0; i < E.rows(); i ++)
-        AContent.push_back(triplet(E(i,0), E(i,1), 1));
+    for (int i = 0; i < surf->data().E.rows(); i ++)
+        AContent.push_back(triplet(surf->data().E(i,0), surf->data().E(i,1), 1));
     Eigen::SparseMatrix<double> AFaceMat (nfaces, nfaces);
     AFaceMat.setFromTriplets(AContent.begin(),AContent.end());
     // Ge the degree of face
@@ -1278,16 +1031,16 @@ void Weave::serialize_forexport(const std::string &filename)
     std::ofstream ofs(buffer);
     int nvars = vectorFields.size();
   //  ofs << Bs.size() << std::endl;
-    for (int i = 0; i < nFaces(); i++)
+    for (int i = 0; i < surf->nFaces(); i++)
     {
         for (int j = 0; j < nFields(); j++)
         {
-            ofs << (Bs[i] * v(i, j)).transpose() << " "; 
+            ofs << (surf->data().Bs[i] * v(i, j)).transpose() << " "; 
         }
     
         for (int j = 0; j < nFields(); j++)
         {
-            ofs << -(Bs[i] * v(i, j)).transpose() << " "; 
+            ofs << -(surf->data().Bs[i] * v(i, j)).transpose() << " "; 
         }
 
         ofs << std::endl;
@@ -1298,16 +1051,16 @@ void Weave::serialize_forexport(const std::string &filename)
     sprintf(buffer, "%s.edges", filename.c_str());
     std::ofstream ofs_edge(buffer);
 
-    int nedges = nEdges();
+    int nedges = surf->nEdges();
     int nfields = nFields();
   //  ofs << nedges << " " << nfields << std::endl;
 
     for (int i = 0; i < nedges; i++)
     {
-        ofs_edge << E(i, 0) + 1 << " " 
-                 << E(i, 1) + 1 << " " 
-                 << edgeVerts(i, 0) + 1  << " "
-                 << edgeVerts(i, 1) + 1 <<  std::endl;
+        ofs_edge << surf->data().E(i, 0) + 1 << " " 
+                 << surf->data().E(i, 1) + 1 << " " 
+                 << surf->data().edgeVerts(i, 0) + 1  << " "
+                 << surf->data().edgeVerts(i, 1) + 1 <<  std::endl;
     }
     ofs_edge.close();
     sprintf(buffer, "%s.permmats", filename.c_str());
@@ -1376,7 +1129,7 @@ void Weave::deserialize(const std::string &filename)
         return;
     }
 
-    if (nedges != nEdges() && nfields != nFields())
+    if (nedges != surf->nEdges() && nfields != nFields())
     {
         std::cerr << "Vector field doesn't match mesh! edge/fields wrong." << std::endl;
         return;
@@ -1414,82 +1167,6 @@ void Weave::deserialize(const std::string &filename)
     }
 }
 
-void Weave::shortestPath(int startVert, int endVert, std::vector<std::pair<int, int> > &path)
-{
-    int nverts = nVerts();
-    path.clear();
-    bool *visited = new bool[nverts];
-    for(int i=0; i<nverts; i++)
-        visited[i] = false;
-    Eigen::VectorXi prev(nverts);
-    Eigen::VectorXi prevOrient(nverts);
-    Eigen::VectorXd prevEdge(nverts);
-    prev.setConstant(-1);
-    prevOrient.setConstant(-1);
-    prevEdge.setConstant(-1);
-
-    struct SearchNode
-    {
-        int next;
-        int prev;
-        int orient;
-        int prevedge;
-    };
-
-    SearchNode start;
-    start.next = startVert;
-    start.prev = -1;
-    start.orient = -1;
-    start.prevedge = -1;
-    
-    std::deque<SearchNode> q;
-    q.push_back(start);
-
-    while(!q.empty())
-    {
-        SearchNode cur = q.front();
-        q.pop_front();
-        if(visited[cur.next])
-            continue;
-        visited[cur.next] = true;
-        prev[cur.next] = cur.prev;
-        prevOrient[cur.next] = cur.orient;
-        prevEdge[cur.next] = cur.prevedge;
-        
-        if(cur.next == endVert)
-        {
-            int v = endVert;
-            while(prev[v] != -1)
-            {
-                path.push_back(std::pair<int, int>(prevEdge[v], prevOrient[v]));
-                v = prev[v];
-            }
-            std::reverse(path.begin(), path.end());
-            delete[] visited;
-            return;
-        }
-
-        int nbs = (int)vertEdges[cur.next].size();
-        for(int i=0; i<nbs; i++)
-        {
-            int e = vertEdges[cur.next][i];
-            int orient = (edgeVerts(e, 0) == cur.next) ? 0 : 1;
-            int next = edgeVerts(e, 1-orient);
-            if(visited[next])
-                continue;
-            SearchNode nextnode;
-            nextnode.next = next;
-            nextnode.prev = cur.next;
-            nextnode.prevedge = e;
-            nextnode.orient = orient;
-            q.push_back(nextnode);
-        }
-    }
-
-    delete[] visited;
-}
-
-
 void Weave::createVisualizationCuts(Eigen::MatrixXd &cutPts1, Eigen::MatrixXd &cutPts2)
 {
     int totedges = 0;
@@ -1504,44 +1181,32 @@ void Weave::createVisualizationCuts(Eigen::MatrixXd &cutPts1, Eigen::MatrixXd &c
     {
         for (int j = 0; j < (int)cuts[i].path.size(); j++)
         {
-            int f1 = E(cuts[i].path[j].first, 0);
-            int f2 = E(cuts[i].path[j].first, 1);
-            Eigen::Vector3d n1 = faceNormal(f1);
-            Eigen::Vector3d n2 = faceNormal(f2);
+            int f1 = surf->data().E(cuts[i].path[j].first, 0);
+            int f2 = surf->data().E(cuts[i].path[j].first, 1);
+            Eigen::Vector3d n1 = surf->faceNormal(f1);
+            Eigen::Vector3d n2 = surf->faceNormal(f2);
             Eigen::Vector3d offset = 0.0001*(n1 + n2);
-            cutPts1.row(idx) = V.row(edgeVerts(cuts[i].path[j].first, 0)) + offset.transpose();
-            cutPts2.row(idx) = V.row(edgeVerts(cuts[i].path[j].first, 1)) + offset.transpose();
+            cutPts1.row(idx) = surf->data().V.row(surf->data().edgeVerts(cuts[i].path[j].first, 0)) + offset.transpose();
+            cutPts2.row(idx) = surf->data().V.row(surf->data().edgeVerts(cuts[i].path[j].first, 1)) + offset.transpose();
             idx++;
         }
     }
 }
 
-int Weave::numInteriorEdges() const
-{
-    int nedges = nEdges();
-    int result = 0;
-    for(int i=0; i<nedges; i++)
-    {
-        if(E(i,0) != -1 && E(i,1) != -1)
-            result++;
-    }
-    return result;
-}
-
 void Weave::connectionEnergy(Eigen::VectorXd &energies)
 {
-    energies.resize(nFaces());
+    energies.resize(surf->nFaces());
     energies.setZero();
     
-    int nedges = nEdges();
+    int nedges = surf->nEdges();
     int nfields = nFields();
     for(int i=0; i<nedges; i++)
     {
-        if(E(i,0) == -1 || E(i,1) == -1)
+        if(surf->data().E(i,0) == -1 || surf->data().E(i,1) == -1)
             continue;
             
-        int face = E(i,0);
-        int opp = E(i,1);
+        int face = surf->data().E(i,0);
+        int opp = surf->data().E(i,1);
             
         for(int j=0; j<nfields; j++)
         {
@@ -1549,13 +1214,13 @@ void Weave::connectionEnergy(Eigen::VectorXd &energies)
             Eigen::Vector2d oppvec(0,0);
             for(int k=0; k<nfields; k++)
                 oppvec += Ps[i](j,k)*v(opp,k);
-            Eigen::Vector2d mappedvec = Ts.block<2,2>(2*i,0) * vec;
+            Eigen::Vector2d mappedvec = surf->data().Ts.block<2,2>(2*i,0) * vec;
             // mappedvec and oppvec now both live on face opp.
             // compute the angle between them
             
-            Eigen::Vector3d v1 = Bs[opp]*mappedvec;
-            Eigen::Vector3d v2 = Bs[opp]*oppvec;
-            Eigen::Vector3d n = faceNormal(opp);
+            Eigen::Vector3d v1 = surf->data().Bs[opp]*mappedvec;
+            Eigen::Vector3d v2 = surf->data().Bs[opp]*oppvec;
+            Eigen::Vector3d n = surf->faceNormal(opp);
             double angle = 2.0 * atan2(v1.cross(v2).dot(n), v1.norm() * v2.norm() + v1.dot(v2));
             energies[face] += fabs(angle);
             energies[opp] += fabs(angle);

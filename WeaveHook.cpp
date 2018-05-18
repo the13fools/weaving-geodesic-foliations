@@ -4,6 +4,7 @@
 #include "Permutations.h"
 #include <igl/opengl/glfw/imgui/ImGuiHelpers.h>
 #include "ImGuiDouble.h"
+#include "Surface.h"
 
 using namespace std;
 
@@ -48,7 +49,7 @@ void WeaveHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
         if (ImGui::Button("Export Field", ImVec2(-1, 0)))   
             exportVectorField();
     }
-    if (ImGui::CollapsingHeader("Add Cut", ImGuiTreeNodeFlags_DefaultOpen))
+    if (ImGui::CollapsingHeader("Cuts", ImGuiTreeNodeFlags_DefaultOpen))
     {
         if (ImGui::Button("Reset Cut Select", ImVec2(-1, 0)))   
             resetCutSelection();
@@ -132,7 +133,7 @@ bool WeaveHook::mouseClicked(igl::opengl::glfw::Viewer &viewer, int button)
     double x = viewer.current_mouse_x;
     double y = viewer.core.viewport(3) - viewer.current_mouse_y;
     if (igl::unproject_onto_mesh(Eigen::Vector2f(x, y), viewer.core.view * viewer.core.model,
-        viewer.core.proj, viewer.core.viewport, this->weave->V, this->weave->F, fid, bc))
+        viewer.core.proj, viewer.core.viewport, this->weave->surf->data().V, this->weave->surf->data().F, fid, bc))
     {
         std::cout << fid << " - clicked on vertex #\n"; 
         bool found = false;
@@ -155,7 +156,7 @@ bool WeaveHook::mouseClicked(igl::opengl::glfw::Viewer &viewer, int button)
         renderSelectedVertices.clear();
         for (int i = 0; i < (int)selectedVertices.size(); i++)
         {
-            renderSelectedVertices.push_back(weave->V.row(weave->F(selectedVertices[i].first, selectedVertices[i].second)));
+            renderSelectedVertices.push_back(weave->surf->data().V.row(weave->surf->data().F(selectedVertices[i].first, selectedVertices[i].second)));
         }
         return true;
     }
@@ -183,21 +184,21 @@ void WeaveHook::initSimulation()
     curFaceEnergies = Eigen::MatrixXd::Zero(3, 3);
     selectedVertices.clear();
     renderSelectedVertices.clear();
-    params.edgeWeights = Eigen::VectorXd::Constant(weave->nEdges(), 1);    
+    params.edgeWeights = Eigen::VectorXd::Constant(weave->surf->nEdges(), 1);    
 
     weave->fixFields = false;    
 }
 
 void WeaveHook::setFaceColors(igl::opengl::glfw::Viewer &viewer)
 { 
-    int faces = weave->F.rows();
+    int faces = weave->surf->data().F.rows();
     // if ( curFaceEnergies.rows() != faces && shading_state != NONE) { return ; }
     // cout << "fuck" << endl;
 
     igl::ColorMapType viz_color = igl::COLOR_MAP_TYPE_MAGMA;
     
     Eigen::VectorXd Z(faces);
-    Eigen::VectorXd FVAL(weave->nVerts());
+    Eigen::VectorXd FVAL(weave->surf->nVerts());
     
     for (int i = 0; i < faces; i++) 
     {
@@ -229,7 +230,7 @@ void WeaveHook::setFaceColors(igl::opengl::glfw::Viewer &viewer)
     
     if (shading_state == FUN_VAL)
     {
-        for (int i = 0; i < weave->nVerts(); i ++)
+        for (int i = 0; i < weave->surf->nVerts(); i ++)
         {
             FVAL(i) = weave->theta[i];
             viewer.data().set_face_based(false);
@@ -250,7 +251,7 @@ void WeaveHook::setFaceColors(igl::opengl::glfw::Viewer &viewer)
             showCutVertexSelection(viewer);     
             break;
         case FUN_VAL:
-            faceColors.resize(weave->nVerts(), 3);
+            faceColors.resize(weave->surf->nVerts(), 3);
             igl::colormap(viz_color,FVAL, true, faceColors);
             cout << "drawLine " << drawLine << endl;
             if (drawLine)
@@ -267,7 +268,7 @@ void WeaveHook::setFaceColors(igl::opengl::glfw::Viewer &viewer)
             }
             break;
         default:
-            faceColors.resize(weave->nFaces(), 3);
+            faceColors.resize(weave->surf->nFaces(), 3);
             igl::colormap(viz_color,Z, true, faceColors);
             break;
     }
@@ -411,7 +412,7 @@ void WeaveHook::renderRenderGeometry(igl::opengl::glfw::Viewer &viewer)
 
 bool WeaveHook::simulateOneStep()
 {
-    params.edgeWeights.resize(weave->nEdges());
+    params.edgeWeights.resize(weave->surf->nEdges());
     params.edgeWeights.setConstant(1.0);
     for (int i = 0; i < (int)weave->cuts.size(); i++)
     {
@@ -444,10 +445,10 @@ void WeaveHook::reassignPermutations()
     singularVerts_topo = Eigen::MatrixXd::Zero(topsingularities.size(), 3);
     for (int i = 0; i < topsingularities.size(); i++)
     {
-        singularVerts_topo.row(i) = weave->V.row(topsingularities[i]);
+        singularVerts_topo.row(i) = weave->surf->data().V.row(topsingularities[i]);
     }
 
-    nonIdentityEdges = Eigen::MatrixXd::Zero(weave->E.size(), 3);
+    nonIdentityEdges = Eigen::MatrixXd::Zero(weave->surf->data().E.size(), 3);
     for (int i = 0; i < weave->Ps.size(); i++)
     {
         bool id = true;
@@ -460,8 +461,8 @@ void WeaveHook::reassignPermutations()
         }
         if (!id)
         {
-            nonIdentityEdges.row(i) = (weave->V.row(weave->edgeVerts(i, 0)) +
-                weave->V.row(weave->edgeVerts(i, 1))) * .5;
+            nonIdentityEdges.row(i) = (weave->surf->data().V.row(weave->surf->data().edgeVerts(i, 0)) +
+                weave->surf->data().V.row(weave->surf->data().edgeVerts(i, 1))) * .5;
 
         }
     }
@@ -546,27 +547,26 @@ void WeaveHook::removeSingularities()
 
 void WeaveHook::addCut()
 {
-    //    cuts.push_back();
-    //    shortestPath
     int idx1 = -1;
     int idx2 = -1;
+
+    std::cout << selectedVertices.size() << std::endl;
 
     if (selectedVertices.size() < 2)
         return;
 
-    idx1 = weave->F(selectedVertices[0].first, selectedVertices[0].second);
-    idx2 = weave->F(selectedVertices[1].first, selectedVertices[1].second);
+    idx1 = weave->surf->data().F(selectedVertices[0].first, selectedVertices[0].second);
+    idx2 = weave->surf->data().F(selectedVertices[1].first, selectedVertices[1].second);
 
     if (idx1 == idx2)
         return;
 
     Cut c;    
-    weave->shortestPath(idx1, idx2, c.path);
+    weave->surf->shortestPath(idx1, idx2, c.path);
     weave->cuts.push_back(c);    
-  //  std::cout << "\n" << weave->edgeVerts(c.path[0].first, 1 - c.path[0].second ) << "\n";
     for (int i = 0; i < c.path.size(); i++ )
     {
-        std::cout << weave->edgeVerts(c.path[i].first, c.path[i].second) << "\n"; // " " <<  weave->edgeVerts.row(c.path[i].first);
+        std::cout << weave->surf->data().edgeVerts(c.path[i].first, c.path[i].second) << "\n"; // " " <<  weave->edgeVerts.row(c.path[i].first);
     }
 
     updateRenderGeometry();
