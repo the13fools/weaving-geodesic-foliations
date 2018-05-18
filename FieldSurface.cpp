@@ -156,10 +156,10 @@ FieldSurface *FieldSurface::removePointsFromMesh(std::vector<int> vIds, std::map
     //cout << faceIdIdx << " face id idx\n";
            
     std::vector<Eigen::MatrixXi> Ps_new;
-    for( int i = 0; i < nEdges(); i++) 
+    for( int i = 0; i < result->nEdges(); i++) 
     {
-        int v0 = vertMap( data().edgeVerts(i, 0) );
-        int v1 = vertMap( data().edgeVerts(i, 1) );
+        int v0 = vertMap( result->data().edgeVerts(i, 0) );
+        int v1 = vertMap( result->data().edgeVerts(i, 1) );
         if ( v0 > v1 ) 
         { 
             std::swap(v0, v1);

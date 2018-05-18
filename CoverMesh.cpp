@@ -1,19 +1,24 @@
-
+#include "CutMesh.h"
 #include "CoverMesh.h"
 #include "FieldSurface.h"
 #include <queue>
 #include <igl/writeOBJ.h>
 #include <Eigen/Dense>
+#include "Weave.h"
+#include <igl/is_vertex_manifold.h>
+#include <igl/is_edge_manifold.h>
 
 typedef Eigen::Triplet<double> triplet;
 # define M_PI           3.14159265358979323846
 
 using namespace std;
 
-CoverMesh::CoverMesh(const Eigen::MatrixXd &V, const Eigen::MatrixXi &F, const Eigen::MatrixXd &field, int ncovers)
+CoverMesh::CoverMesh(const Weave &parent, const Eigen::MatrixXd &V, const Eigen::MatrixXi &F, const Eigen::VectorXi &oldToNewVertMap, const Eigen::MatrixXd &field, int ncovers)
+ : parent_(parent), oldToNewVertMap_(oldToNewVertMap)
 {
     fs = new FieldSurface(V, F, 1);
     int nfaces = F.rows();
+    ncovers_ = ncovers;
     for (int i = 0; i < nfaces; i++)
     {
         fs->vectorFields.segment<2>(fs->vidx(i, 0)) = field.row(i).transpose();
@@ -21,6 +26,11 @@ CoverMesh::CoverMesh(const Eigen::MatrixXd &V, const Eigen::MatrixXi &F, const E
 
     theta.resize(fs->nVerts());
     theta.setZero();
+    
+    s.resize(fs->nFaces());
+    s.setConstant(1.0);
+    
+    renderScale_ = 1.0;
 }
 
 CoverMesh::~CoverMesh()
@@ -498,35 +508,154 @@ Eigen::SparseMatrix<double> CoverMesh::faceLaplacian()
 }
 
 
-void CoverMesh::createVisualizationEdges(Eigen::MatrixXd &edgePts, Eigen::MatrixXd &edgeVecs, Eigen::MatrixXi &edgeSegs, Eigen::MatrixXd &colors)
+void CoverMesh::createVisualization(Eigen::MatrixXd &V, Eigen::MatrixXi &F, Eigen::MatrixXd &edgePts, Eigen::MatrixXd &edgeVecs, Eigen::MatrixXi &edgeSegs, Eigen::MatrixXd &colors)
 {
-    int nfaces = fs->nFaces();
-    int m = fs->nFields();
-    edgePts.resize(m*nfaces, 3);
-    edgeVecs.resize(m*nfaces, 3);
-    edgeVecs.setZero();
-    edgeSegs.resize(m*nfaces, 2);
-    colors.resize(m*nfaces , 3);
-
-    Eigen::MatrixXd fcolors(m, 3);
-    for (int i = 0; i < m; i++)
-        fcolors.row(i).setZero();//heatmap(double(i), 0.0, double(m-1));
-
-    for (int i = 0; i < nfaces; i++)
+    int facespercover = fs->nFaces()/ncovers_;
+    int rows = 2;
+    int meshesperrow = ncovers_ / rows + (ncovers_ % rows == 0 ? 0 : 1);
+    std::vector<Eigen::Vector3d> offsets;
+    for(int i=0; i<ncovers_; i++)
     {
-        Eigen::Vector3d centroid;
-        centroid.setZero();
-        for (int j = 0; j < 3; j++)
-            centroid += fs->data().V.row(fs->data().F(i, j));
-        centroid /= 3.0;
-
-        for (int j = 0; j < m; j++)
+        int row = i/meshesperrow;
+        int col = i%meshesperrow;
+        double dy = (-1.0 * row + (1.0) * (rows-row-1))/double(rows);
+        double dx = (1.0 * col + (-1.0) * (meshesperrow - col-1))/double(meshesperrow);
+        offsets.push_back(Eigen::Vector3d(dx, dy, 0.0));
+    }
+    
+    int origverts = parent_.fs->nVerts();
+    int origfaces = parent_.fs->nFaces();
+    int newverts = ncovers_*origverts;
+    int newfaces = ncovers_*origfaces;
+    V.resize(newverts, 3);
+    F.resize(newfaces, 3);
+    renderScale_ = 1.0 / std::max(rows,meshesperrow);
+    for(int i=0; i<ncovers_; i++)
+    {
+        for(int j=0; j<origverts; j++)
         {
-            edgePts.row(m*i + j) = centroid;
-            edgeVecs.row(m*i + j) = fs->data().Bs[i] * fs->v(i, j);
-            edgeSegs(m*i + j, 0) = 2 * (m*i + j);
-            edgeSegs(m*i + j, 1) = 2 * (m*i + j) + 1;
-            colors.row(m*i + j) = fcolors.row(j);
+            V.row(i*origverts + j) = offsets[i].transpose() + renderScale_ * parent_.fs->data().V.row(j);
+        }
+        for(int j=0; j<origfaces; j++)
+        {
+            for(int k=0; k<3; k++)
+            {
+                F(i*origfaces + j, k) = i*origverts + parent_.fs->data().F(j,k);
+            }
         }
     }
+    edgePts.resize(newfaces, 3);
+    edgeVecs.resize(newfaces, 3);
+    edgeVecs.setZero();
+    edgeSegs.resize(newfaces, 2);
+    colors.resize(newfaces , 3);
+
+    for(int c=0; c<ncovers_; c++)
+    {
+        for (int i = 0; i < origfaces; i++)
+        {
+            Eigen::Vector3d centroid;
+            centroid.setZero();
+            for (int j = 0; j < 3; j++)
+                centroid += renderScale_ * parent_.fs->data().V.row(parent_.fs->data().F(i, j));
+            centroid /= 3.0;
+            centroid += offsets[c];
+
+            edgePts.row(c*origfaces + i) = centroid;
+            edgeVecs.row(c*origfaces + i) = parent_.fs->data().Bs[i] * fs->v(c*origfaces + i, 0);
+            edgeSegs(c*origfaces + i, 0) = 2 * (c*origfaces + i);
+            edgeSegs(c*origfaces + i, 1) = 2 * (c*origfaces + i) + 1;
+            colors.row(c*origfaces + i) = Eigen::Vector3d(0,0,0).transpose();
+        }
+    }
+}
+
+int CoverMesh::visMeshToCoverMesh(int vertid)
+{
+    return oldToNewVertMap_[vertid];
+}
+
+void CoverMesh::initializeS()
+{
+    Eigen::VectorXi B;
+    if(!igl::is_vertex_manifold(fs->data().F, B))
+        std::cout << "ERROR: cover mesh not vertex-manifold!" << std::endl;
+    if(!igl::is_edge_manifold(fs->data().F))
+        std::cout << "ERROR: cover mesh not edge-manifold!" << std::endl;
+    // cut the mesh
+    std::vector<std::vector<int> > cuts;
+    findCuts(fs->data().V, fs->data().F, cuts);
+    std::cout << "Found " << cuts.size() << " cuts";
+    if (cuts.size() == 0)
+        std::cout << std::endl;
+    else
+    {
+        std::cout << " of lengths ";
+        for (int i = 0; i < cuts.size(); i++)
+        {
+            if (i != 0)
+                std::cout << ", ";
+            std::cout << cuts[i].size();
+        }
+        std::cout << std::endl;
+    }
+
+    Eigen::MatrixXd cutV;
+    Eigen::MatrixXi cutF;    
+    cutMesh(fs->data().V, fs->data().F, cuts, cutV, cutF);
+    Surface surf(cutV, cutF);
+    
+    // build edge metric matrix
+    std::vector<Eigen::Triplet<double> > edgeMetricCoeffs;
+    int nedges = surf.nEdges();
+    for(int i=0; i<nedges; i++)
+    {
+        Eigen::Vector3d v0 = surf.data().V.row(surf.data().edgeVerts(i,0)).transpose();
+        Eigen::Vector3d v1 = surf.data().V.row(surf.data().edgeVerts(i,1)).transpose();
+        double len = (v1-v0).norm();
+        edgeMetricCoeffs.push_back(Eigen::Triplet<double>(i,i,len));
+    }
+    Eigen::SparseMatrix<double> edgeMetric(nedges, nedges);
+    edgeMetric.setFromTriplets(edgeMetricCoeffs.begin(), edgeMetricCoeffs.end());
+    
+    double reg = 1e-4;
+    
+    // edge gradient matrix
+    std::vector<Eigen::Triplet<double> > DCoeffs;
+    int nfaces = surf.nFaces();
+    for(int i=0; i<nedges; i++)
+    {
+        int f0 = surf.data().E(i,0);
+        int f1 = surf.data().E(i,1);
+        if(f0 == -1 || f1 == -1)
+            continue;
+        Eigen::Vector3d v0 = surf.data().V.row(surf.data().edgeVerts(i,0)).transpose();
+        Eigen::Vector3d v1 = surf.data().V.row(surf.data().edgeVerts(i,1)).transpose();
+        Eigen::Vector3d edgeVec = v1-v0;
+        Eigen::Vector3d scaledvec0 = surf.data().Bs[f0] * fs->v(f0, 0);           
+        Eigen::Vector3d scaledvec1 = surf.data().Bs[f1] * fs->v(f1, 0);
+        DCoeffs.push_back(Eigen::Triplet<double>(i, f0, -scaledvec0.dot(edgeVec) - reg));
+        DCoeffs.push_back(Eigen::Triplet<double>(i, f1, scaledvec1.dot(edgeVec) + reg));
+    }
+    Eigen::SparseMatrix<double> D(nedges, nfaces);
+    D.setFromTriplets(DCoeffs.begin(), DCoeffs.end());
+    // the integrability operator
+    Eigen::SparseMatrix<double> L = D.transpose() * edgeMetric * D;
+    std::cout << "Solving eigenproblem..." << std::endl;
+    double eval = inversePowerIteration(L, s, 1000);
+    std::cout << "Smallest eigenvalue: " << eval << std::endl;
+}
+
+double CoverMesh::inversePowerIteration(Eigen::SparseMatrix<double> &M, Eigen::VectorXd &evec, int iters)
+{
+    evec.resize(M.cols());
+    evec.setRandom();
+    evec /= evec.norm();
+    Eigen::SimplicialLDLT<Eigen::SparseMatrix<double> > solver(M);
+    for(int i=0; i<iters; i++)
+    {
+        Eigen::VectorXd newvec = solver.solve(evec);
+        evec = newvec / newvec.norm();
+    }
+    return evec.transpose() * M * evec;
 }

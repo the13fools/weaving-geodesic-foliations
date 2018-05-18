@@ -127,12 +127,14 @@ void WeaveHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
         {
             ImGui::InputDoubleScientific("Vector Scale", &vectorScale);
             ImGui::Checkbox("Hide Vectors", &hideVectors);
-            ImGui::Combo("Shading", (int *)&cover_shading_state, "None\0Theta Value\0Connection\0\0");
+            ImGui::Combo("Shading", (int *)&cover_shading_state, "None\0S Value\0Theta Value\0Connection\0\0");
         }
 
         if (ImGui::CollapsingHeader("Cover Controls", ImGuiTreeNodeFlags_DefaultOpen))
         {
             ImGui::InputDoubleScientific("Initial Scales", &scalesInit);
+            if (ImGui::Button("Initialize S", ImVec2(-1,0)))
+                initializeS();
             if (ImGui::Button("Compute Function Value", ImVec2(-1, 0)))
                 computeFunc();
             ImGui::InputInt("Num Isolines", &numISOLines);
@@ -208,6 +210,12 @@ void WeaveHook::initSimulation()
     selectedVertices.clear();
     renderSelectedVertices.clear();
     params.edgeWeights = Eigen::VectorXd::Constant(weave->fs->nEdges(), 1);    
+    
+    singularVerts_topo.resize(0,3);
+    singularVerts_geo.resize(0,3);
+    nonIdentityEdges.resize(0,3);
+    cutPos1.resize(0,3);
+    cutPos2.resize(0,3);
 
     weave->fixFields = false;    
 }
@@ -229,7 +237,7 @@ void WeaveHook::setFaceColorsCover(igl::opengl::glfw::Viewer &viewer)
     {
         for (int i = 0; i < cover->fs->nVerts(); i++)
         {            
-            FVAL(i) = cover->theta[i];            
+            FVAL(i) = cover->theta[cover->visMeshToCoverMesh(i)];            
         }
         viewer.data().set_face_based(false);
     }
@@ -241,6 +249,11 @@ void WeaveHook::setFaceColorsCover(igl::opengl::glfw::Viewer &viewer)
     if (cover_shading_state == CS_CONNECTION_ENERGY)
     {
         cover->fs->connectionEnergy(Z);
+    }
+    
+    if (cover_shading_state == CS_S_VAL)
+    {
+        Z = cover->s;
     }
 
     Eigen::MatrixXd faceColors(cover->fs->nFaces(), 3);
@@ -475,11 +488,8 @@ void WeaveHook::renderRenderGeometry(igl::opengl::glfw::Viewer &viewer)
         for (int i = 0; i < edges; i++)
         {
             Eigen::Vector3d vec = edgeVecsCover.row(i);
-            if (normalizeVectors)
-            {
-                if (vec.norm() != 0.0)
-                    vec *= baseLength / vec.norm() * sqrt(3.0) / 6.0 * 0.75;
-            }
+            if (vec.norm() != 0.0)
+                vec *= cover->renderScale() * baseLength / vec.norm() * sqrt(3.0) / 6.0 * 0.75;
             renderPts.row(2 * i) = edgePtsCover.row(i) - vectorScale*vec.transpose();
             renderPts.row(2 * i + 1) = edgePtsCover.row(i) + vectorScale*vec.transpose();
         }
@@ -566,6 +576,7 @@ void WeaveHook::augmentField()
     if (cover) delete cover;
     cover = weave->createCover();    
     updateRenderGeometry();
+    gui_mode = GUIMode_Enum::COVER;
 }
 
 void WeaveHook::computeFunc()
@@ -626,8 +637,8 @@ void WeaveHook::removeSingularities()
     findSingularVertices(*weave, topsingularities, geosingularities);
 
     std::vector<int> todelete = topsingularities;
-//    for (int i = 0; i < geosingularities.size(); i++)
-//        todelete.push_back(geosingularities[i].first);
+    for (int i = 0; i < geosingularities.size(); i++)
+        todelete.push_back(geosingularities[i].first);
 
     weave->removePointsFromMesh(todelete);
     updateRenderGeometry();
@@ -704,9 +715,7 @@ void WeaveHook::updateRenderGeometry()
 
     if (cover)
     {
-        renderQCover = cover->fs->data().V;
-        renderFCover = cover->fs->data().F;
-        cover->createVisualizationEdges(edgePtsCover, edgeVecsCover, edgeSegsCover, edgeColorsCover);
+        cover->createVisualization(renderQCover, renderFCover, edgePtsCover, edgeVecsCover, edgeSegsCover, edgeColorsCover);
     }
     else
     {
@@ -717,4 +726,9 @@ void WeaveHook::updateRenderGeometry()
         edgeSegsCover.resize(0, 2);
         edgeColorsCover.resize(0, 3);
     }
+}
+
+void WeaveHook::initializeS()
+{
+    if(cover) cover->initializeS();
 }

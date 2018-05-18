@@ -23,6 +23,7 @@ enum WeaveShading_Enum {
 
 enum CoverShading_Enum {
     CS_NONE = 0,
+    CS_S_VAL,
     FUN_VAL,
     CS_CONNECTION_ENERGY
 };
@@ -80,6 +81,7 @@ public:
     void deserializeVectorField();    
     void deserializeVectorFieldOld();
     void augmentField();
+    void initializeS();
     void computeFunc();
     void drawISOLines();
     void resetCutSelection();
