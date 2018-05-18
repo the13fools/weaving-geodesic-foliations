@@ -31,7 +31,8 @@ public:
     Eigen::VectorXd theta;
     Eigen::VectorXd s;
 
-    void createVisualization(Eigen::MatrixXd &V, Eigen::MatrixXi &F, Eigen::MatrixXd &edgePts, Eigen::MatrixXd &edgeVecs, Eigen::MatrixXi &edgeSegs, Eigen::MatrixXd &colors, Eigen::MatrixXd &cutPts1, Eigen::MatrixXd &cutPts2);
+    void createVisualization(Eigen::MatrixXd &V, Eigen::MatrixXi &F, Eigen::MatrixXd &edgePts, Eigen::MatrixXd &edgeVecs, Eigen::MatrixXi &edgeSegs, Eigen::MatrixXd &colors, 
+        Eigen::MatrixXd &cutPts1, Eigen::MatrixXd &cutPts2, Eigen::MatrixXd &cutColors);
 
     void computeFunc(double scalesInit);
     double renderScale() {return renderScale_;}
@@ -61,6 +62,8 @@ private:
     int ncovers_;
     const Weave &parent_;
     double renderScale_;    
+    // edges along which the multiple cover is cut to create a topological disk
+    std::vector<int> slicedEdges;
 };
 
 #endif

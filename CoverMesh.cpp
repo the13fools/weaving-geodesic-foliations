@@ -7,6 +7,10 @@
 #include "Weave.h"
 #include <igl/is_vertex_manifold.h>
 #include <igl/is_edge_manifold.h>
+#include <set>
+#include <igl/cotmatrix_entries.h>
+#define MIN_QUAD_WITH_FIXED_CPP_DEBUG
+#include <igl/min_quad_with_fixed.h>
 
 typedef Eigen::Triplet<double> triplet;
 # define M_PI           3.14159265358979323846
@@ -512,7 +516,8 @@ Eigen::SparseMatrix<double> CoverMesh::faceLaplacian()
 }
 
 
-void CoverMesh::createVisualization(Eigen::MatrixXd &V, Eigen::MatrixXi &F, Eigen::MatrixXd &edgePts, Eigen::MatrixXd &edgeVecs, Eigen::MatrixXi &edgeSegs, Eigen::MatrixXd &colors, Eigen::MatrixXd &cutPts1, Eigen::MatrixXd &cutPts2)
+void CoverMesh::createVisualization(Eigen::MatrixXd &V, Eigen::MatrixXi &F, Eigen::MatrixXd &edgePts, Eigen::MatrixXd &edgeVecs, Eigen::MatrixXi &edgeSegs, Eigen::MatrixXd &colors, 
+    Eigen::MatrixXd &cutPts1, Eigen::MatrixXd &cutPts2, Eigen::MatrixXd &cutColors)
 {
     int splitFace = data_.splitMesh->nFaces();
     int origverts = parent_.fs->nVerts();
@@ -546,8 +551,10 @@ void CoverMesh::createVisualization(Eigen::MatrixXd &V, Eigen::MatrixXi &F, Eige
     }
 
     int ncutedges = data_.splitMeshCuts.size();
-    cutPts1.resize(ncutedges, 3);
-    cutPts2.resize(ncutedges, 3);
+    int nsliceedges = slicedEdges.size();
+    cutPts1.resize(ncutedges+nsliceedges, 3);
+    cutPts2.resize(ncutedges+nsliceedges, 3);
+    cutColors.resize(ncutedges + nsliceedges, 3);
     for (int i = 0; i < ncutedges; i++)
     {
         int edgeid = data_.splitMeshCuts[i];
@@ -563,6 +570,23 @@ void CoverMesh::createVisualization(Eigen::MatrixXd &V, Eigen::MatrixXi &F, Eige
         Eigen::Vector3d offset = 0.0001*n / n.norm();
         cutPts1.row(i) = data_.splitMesh->data().V.row(v0) + offset.transpose();
         cutPts2.row(i) = data_.splitMesh->data().V.row(v1) + offset.transpose();
+        cutColors.row(i) = Eigen::RowVector3d(0.9, .1, .9);
+    }
+    for (int i = 0; i < nsliceedges; i++)
+    {
+        int v0 = data_.splitMesh->data().edgeVerts(slicedEdges[i], 0);
+        int v1 = data_.splitMesh->data().edgeVerts(slicedEdges[i], 1);
+        Eigen::Vector3d n(0, 0, 0);
+        int f0 = data_.splitMesh->data().E(slicedEdges[i], 0);
+        int f1 = data_.splitMesh->data().E(slicedEdges[i], 1);
+        if (f0 != -1)
+            n += data_.splitMesh->faceNormal(f0);
+        if (f1 != -1)
+            n += data_.splitMesh->faceNormal(f1);
+        Eigen::Vector3d offset = 0.0001*n / n.norm();
+        cutPts1.row(i + ncutedges) = data_.splitMesh->data().V.row(v0) + offset.transpose();
+        cutPts2.row(i + ncutedges) = data_.splitMesh->data().V.row(v1) + offset.transpose();
+        cutColors.row(i + ncutedges) = Eigen::RowVector3d(0.1, .9, .9);
     }
 }
 
@@ -596,50 +620,142 @@ void CoverMesh::initializeS()
         std::cout << std::endl;
     }
 
+    std::set<std::pair<int, int> > cutsegs;
+    for (auto &it : cuts)
+    {
+        for (int i = 0; i < it.size() - 1; i++)
+        {
+            int v0 = it[i];
+            int v1 = it[i + 1];
+            if (v0 > v1)
+                std::swap(v0, v1);
+            cutsegs.insert(std::pair<int, int>(v0, v1));
+        }
+    }
+
+    slicedEdges.clear();
+    int splitedges = data_.splitMesh->nEdges();
+    for (int i = 0; i < splitedges; i++)
+    {
+        int v0 = data_.splitMesh->data().edgeVerts(i, 0);
+        int v1 = data_.splitMesh->data().edgeVerts(i, 1);
+        int mappedv0 = data_.splitToCoverVerts[v0];
+        int mappedv1 = data_.splitToCoverVerts[v1];
+        if (mappedv0 > mappedv1)
+            std::swap(mappedv0, mappedv1);
+        if (cutsegs.count(std::pair<int, int>(mappedv0, mappedv1)))
+        {
+            slicedEdges.push_back(i);
+        }
+    }
+
     Eigen::MatrixXd cutV;
     Eigen::MatrixXi cutF;    
     cutMesh(fs->data().V, fs->data().F, cuts, cutV, cutF);
     Surface surf(cutV, cutF);
     
     // build edge metric matrix
+    Eigen::MatrixXd C;
+    igl::cotmatrix_entries(surf.data().V, surf.data().F, C);
     std::vector<Eigen::Triplet<double> > edgeMetricCoeffs;
     int nedges = surf.nEdges();
-    for(int i=0; i<nedges; i++)
+    int nfaces = surf.nFaces();
+    for(int i=0; i<nfaces; i++)
     {
-        Eigen::Vector3d v0 = surf.data().V.row(surf.data().edgeVerts(i,0)).transpose();
-        Eigen::Vector3d v1 = surf.data().V.row(surf.data().edgeVerts(i,1)).transpose();
-        double len = (v1-v0).norm();
-        edgeMetricCoeffs.push_back(Eigen::Triplet<double>(i,i,len));
+        for (int j = 0; j < 3; j++)
+        {
+            int eidx = surf.data().faceEdges(i, j);
+            edgeMetricCoeffs.push_back(Eigen::Triplet<double>(eidx,eidx,C(i,j)));
+        }                
     }
     Eigen::SparseMatrix<double> edgeMetric(nedges, nedges);
     edgeMetric.setFromTriplets(edgeMetricCoeffs.begin(), edgeMetricCoeffs.end());
     
     double reg = 1e-4;
     
-    // edge gradient matrix
-    std::vector<Eigen::Triplet<double> > DCoeffs;
-    int nfaces = surf.nFaces();
+    // edge gradient matrices
+    std::vector<Eigen::Triplet<double> > DCoeffs;    
+    std::vector<Eigen::Triplet<double> > DvecCoeffs;    
+    std::vector<Eigen::Triplet<double> > DvertCoeffs;    
     for(int i=0; i<nedges; i++)
     {
         int f0 = surf.data().E(i,0);
         int f1 = surf.data().E(i,1);
+        int vert0 = surf.data().edgeVerts(i, 0);
+        int vert1 = surf.data().edgeVerts(i, 1);
+        DvertCoeffs.push_back(Eigen::Triplet<double>(i, vert0, -1));
+        DvertCoeffs.push_back(Eigen::Triplet<double>(i, vert1, 1));
         if(f0 == -1 || f1 == -1)
             continue;
-        Eigen::Vector3d v0 = surf.data().V.row(surf.data().edgeVerts(i,0)).transpose();
-        Eigen::Vector3d v1 = surf.data().V.row(surf.data().edgeVerts(i,1)).transpose();
+        Eigen::Vector3d v0 = surf.data().V.row(vert0).transpose();
+        Eigen::Vector3d v1 = surf.data().V.row(vert1).transpose();
         Eigen::Vector3d edgeVec = v1-v0;
         Eigen::Vector3d scaledvec0 = surf.data().Bs[f0] * fs->v(f0, 0);           
         Eigen::Vector3d scaledvec1 = surf.data().Bs[f1] * fs->v(f1, 0);
-        DCoeffs.push_back(Eigen::Triplet<double>(i, f0, -scaledvec0.dot(edgeVec) - reg));
-        DCoeffs.push_back(Eigen::Triplet<double>(i, f1, scaledvec1.dot(edgeVec) + reg));
+        DvecCoeffs.push_back(Eigen::Triplet<double>(i, f0, -scaledvec0.dot(edgeVec)));
+        DvecCoeffs.push_back(Eigen::Triplet<double>(i, f1, scaledvec1.dot(edgeVec)));
+        DCoeffs.push_back(Eigen::Triplet<double>(i, f0, -1));
+        DCoeffs.push_back(Eigen::Triplet<double>(i, f1, 1));
     }
+    int nverts = surf.nVerts();
+    Eigen::SparseMatrix<double> Dvert(nedges, nverts);
+    Dvert.setFromTriplets(DvertCoeffs.begin(), DvertCoeffs.end());
     Eigen::SparseMatrix<double> D(nedges, nfaces);
     D.setFromTriplets(DCoeffs.begin(), DCoeffs.end());
+    Eigen::SparseMatrix<double> Dvec(nedges, nfaces);
+    Dvec.setFromTriplets(DvecCoeffs.begin(), DvecCoeffs.end());
     // the integrability operator
-    Eigen::SparseMatrix<double> L = D.transpose() * edgeMetric * D;
+    Eigen::SparseMatrix<double> Lint = Dvec.transpose() * edgeMetric * Dvec;
+    // the Laplacian
+    Eigen::SparseMatrix<double> L = D.transpose() * edgeMetric * D;    
+    Eigen::SparseMatrix<double> Lvert = Dvert.transpose() * edgeMetric * Dvert;    
+
+    Eigen::SparseMatrix<double> Lreg = Lint + reg*L;
     std::cout << "Solving eigenproblem..." << std::endl;
-    double eval = inversePowerIteration(L, s, 1000);
+    double eval = inversePowerIteration(Lreg, s, 1000);
     std::cout << "Smallest eigenvalue: " << eval << std::endl;
+
+    // compute theta from s
+    Eigen::VectorXd b(nedges);
+    b.setZero();
+    Eigen::VectorXi cnt(nedges);
+    cnt.setZero();
+    for (int i = 0; i < nfaces; i++)
+    {
+        Eigen::Vector3d scaledvec = s[i] * surf.data().Bs[i] * fs->v(i, 0);   
+        for (int j = 0; j < 3; j++)
+        {
+            int edge = surf.data().faceEdges(i, j);
+            Eigen::Vector3d v0 = surf.data().V.row(surf.data().edgeVerts(edge,0)).transpose();
+            Eigen::Vector3d v1 = surf.data().V.row(surf.data().edgeVerts(edge,1)).transpose();
+            Eigen::Vector3d edgeVec = v1-v0;
+            b[edge] += edgeVec.dot(scaledvec);
+            cnt[edge]++;
+        }
+    }
+    for (int i = 0; i < nedges; i++)
+        b[i] /= cnt[i];
+
+    Eigen::VectorXd rhs = Dvert.transpose() * edgeMetric * b;
+
+    Eigen::SimplicialLDLT<Eigen::SparseMatrix<double> > solver(Lvert);
+    Eigen::VectorXd cuttheta = solver.solve(rhs);
+    theta.resize(fs->nVerts());
+    theta.setZero();
+    cnt.resize(fs->nVerts());
+    cnt.setZero();
+    for (int i = 0; i < nfaces; i++)
+    {
+        for (int j = 0; j < 3; j++)
+        {
+            int cutv = surf.data().F(i, j);
+            int coverv = fs->data().F(i, j);
+            theta[coverv] += cuttheta[cutv];
+            cnt[coverv]++;
+        }
+    }
+    for (int i = 0; i < fs->nVerts(); i++)
+        theta[i] /= cnt[i];    
 }
 
 double CoverMesh::inversePowerIteration(Eigen::SparseMatrix<double> &M, Eigen::VectorXd &evec, int iters)

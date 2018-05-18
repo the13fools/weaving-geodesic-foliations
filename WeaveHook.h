@@ -169,6 +169,7 @@ private:
     Eigen::MatrixXd cutPos2Weave;
     Eigen::MatrixXd cutPos1Cover;
     Eigen::MatrixXd cutPos2Cover;
+    Eigen::MatrixXd cutColorsCover;
 
     std::string vectorFieldName;
 

@@ -376,7 +376,7 @@ void WeaveHook::drawCuts(igl::opengl::glfw::Viewer &viewer)
         Eigen::MatrixXd C(cutPos1Cover.rows(), 3);
         for (int i = 0; i < 3; i++)
             C.col(i).setConstant(blue[i]);
-        viewer.data().add_edges(cutPos1Cover, cutPos2Cover, C);
+        viewer.data().add_edges(cutPos1Cover, cutPos2Cover, cutColorsCover);
     }
 }
 
@@ -726,7 +726,8 @@ void WeaveHook::updateRenderGeometry()
 
     if (cover)
     {
-        cover->createVisualization(renderQCover, renderFCover, edgePtsCover, edgeVecsCover, edgeSegsCover, edgeColorsCover, cutPos1Cover, cutPos2Cover);
+        cover->createVisualization(renderQCover, renderFCover, edgePtsCover, edgeVecsCover, edgeSegsCover, edgeColorsCover, 
+            cutPos1Cover, cutPos2Cover, cutColorsCover);
     }
     else
     {
@@ -738,10 +739,12 @@ void WeaveHook::updateRenderGeometry()
         edgeColorsCover.resize(0, 3);
         cutPos1Cover.resize(0, 3);
         cutPos2Cover.resize(0, 3);
+        cutColorsCover.resize(0, 3);
     }
 }
 
 void WeaveHook::initializeS()
 {
     if(cover) cover->initializeS();
+    updateRenderGeometry();
 }

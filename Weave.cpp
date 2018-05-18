@@ -410,6 +410,7 @@ CoverMesh *Weave::createCover() const
     int nNewPoints = gluePointList.size();
     Eigen::MatrixXd VAug = Eigen::MatrixXd::Zero(nNewPoints, 3); // |gluePointList| x 3
     Eigen::VectorXi oldId2NewId(nCover*nverts);
+    oldId2NewId.setConstant(-1);
     vector<long> encodeDOldId2NewId(nCover*3*nfaces);
     for (int i = 0; i < nNewPoints; i ++)
     { // Assign a new Vertex for each group of glue vetices
@@ -431,6 +432,7 @@ CoverMesh *Weave::createCover() const
             encodeDOldId2NewId[gluePointList[i][j]] = i;
         }
     }
+
     Eigen::MatrixXi FAug = Eigen::MatrixXi::Zero(nCover*nfaces, 3);; // |gluePointList| x 3
     for (int cId = 0; cId < nCover; cId ++)
     {
