@@ -799,6 +799,16 @@ void CoverMesh::initializeS(double reg)
     
         Eigen::SimplicialLDLT<Eigen::SparseMatrix<double> > solver(Lvert);
         Eigen::VectorXd cuttheta = solver.solve(rhs);
+        
+        // normalize cuttheta to have mean zero
+        
+        double meantheta = 0;
+        for(int i=0; i<cuttheta.size(); i++)
+            meantheta += cuttheta[i];
+        meantheta /= cuttheta.size();
+        for(int i=0; i<cuttheta.size(); i++)
+            cuttheta[i] -= meantheta;
+        
         for (int i = 0; i < nfaces; i++)
         {
             for (int j = 0; j < 3; j++)
