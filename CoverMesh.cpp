@@ -14,7 +14,7 @@ typedef Eigen::Triplet<double> triplet;
 using namespace std;
 
 CoverMesh::CoverMesh(const Weave &parent, const Eigen::MatrixXd &V, const Eigen::MatrixXi &F, const Eigen::VectorXi &oldToNewVertMap, const Eigen::MatrixXd &field, int ncovers)
- : parent_(parent), oldToNewVertMap_(oldToNewVertMap)
+ : parent_(parent)
 {
     fs = new FieldSurface(V, F, 1);
     int nfaces = F.rows();
@@ -31,11 +31,15 @@ CoverMesh::CoverMesh(const Weave &parent, const Eigen::MatrixXd &V, const Eigen:
     s.setConstant(1.0);
     
     renderScale_ = 1.0;
+
+    initializeSplitMesh(oldToNewVertMap);
 }
 
 CoverMesh::~CoverMesh()
 {
     delete fs;
+    if (data_.splitMesh)
+        delete data_.splitMesh;
 }
 
 double CoverMesh::barycentric(double val1, double val2, double target)
@@ -508,47 +512,19 @@ Eigen::SparseMatrix<double> CoverMesh::faceLaplacian()
 }
 
 
-void CoverMesh::createVisualization(Eigen::MatrixXd &V, Eigen::MatrixXi &F, Eigen::MatrixXd &edgePts, Eigen::MatrixXd &edgeVecs, Eigen::MatrixXi &edgeSegs, Eigen::MatrixXd &colors)
+void CoverMesh::createVisualization(Eigen::MatrixXd &V, Eigen::MatrixXi &F, Eigen::MatrixXd &edgePts, Eigen::MatrixXd &edgeVecs, Eigen::MatrixXi &edgeSegs, Eigen::MatrixXd &colors, Eigen::MatrixXd &cutPts1, Eigen::MatrixXd &cutPts2)
 {
-    int facespercover = fs->nFaces()/ncovers_;
-    int rows = 2;
-    int meshesperrow = ncovers_ / rows + (ncovers_ % rows == 0 ? 0 : 1);
-    std::vector<Eigen::Vector3d> offsets;
-    for(int i=0; i<ncovers_; i++)
-    {
-        int row = i/meshesperrow;
-        int col = i%meshesperrow;
-        double dy = (-1.0 * row + (1.0) * (rows-row-1))/double(rows);
-        double dx = (1.0 * col + (-1.0) * (meshesperrow - col-1))/double(meshesperrow);
-        offsets.push_back(Eigen::Vector3d(dx, dy, 0.0));
-    }
-    
+    int splitFace = data_.splitMesh->nFaces();
     int origverts = parent_.fs->nVerts();
     int origfaces = parent_.fs->nFaces();
-    int newverts = ncovers_*origverts;
-    int newfaces = ncovers_*origfaces;
-    V.resize(newverts, 3);
-    F.resize(newfaces, 3);
-    renderScale_ = 1.0 / std::max(rows,meshesperrow);
-    for(int i=0; i<ncovers_; i++)
-    {
-        for(int j=0; j<origverts; j++)
-        {
-            V.row(i*origverts + j) = offsets[i].transpose() + renderScale_ * parent_.fs->data().V.row(j);
-        }
-        for(int j=0; j<origfaces; j++)
-        {
-            for(int k=0; k<3; k++)
-            {
-                F(i*origfaces + j, k) = i*origverts + parent_.fs->data().F(j,k);
-            }
-        }
-    }
-    edgePts.resize(newfaces, 3);
-    edgeVecs.resize(newfaces, 3);
+    V = data_.splitMesh->data().V;
+    F = data_.splitMesh->data().F;
+    
+    edgePts.resize(splitFace, 3);
+    edgeVecs.resize(splitFace, 3);
     edgeVecs.setZero();
-    edgeSegs.resize(newfaces, 2);
-    colors.resize(newfaces , 3);
+    edgeSegs.resize(splitFace, 2);
+    colors.resize(splitFace , 3);
 
     for(int c=0; c<ncovers_; c++)
     {
@@ -559,7 +535,7 @@ void CoverMesh::createVisualization(Eigen::MatrixXd &V, Eigen::MatrixXi &F, Eige
             for (int j = 0; j < 3; j++)
                 centroid += renderScale_ * parent_.fs->data().V.row(parent_.fs->data().F(i, j));
             centroid /= 3.0;
-            centroid += offsets[c];
+            centroid += data_.splitOffsets[c];
 
             edgePts.row(c*origfaces + i) = centroid;
             edgeVecs.row(c*origfaces + i) = parent_.fs->data().Bs[i] * fs->v(c*origfaces + i, 0);
@@ -568,11 +544,31 @@ void CoverMesh::createVisualization(Eigen::MatrixXd &V, Eigen::MatrixXi &F, Eige
             colors.row(c*origfaces + i) = Eigen::Vector3d(0,0,0).transpose();
         }
     }
+
+    int ncutedges = data_.splitMeshCuts.size();
+    cutPts1.resize(ncutedges, 3);
+    cutPts2.resize(ncutedges, 3);
+    for (int i = 0; i < ncutedges; i++)
+    {
+        int edgeid = data_.splitMeshCuts[i];
+        int v0 = data_.splitMesh->data().edgeVerts(edgeid, 0);
+        int v1 = data_.splitMesh->data().edgeVerts(edgeid, 1);
+        Eigen::Vector3d n(0, 0, 0);
+        int f0 = data_.splitMesh->data().E(edgeid, 0);
+        int f1 = data_.splitMesh->data().E(edgeid, 1);
+        if (f0 != -1)
+            n += data_.splitMesh->faceNormal(f0);
+        if (f1 != -1)
+            n += data_.splitMesh->faceNormal(f1);
+        Eigen::Vector3d offset = 0.0001*n / n.norm();
+        cutPts1.row(i) = data_.splitMesh->data().V.row(v0) + offset.transpose();
+        cutPts2.row(i) = data_.splitMesh->data().V.row(v1) + offset.transpose();
+    }
 }
 
 int CoverMesh::visMeshToCoverMesh(int vertid)
 {
-    return oldToNewVertMap_[vertid];
+    return data_.splitToCoverVerts[vertid];
 }
 
 void CoverMesh::initializeS()
@@ -658,4 +654,69 @@ double CoverMesh::inversePowerIteration(Eigen::SparseMatrix<double> &M, Eigen::V
         evec = newvec / newvec.norm();
     }
     return evec.transpose() * M * evec;
+}
+
+void CoverMesh::initializeSplitMesh(const Eigen::VectorXi &oldToNewVertMap)
+{
+    data_.splitToCoverVerts = oldToNewVertMap;
+    int facespercover = fs->nFaces() / ncovers_;
+    int rows = 2;
+    int meshesperrow = ncovers_ / rows + (ncovers_ % rows == 0 ? 0 : 1);
+    data_.splitOffsets.clear();
+    for (int i = 0; i < ncovers_; i++)
+    {
+        int row = i / meshesperrow;
+        int col = i%meshesperrow;
+        double dy = (-1.1 * row + (1.1) * (rows - row - 1)) / double(rows);
+        double dx = (1.1 * col + (-1.1) * (meshesperrow - col - 1)) / double(meshesperrow);
+        data_.splitOffsets.push_back(Eigen::Vector3d(dx, dy, 0.0));
+    }
+
+    int origverts = parent_.fs->nVerts();
+    int origfaces = parent_.fs->nFaces();
+    int newverts = ncovers_*origverts;
+    int newfaces = ncovers_*origfaces;
+    Eigen::MatrixXd V(newverts, 3);
+    Eigen::MatrixXi F(newfaces, 3);
+    renderScale_ = 1.0 / std::max(rows, meshesperrow);
+    for (int i = 0; i < ncovers_; i++)
+    {
+        for (int j = 0; j < origverts; j++)
+        {
+            V.row(i*origverts + j) = data_.splitOffsets[i].transpose() + renderScale_ * parent_.fs->data().V.row(j);
+        }
+        for (int j = 0; j < origfaces; j++)
+        {
+            for (int k = 0; k < 3; k++)
+            {
+                F(i*origfaces + j, k) = i*origverts + parent_.fs->data().F(j, k);
+            }
+        }
+    }
+    data_.splitMesh = new Surface(V, F);
+
+    data_.coverToSplitVerts.clear();
+    for (int i = 0; i < oldToNewVertMap.rows(); i++)
+    {
+        data_.coverToSplitVerts[oldToNewVertMap[i]].push_back(i);
+    }
+
+    data_.splitMeshCuts.clear();
+    for (int i = 0; i < newfaces; i++)
+    {
+        for (int j = 0; j < 3; j++)
+        {
+            int edge = fs->data().faceEdges(i, j);
+            int f0 = fs->data().E(edge, 0);
+            int f1 = fs->data().E(edge, 1);
+            if (f0 == -1 || f1 == -1)
+                continue;
+            int face0copy = f0 / origfaces;
+            int face1copy = f1 / origfaces;
+            if (face0copy != face1copy)
+            {
+                data_.splitMeshCuts.push_back(data_.splitMesh->data().faceEdges(i, j));
+            }
+        }
+    }    
 }

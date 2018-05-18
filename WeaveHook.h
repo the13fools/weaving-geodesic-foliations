@@ -165,8 +165,10 @@ private:
     Eigen::MatrixXd singularVerts_topo;
     Eigen::MatrixXd singularVerts_geo;
     Eigen::MatrixXd nonIdentityEdges;
-    Eigen::MatrixXd cutPos1; // endpoints of cut edges
-    Eigen::MatrixXd cutPos2;
+    Eigen::MatrixXd cutPos1Weave; // endpoints of cut edges
+    Eigen::MatrixXd cutPos2Weave;
+    Eigen::MatrixXd cutPos1Cover;
+    Eigen::MatrixXd cutPos2Cover;
 
     std::string vectorFieldName;
 

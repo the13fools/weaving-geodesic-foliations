@@ -214,8 +214,8 @@ void WeaveHook::initSimulation()
     singularVerts_topo.resize(0,3);
     singularVerts_geo.resize(0,3);
     nonIdentityEdges.resize(0,3);
-    cutPos1.resize(0,3);
-    cutPos2.resize(0,3);
+    cutPos1Weave.resize(0,3);
+    cutPos2Weave.resize(0,3);
 
     weave->fixFields = false;    
 }
@@ -362,12 +362,22 @@ void WeaveHook::showCutVertexSelection(igl::opengl::glfw::Viewer &viewer)
 
 void WeaveHook::drawCuts(igl::opengl::glfw::Viewer &viewer)
 {
-    Eigen::RowVector3d blue(0.9, .1, .9);
-    Eigen::MatrixXd C(cutPos1.rows(), 3);
-    for(int i=0; i<3; i++)
-        C.col(i).setConstant(blue[i]);
-    viewer.data().add_edges(cutPos1, cutPos2, C);
-    
+    if (gui_mode == GUIMode_Enum::WEAVE)
+    {
+        Eigen::RowVector3d blue(0.9, .1, .9);
+        Eigen::MatrixXd C(cutPos1Weave.rows(), 3);
+        for (int i = 0; i < 3; i++)
+            C.col(i).setConstant(blue[i]);
+        viewer.data().add_edges(cutPos1Weave, cutPos2Weave, C);
+    }
+    else if (gui_mode == GUIMode_Enum::COVER)
+    {
+        Eigen::RowVector3d blue(0.9, .1, .9);
+        Eigen::MatrixXd C(cutPos1Cover.rows(), 3);
+        for (int i = 0; i < 3; i++)
+            C.col(i).setConstant(blue[i]);
+        viewer.data().add_edges(cutPos1Cover, cutPos2Cover, C);
+    }
 }
 
 void WeaveHook::drawTraceCenterlines(igl::opengl::glfw::Viewer &viewer)
@@ -498,6 +508,7 @@ void WeaveHook::renderRenderGeometry(igl::opengl::glfw::Viewer &viewer)
             viewer.data().set_edges(renderPts, edgeSegsCover, edgeColorsCover);
         }
         setFaceColorsCover(viewer);
+        drawCuts(viewer);
     }
 }
 
@@ -698,7 +709,7 @@ void WeaveHook::updateRenderGeometry()
     renderQWeave = weave->fs->data().V;
     renderFWeave = weave->fs->data().F;
     weave->createVisualizationEdges(edgePtsWeave, edgeVecsWeave, edgeSegsWeave, edgeColorsWeave);
-    weave->createVisualizationCuts(cutPos1, cutPos2);
+    weave->createVisualizationCuts(cutPos1Weave, cutPos2Weave);
     baseLength = weave->fs->data().averageEdgeLength;
     curFaceEnergies = tempFaceEnergies;
 
@@ -715,7 +726,7 @@ void WeaveHook::updateRenderGeometry()
 
     if (cover)
     {
-        cover->createVisualization(renderQCover, renderFCover, edgePtsCover, edgeVecsCover, edgeSegsCover, edgeColorsCover);
+        cover->createVisualization(renderQCover, renderFCover, edgePtsCover, edgeVecsCover, edgeSegsCover, edgeColorsCover, cutPos1Cover, cutPos2Cover);
     }
     else
     {
@@ -725,6 +736,8 @@ void WeaveHook::updateRenderGeometry()
         edgeVecsCover.resize(0, 3);
         edgeSegsCover.resize(0, 2);
         edgeColorsCover.resize(0, 3);
+        cutPos1Cover.resize(0, 3);
+        cutPos2Cover.resize(0, 3);
     }
 }
 

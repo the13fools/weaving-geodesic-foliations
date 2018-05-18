@@ -451,7 +451,10 @@ CoverMesh *Weave::createCover() const
         {
             int field = cId % fs->nFields();
             double sign = (cId < fs->nFields() ? 1.0 : -1.0);
-            flattenedField.row(fId + cId * nfaces) = sign*fs->v(fId, field).transpose();
+            Eigen::Vector2d vec = sign*fs->v(fId, field).transpose();
+            Eigen::Vector3d embvec = fs->data().Bs[fId] * vec;
+            double norm = embvec.norm();
+            flattenedField.row(fId + cId * nfaces) = vec/norm;
         }
     }
     //igl::writeOBJ("debug.obj", VAug, FAug);
