@@ -128,6 +128,7 @@ void WeaveHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
             ImGui::InputDoubleScientific("Vector Scale", &vectorScale);
             ImGui::Checkbox("Hide Vectors", &hideVectors);
             ImGui::Combo("Shading", (int *)&cover_shading_state, "None\0S Value\0Theta Value\0Connection\0\0");
+            ImGui::Checkbox("Show Cuts", &showCoverCuts);
         }
 
         if (ImGui::CollapsingHeader("Cover Controls", ImGuiTreeNodeFlags_DefaultOpen))
@@ -216,6 +217,7 @@ void WeaveHook::clear()
     cutPos2Weave.resize(0,3);
 
     weave->fixFields = false;    
+    paths.clear();
 }
 
 void WeaveHook::initSimulation()
@@ -273,22 +275,19 @@ void WeaveHook::setFaceColorsCover(igl::opengl::glfw::Viewer &viewer)
 
     case FUN_VAL:
         igl::colormap(viz_color, FVAL, true, faceColors);        
-        if (drawLine)
-        {
-            for (int i = 0; i < paths.size(); i ++)
-            {
-                const Eigen::RowVector3d red(0.9,.1,.1), blue(0.1,.1,.9);
-                Eigen::MatrixXd line_starts = paths[i].block(0, 0, paths[i].rows() - 1, 3);
-                Eigen::MatrixXd line_ends  = paths[i].block(1, 0, paths[i].rows() - 1, 3);
-                viewer.data().add_edges( line_starts, line_ends, red);
-            }
-        }
         break;
     default:
         igl::colormap(viz_color,Z, true, faceColors);
         break;
     }
-
+    
+    for (int i = 0; i < paths.size(); i ++)
+    {
+        const Eigen::RowVector3d green(.1,.9,.1);
+        Eigen::MatrixXd line_starts = paths[i].block(0, 0, paths[i].rows() - 1, 3);
+        Eigen::MatrixXd line_ends  = paths[i].block(1, 0, paths[i].rows() - 1, 3);
+        viewer.data().add_edges( line_starts, line_ends, green);
+    }
 
     viewer.data().set_colors(faceColors);
 }
@@ -499,7 +498,7 @@ void WeaveHook::renderRenderGeometry(igl::opengl::glfw::Viewer &viewer)
     }
     else if (gui_mode == GUIMode_Enum::COVER)
     {
-        viewer.data().set_mesh(renderQCover, renderFCover);
+        viewer.data().set_mesh(renderQCover, renderFCover);        
         int edges = edgeSegsCover.rows();
         Eigen::MatrixXd renderPts(2 * edges, 3);
         for (int i = 0; i < edges; i++)
@@ -515,7 +514,8 @@ void WeaveHook::renderRenderGeometry(igl::opengl::glfw::Viewer &viewer)
             viewer.data().set_edges(renderPts, edgeSegsCover, edgeColorsCover);
         }
         setFaceColorsCover(viewer);
-        drawCuts(viewer);
+        if(showCoverCuts)
+            drawCuts(viewer);
     }
 }
 
@@ -611,26 +611,20 @@ void WeaveHook::computeFunc()
 void WeaveHook::drawISOLines()
 {
     paths.clear();
-    drawLine = true;
-    //TODO
-    /*weave->drawISOLines(numISOLines);
-    for (int p_cnt = 0; p_cnt < weave->isoLines.size(); p_cnt ++)
+    if(cover)
     {
-        std::vector<Eigen::Vector3d> curPath = weave->isoLines[p_cnt];
-        Eigen::MatrixXd path(curPath.size(), 3);
-        if (curPath.size() < 10){
-            // cout << "skip the " << p_cnt << " iso line" << endl;
-            continue;
+        std::vector<IsoLine> isolines;
+        cover->recomputeIsolines(numISOLines, isolines);
+        for (auto &it : isolines)
+        {
+            if(it.segs.size() < 10)
+                continue;
+            Eigen::MatrixXd path;
+            cover->drawIsolineOnSplitMesh(it, path);
+            paths.push_back(path);
+            //trace->loadGeneratedCurves(isoLines, isoNormal);
         }
-        for (int i = 0; i < curPath.size(); i ++)
-            path.row(i) = curPath[i];
-        paths.push_back(path);
-        // cout << "Generating the " << p_cnt << " iso line" << endl;
-        // Eigen::MatrixXd line_starts = path.block(0, 0, curPath.size() - 1, 3);
-        // Eigen::MatrixXd line_ends  = path.block(1, 0, curPath.size() - 1, 3);
-        // viewer.data.add_edges( line_starts, line_ends, red);
     }
-    trace->loadGeneratedCurves(weave->isoLines, weave->isoNormal);*/
 }
 
 void WeaveHook::deserializeVectorField()

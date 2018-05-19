@@ -68,7 +68,7 @@ public:
         handleParams(4) = 1;
         handleParams(5) = -1;
 
-        drawLine = false;
+        showCoverCuts = true;
         trace = new Trace();
         
         initSReg = 1e-4;
@@ -145,6 +145,7 @@ private:
     std::vector<Eigen::Vector3d> renderSelectedVertices; // teal selected vertex spheres
     bool normalizeVectors;
     bool hideVectors;
+    bool showCoverCuts;
 
     Eigen::MatrixXd renderQCover;
     Eigen::MatrixXi renderFCover;
@@ -177,7 +178,6 @@ private:
 
     std::string vectorFieldName;
 
-    bool drawLine;
     std::vector<Eigen::MatrixXd> paths;
     int numISOLines;
     double initSReg;

@@ -87,14 +87,14 @@ bool CoverMesh::crosses(double isoval, double val1, double val2, double minval, 
 } 
 
 
-int CoverMesh::extractIsoline(const Eigen::MatrixXd &V, const Eigen::MatrixXi &F, const Eigen::MatrixXi &faceNeighbors, const Eigen::VectorXd &func, double isoval, double minval, double maxval)
+int CoverMesh::extractIsoline(const Eigen::VectorXd &func, double isoval, double minval, double maxval, std::vector<IsoLine> &isolines)
 {
-    int nfaces = F.rows();
+    int nfaces = fs->nFaces();
     bool *visited = new bool[nfaces];
     for(int i=0; i<nfaces; i++)
         visited[i] = false;
-
-    int ntraces = 0;
+        
+    int ret = 0;
 
     // Iterate between faces until encountering a zero level set.  
     // Trace out the level set in both directions from this face (marking faces as visited)
@@ -104,240 +104,117 @@ int CoverMesh::extractIsoline(const Eigen::MatrixXd &V, const Eigen::MatrixXi &F
         if(visited[i])
             continue;
         visited[i] = true;
-        std::vector<std::vector<Eigen::Vector3d> > traces;
-        std::vector<std::vector<Eigen::Vector3d> > normals;
-        std::vector<std::vector<std::pair<int, int> > > traces_vids;
+        std::vector<std::vector<IsoSegment> > traces;
+        std::vector<int> crossings;
+        std::vector<double> crossingsbary;
         for(int j=0; j<3; j++)
-        {
-            int vp1 = F(i, (j+1)%3);
-            int vp2 = F(i, (j+2)%3);
+        {            
+            int vp1 = fs->data().F(i, (j+1)%3);
+            int vp2 = fs->data().F(i, (j+2)%3);
             double bary;
             if(crosses(isoval, func[vp1], func[vp2], minval, maxval, bary))
             {
-                std::vector<Eigen::Vector3d> trace;
-                std::vector<Eigen::Vector3d> norm;
-                std::vector<std::pair<int, int> > trace_vid;
-                trace.push_back( (1.0 - bary) * V.row(vp1) + bary * V.row(vp2) );
-                trace_vid.push_back(std::make_pair(vp1, vp2));
+                crossings.push_back(j);
+                crossingsbary.push_back(bary);
+                std::vector<IsoSegment> trace;
+                
                 int prevface = i;
-                int curface = faceNeighbors(i, j);
-                //         norm.push_back(faceNormal(prevface));
+                int curface = fs->data().faceNeighbors(i, j);
                 while(curface != -1 && !visited[curface])
-                {
+                {                
                     visited[curface] = true;
+                    IsoSegment nextseg;
+                    nextseg.face = curface;
                     for(int k=0; k<3; k++)
                     {
-                        if(faceNeighbors(curface, k) == prevface)
+                        if(fs->data().faceNeighbors(curface, k) == prevface)
+                        {
+                            nextseg.side[0] = k;
+                            nextseg.bary[0] = 1.0-bary;
+                            break;
+                        }
+                    }
+
+                    for(int k=0; k<3; k++)
+                    {
+                        if(fs->data().faceNeighbors(curface, k) == prevface)
                             continue;
-                        int vp1 = F(curface, (k+1)%3);
-                        int vp2 = F(curface, (k+2)%3);
-                        double bary;
+                        int vp1 = fs->data().F(curface, (k+1)%3);
+                        int vp2 = fs->data().F(curface, (k+2)%3);
                         if(crosses(isoval, func[vp1], func[vp2], minval, maxval, bary))
                         {
-                            trace.push_back( (1.0 - bary) * V.row(vp1) + bary * V.row(vp2) );
-                            trace_vid.push_back(std::make_pair(vp1, vp2));
-                            norm.push_back(fs->faceNormal(curface));
+                            nextseg.side[1] = k;
+                            nextseg.bary[1] = bary;
+                            trace.push_back(nextseg);
                             prevface = curface;
-                            curface = faceNeighbors(curface, k);
+                            curface = fs->data().faceNeighbors(curface, k);
                             break;
                         }                       
                     }
                 }
                 traces.push_back(trace);
-                normals.push_back(norm);
-                traces_vids.push_back(trace_vid);
             }
         }
-        assert(traces.size() == traces_vids.size());
         assert(traces.size() < 3);
 
 
-        // if(traces.size() == 2)
-        // {
-        //     ntraces++;
-        //     vector<Eigen::Vector3d> curISONormal;
-        //     vector<Eigen::Vector3d> curISOLine;
-        //     int nterms = traces[0].size() + traces[1].size();
-        //     std::cout << nterms << " 0 0 " << nterms << " 0 0 " << std::endl;
-        //     for(int j=0; j < traces[0].size(); j++)
-        //     {
-        //         curISOLine.push_back(traces[0][j]);
-        //     }
-        //     isoNormal.push_back(normals[0]);
-        //     isoLines.push_back(curISOLine);
-        //     std::cout << "trace size is 2\n";
-
-        // }
         if(traces.size() == 1)
         {
-            ntraces++;
-            vector<Eigen::Vector3d> curISONormal;
-            vector<Eigen::Vector3d> curISOLine;
-            std::cout << traces[0].size() << " 0 0 " << traces[0].size() << " 0 0 " << std::endl;
-            int next_vid1, next_vid2;
-            for(int j=0; j<traces[0].size(); j++)
-            {
-                curISOLine.push_back(traces[0][j]);
-                std::cout << traces[0][j].transpose() << " ";
-                if (j == traces[0].size()-1)
-                {
-                    std::cout << " 0 0 0 " << std::endl;            
-                    break;
-                }
-                else
-                {
-                    int next_vid1 = std::get<0>(traces_vids[0][j+1]);
-                    int next_vid2 = std::get<1>(traces_vids[0][j+1]);
-                    int cur_vid1 = std::get<0>(traces_vids[0][j]);
-                    int cur_vid2 = std::get<1>(traces_vids[0][j]);
-                    Eigen::Vector3d e1 = V.row(next_vid1) - V.row(next_vid2);
-                    Eigen::Vector3d e2 = V.row(cur_vid1) - V.row(cur_vid2);
-                    Eigen::Vector3d normal = (e1.cross(e2));
-                    normal = normal / normal.norm();
-                    std::cout << normal.transpose() << std::endl;
-                    curISONormal.push_back(normal);
-                }
-            }
-            isoNormal.push_back(curISONormal);
-            isoLines.push_back(curISOLine);
-            std::cerr << "trace size is 1\n";
+            // lucky! no stitching together needed
+            IsoLine line;
+            line.segs = traces[0];
+            line.value = isoval;
+            isolines.push_back(line);
+            ret++;
         }
         if(traces.size() == 2)
         {
-            ntraces++;
-            vector<Eigen::Vector3d> curISONormal;
-            vector<Eigen::Vector3d> curISOLine;
-            int nterms = traces[0].size() + traces[1].size();
-            std::cout << nterms << " 0 0 " << nterms << " 0 0 " << std::endl;
-            for(int j=traces[1].size()-1; j >= 0; j--)
+            // must stitch together both traces into one isoline
+            IsoLine line;
+            line.value = isoval;
+            // first, reverse the order and orientation of the segments in traces[0]
+            for(auto it = traces[0].rbegin(); it != traces[0].rend(); ++it)
             {
-                curISOLine.push_back(traces[1][j]);
-                std::cout << traces[1][j].transpose() << " ";
-                if (j == 0)
-                {
-                    int next_vid1 = std::get<0>(traces_vids[0][0]);
-                    int next_vid2 = std::get<1>(traces_vids[0][0]);
-                    int cur_vid1 = std::get<0>(traces_vids[1][j]);
-                    int cur_vid2 = std::get<1>(traces_vids[1][j]);
-                    Eigen::Vector3d e1 = V.row(next_vid1) - V.row(next_vid2);
-                    Eigen::Vector3d e2 = V.row(cur_vid1) - V.row(cur_vid2);
-                    Eigen::Vector3d normal = (e1.cross(e2));
-                    normal = normal / normal.norm();
-                    std::cout << normal.transpose() << std::endl;
-                    curISONormal.push_back(normal);
-                }
-                else
-                {
-                    int next_vid1 = std::get<0>(traces_vids[1][j-1]);
-                    int next_vid2 = std::get<1>(traces_vids[1][j-1]);
-                    int cur_vid1 = std::get<0>(traces_vids[1][j]);
-                    int cur_vid2 = std::get<1>(traces_vids[1][j]);
-                    Eigen::Vector3d e1 = V.row(next_vid1) - V.row(next_vid2);
-                    Eigen::Vector3d e2 = V.row(cur_vid1) - V.row(cur_vid2);
-                    Eigen::Vector3d normal = (e1.cross(e2));
-                    normal = normal / normal.norm();
-                    std::cout << normal.transpose() << std::endl;
-                    curISONormal.push_back(normal);
-                }
+                IsoSegment rev = *it;
+                std::swap(rev.side[0], rev.side[1]);
+                std::swap(rev.bary[0], rev.bary[1]);
+                line.segs.push_back(rev);
             }
-            for(int j=0; j<traces[0].size(); j++)
-            {
-                curISOLine.push_back(traces[0][j]);
-                std::cout << traces[0][j].transpose() << " ";
-                if (j == traces[0].size()-1)
-                {
-                    std::cout << "0 0 0 " << std::endl;
-                    break;
-                }
-                else
-                {
-                    int next_vid1 = std::get<0>(traces_vids[0][j+1]);
-                    int next_vid2 = std::get<1>(traces_vids[0][j+1]);
-                    int cur_vid1 = std::get<0>(traces_vids[0][j]);
-                    int cur_vid2 = std::get<1>(traces_vids[0][j]);
-                    Eigen::Vector3d e1 = V.row(next_vid1) - V.row(next_vid2);
-                    Eigen::Vector3d e2 = V.row(cur_vid1) - V.row(cur_vid2);
-                    Eigen::Vector3d normal = (e1.cross(e2));
-                    normal = normal / normal.norm();
-                    std::cout << normal.transpose() << std::endl;
-                    curISONormal.push_back(normal);
-                }
-            }
-            isoNormal.push_back(curISONormal);
-            isoLines.push_back(curISOLine);
-            std::cout << "trace size is 2\n";
+            // add in the connecting segment
+            IsoSegment con;
+            con.face = i;
+            con.side[0] = crossings[0];
+            con.side[1] = crossings[1];
+            con.bary[0] = crossingsbary[0];
+            con.bary[1] = crossingsbary[1];
+            line.segs.push_back(con);
+            // finally append all of traces[1]
+            for(auto &it : traces[1])
+                line.segs.push_back(it);
+                
+            isolines.push_back(line);
+            ret++;
         }
     }
     delete[] visited;
-    return ntraces;
+    return ret;
 }
 
-void CoverMesh::drawISOLines(int numISOLines)
+void CoverMesh::recomputeIsolines(int numISOLines, std::vector<IsoLine> &isolines)
 {
     double minval = -M_PI;
     double maxval = M_PI;
     double numlines = numISOLines;
 
-    int nfaces = fs->nFaces();
-    int nverts = fs->nVerts();
-
-    std::map<std::pair<int, int>, Eigen::Vector2i > edgemap;
-    for (int i = 0; i < nfaces; i++)
-    {
-        for (int j = 0; j < 3; j++)
-        {
-            int nextj = (j + 1) % 3;
-            int v1 = fs->data().F(i, j);
-            int v2 = fs->data().F(i, nextj);
-            int idx = 0;
-            if (v1 > v2)
-            {
-                idx = 1;
-                std::swap(v1, v2);
-            }
-            std::pair<int, int> p(v1,v2);
-            std::map<std::pair<int, int>, Eigen::Vector2i >::iterator it = edgemap.find(p);
-            if(it != edgemap.end())
-                edgemap[p][idx] = i;
-            else
-            {
-                Eigen::Vector2i entry(-1,-1);
-                entry[idx] = i;
-                edgemap[p] = entry;
-            }
-        }
-    }
-
-    Eigen::MatrixXi faceNeighbors(nfaces, 3);
-    faceNeighbors.setConstant(-1);
-    for(int i=0; i<nfaces; i++)
-    {
-        for(int j=0; j<3; j++)
-        {
-            int vp1 = fs->data().F(i,(j+1)%3);
-            int vp2 = fs->data().F(i,(j+2)%3);
-            if(vp1 > vp2) std::swap(vp1, vp2);
-            std::map<std::pair<int, int>, Eigen::Vector2i >::iterator it = edgemap.find(std::pair<int,int>(vp1, vp2));
-            if(it == edgemap.end())
-                faceNeighbors(i, j) = -1;
-            else
-            {
-                int opp = (it->second[0] == i ? it->second[1] : it->second[0]);
-                faceNeighbors(i, j) = opp;
-            }
-        }
-    }
     int ntraces = 0;
-    isoLines.clear();
-    isoNormal.clear();
+    isolines.clear();
     for(int i=0; i<numlines; i++)
     {
         double isoval = minval + (maxval-minval) * double(i)/double(numlines);
-        ntraces += extractIsoline(fs->data().V, fs->data().F, faceNeighbors, 
-            Eigen::Map<Eigen::VectorXd, Eigen::Unaligned>(theta.data(), theta.size()), 
-            isoval, minval, maxval);
+        ntraces += extractIsoline(theta, isoval, minval, maxval, isolines);
     }
-    std::cout << ntraces << " 0 0 " << ntraces <<  " 0 0 " << std::endl;
+    std::cout << "Extracted " << ntraces << " isolines" << std::endl;
+    //std::cout << ntraces << " 0 0 " << ntraces <<  " 0 0 " << std::endl;
 }
 
 void CoverMesh::computeFunc(double globalScale)
@@ -912,4 +789,25 @@ void CoverMesh::initializeSplitMesh(const Eigen::VectorXi &oldToNewVertMap)
 const Surface &CoverMesh::splitMesh() const
 {
     return *data_.splitMesh;
+}
+
+void CoverMesh::drawIsolineOnSplitMesh(const IsoLine &line, Eigen::MatrixXd &pathPts)
+{
+    // we could do this with 0.5x as many segments
+    // but let's overdo it to catch bugs with the barycentric coordinates
+    int nsegs = line.segs.size();
+    pathPts.resize(nsegs*2, 3);
+    for(int i=0; i<nsegs; i++)
+    {
+        Eigen::Vector3d offset = 0.0001 * data_.splitMesh->faceNormal(line.segs[i].face);        
+        int v0 = data_.splitMesh->data().F(line.segs[i].face, (line.segs[i].side[0]+1)%3);
+        int v1 = data_.splitMesh->data().F(line.segs[i].face, (line.segs[i].side[0]+2)%3);
+        Eigen::Vector3d pos = (1.0 - line.segs[i].bary[0])*data_.splitMesh->data().V.row(v0).transpose() + line.segs[i].bary[0] * data_.splitMesh->data().V.row(v1).transpose();
+        pathPts.row(2*i) = pos.transpose() + offset.transpose();
+                
+        v0 = data_.splitMesh->data().F(line.segs[i].face, (line.segs[i].side[1]+1)%3);
+        v1 = data_.splitMesh->data().F(line.segs[i].face, (line.segs[i].side[1]+2)%3);
+        pos = (1.0 - line.segs[i].bary[1])*data_.splitMesh->data().V.row(v0).transpose() + line.segs[i].bary[1] * data_.splitMesh->data().V.row(v1).transpose();
+        pathPts.row(2*i+1) = pos.transpose() + offset.transpose();
+    }
 }
