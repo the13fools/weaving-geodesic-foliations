@@ -791,23 +791,51 @@ const Surface &CoverMesh::splitMesh() const
     return *data_.splitMesh;
 }
 
-void CoverMesh::drawIsolineOnSplitMesh(const IsoLine &line, Eigen::MatrixXd &pathPts)
+void CoverMesh::drawIsolineOnSplitMesh(const IsoLine &line, Eigen::MatrixXd &pathStarts, Eigen::MatrixXd &pathEnds)
 {
-    // we could do this with 0.5x as many segments
-    // but let's overdo it to catch bugs with the barycentric coordinates
     int nsegs = line.segs.size();
-    pathPts.resize(nsegs*2, 3);
+    pathStarts.resize(nsegs, 3);
+    pathEnds.resize(nsegs, 3);
     for(int i=0; i<nsegs; i++)
     {
         Eigen::Vector3d offset = 0.0001 * data_.splitMesh->faceNormal(line.segs[i].face);        
         int v0 = data_.splitMesh->data().F(line.segs[i].face, (line.segs[i].side[0]+1)%3);
         int v1 = data_.splitMesh->data().F(line.segs[i].face, (line.segs[i].side[0]+2)%3);
         Eigen::Vector3d pos = (1.0 - line.segs[i].bary[0])*data_.splitMesh->data().V.row(v0).transpose() + line.segs[i].bary[0] * data_.splitMesh->data().V.row(v1).transpose();
-        pathPts.row(2*i) = pos.transpose() + offset.transpose();
+        pathStarts.row(i) = pos.transpose() + offset.transpose();
                 
         v0 = data_.splitMesh->data().F(line.segs[i].face, (line.segs[i].side[1]+1)%3);
         v1 = data_.splitMesh->data().F(line.segs[i].face, (line.segs[i].side[1]+2)%3);
         pos = (1.0 - line.segs[i].bary[1])*data_.splitMesh->data().V.row(v0).transpose() + line.segs[i].bary[1] * data_.splitMesh->data().V.row(v1).transpose();
-        pathPts.row(2*i+1) = pos.transpose() + offset.transpose();
+        pathEnds.row(i) = pos.transpose() + offset.transpose();
+    }
+}
+
+void CoverMesh::isolineToPath(const IsoLine &line, std::vector<Eigen::Vector3d> &verts, std::vector<Eigen::Vector3d> &normals)
+{
+    int nsegs = line.segs.size();
+    int nverts = nsegs + 1;
+    verts.resize(nverts);
+    for (int i = 0; i < nverts; i++)
+        verts[i].setZero();
+    normals.resize(nsegs);
+    for (int i = 0; i < nsegs; i++)
+    {
+        int v0 = fs->data().F(line.segs[i].face, (line.segs[i].side[0]+1)%3);
+        int v1 = fs->data().F(line.segs[i].face, (line.segs[i].side[0]+2)%3);
+        Eigen::Vector3d pos = (1.0 - line.segs[i].bary[0])*fs->data().V.row(v0).transpose() + line.segs[i].bary[0] * fs->data().V.row(v1).transpose();
+        verts[i] += pos;
+
+        v0 = fs->data().F(line.segs[i].face, (line.segs[i].side[1]+1)%3);
+        v1 = fs->data().F(line.segs[i].face, (line.segs[i].side[1]+2)%3);
+        pos = (1.0 - line.segs[i].bary[1])*fs->data().V.row(v0).transpose() + line.segs[i].bary[1] * fs->data().V.row(v1).transpose();
+        verts[i + 1] += pos;
+    }
+    for (int i = 1; i < nverts - 1; i++)
+        verts[i] /= 2.0;
+
+    for (int i = 0; i < nsegs; i++)
+    {
+        normals[i] = fs->faceNormal(line.segs[i].face);
     }
 }

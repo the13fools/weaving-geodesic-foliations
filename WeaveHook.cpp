@@ -151,6 +151,8 @@ void WeaveHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
             if (ImGui::Button("Draw Isolines", ImVec2(-1, 0)))
                 drawISOLines();
         }
+
+        menu.callback_draw_custom_window = NULL;
     }
 }
 
@@ -225,7 +227,11 @@ void WeaveHook::clear()
     cutPos2Weave.resize(0,3);
 
     weave->fixFields = false;    
-    paths.clear();
+    pathstarts.clear();
+    pathends.clear();
+
+    delete trace;
+    trace = new Trace;
 }
 
 void WeaveHook::initSimulation()
@@ -315,12 +321,11 @@ void WeaveHook::setFaceColorsCover(igl::opengl::glfw::Viewer &viewer)
         break;
     }
     
-    for (int i = 0; i < paths.size(); i ++)
+    int npaths = pathstarts.size();
+    for (int i = 0; i < npaths; i ++)
     {
         const Eigen::RowVector3d green(.1,.9,.1);
-        Eigen::MatrixXd line_starts = paths[i].block(0, 0, paths[i].rows() - 1, 3);
-        Eigen::MatrixXd line_ends  = paths[i].block(1, 0, paths[i].rows() - 1, 3);
-        viewer.data().add_edges( line_starts, line_ends, green);
+        viewer.data().add_edges( pathstarts[i], pathends[i], green);
     }
 
     viewer.data().set_colors(faceColors);
@@ -644,20 +649,29 @@ void WeaveHook::computeFunc()
 
 void WeaveHook::drawISOLines()
 {
-    paths.clear();
+    pathstarts.clear();
+    pathends.clear();
     if(cover)
     {
         std::vector<IsoLine> isolines;
         cover->recomputeIsolines(numISOLines, isolines);
+        std::vector<std::vector<Eigen::Vector3d> > isolineVerts;
+        std::vector<std::vector<Eigen::Vector3d> > isolineNormals;
         for (auto &it : isolines)
         {
             if(it.segs.size() < 10)
                 continue;
-            Eigen::MatrixXd path;
-            cover->drawIsolineOnSplitMesh(it, path);
-            paths.push_back(path);
-            //trace->loadGeneratedCurves(isoLines, isoNormal);
+            Eigen::MatrixXd pathstart, pathend;
+            cover->drawIsolineOnSplitMesh(it, pathstart, pathend);
+            pathstarts.push_back(pathstart);
+            pathends.push_back(pathend);
+            std::vector<Eigen::Vector3d> verts;
+            std::vector<Eigen::Vector3d> normals;
+            cover->isolineToPath(it, verts, normals);
+            isolineVerts.push_back(verts);
+            isolineNormals.push_back(normals);
         }
+        trace->loadGeneratedCurves(isolineVerts, isolineNormals);
     }
 }
 

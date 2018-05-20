@@ -56,7 +56,8 @@ public:
     // maps indices of vertices on the visualization mesh to corresponding "parent" vertices on the cover mesh
     int visMeshToCoverMesh(int vertid);
     void recomputeIsolines(int numISOLines, std::vector<IsoLine> &isolines);
-    void drawIsolineOnSplitMesh(const IsoLine &line, Eigen::MatrixXd &pathPts);
+    void drawIsolineOnSplitMesh(const IsoLine &line, Eigen::MatrixXd &pathStarts, Eigen::MatrixXd &pathEnds);
+    void isolineToPath(const IsoLine &line, std::vector<Eigen::Vector3d> &verts, std::vector<Eigen::Vector3d> &normals);
    
 private:
     double inversePowerIteration(Eigen::SparseMatrix<double> &M, Eigen::VectorXd &evec, int iters);
