@@ -36,6 +36,12 @@ Weave::Weave(const std::string &objname, int m)
     fs = new FieldSurface(Vtmp, Ftmp, m);       
 }
 
+Weave::Weave(Eigen::MatrixXd Vtmp, Eigen::MatrixXi Ftmp, int m)
+{
+    centerAndScale(Vtmp);
+    fs = new FieldSurface(Vtmp, Ftmp, m);       
+}
+
 Weave::~Weave()
 {    
     delete fs;

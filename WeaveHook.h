@@ -58,6 +58,8 @@ public:
         hideVectors = false;
         showBending = false;
         showSingularities = false;
+
+        targetResolution = 5000;
     
         handleLocation = 0;
         handleParams = Eigen::VectorXd::Zero(6);
@@ -89,6 +91,7 @@ public:
     void drawISOLines();
     void resetCutSelection();
     void addCut();
+    void resample();
     void removeSingularities();
     void removePrevCut(); 
     void saveTraces();
@@ -160,6 +163,7 @@ private:
     int traceSign;
     int traceFaceId;
     int traceSteps;
+    int targetResolution;
     // nutton Variables for weave hook
     bool isDrawTrace;
     bool isDeleteLastTrace;

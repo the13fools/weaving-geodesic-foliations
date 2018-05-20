@@ -7,6 +7,9 @@
 #include "Surface.h"
 #include "CoverMesh.h"
 
+#include <igl/decimate.h>
+#include <igl/upsample.h>
+
 using namespace std;
 
 void WeaveHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
@@ -57,21 +60,11 @@ void WeaveHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
             if (ImGui::Button("Remove Prev Cut", ImVec2(-1, 0)))
                 removePrevCut();
         }
-
-        if (ImGui::CollapsingHeader("Traces", ImGuiTreeNodeFlags_DefaultOpen))
+        if (ImGui::CollapsingHeader("Misc", ImGuiTreeNodeFlags_DefaultOpen))
         {
-            if (ImGui::Button("Draw Trace", ImVec2(-1, 0)))
-            {
-                isDrawTrace = true;
-            }
-            if (ImGui::Button("Delete Last Trace", ImVec2(-1, 0)))
-            {
-                isDeleteLastTrace = true;
-            }
-            if (ImGui::Button("Save Traces", ImVec2(-1, 0)))
-            {
-                isSaveTrace = true;
-            }
+            ImGui::InputInt("Target # faces", &targetResolution, 0, 0);
+            if (ImGui::Button("Resample Mesh", ImVec2(-1, 0)))
+                resample();
         }
 
         menu.callback_draw_custom_window = [&]()
@@ -95,7 +88,7 @@ void WeaveHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
             ImGui::End();
 
             ImGui::SetNextWindowPos(ImVec2(180.f * menu.menu_scaling(), 210), ImGuiSetCond_FirstUseEver);
-            ImGui::SetNextWindowSize(ImVec2(200, 300), ImGuiSetCond_FirstUseEver);
+            ImGui::SetNextWindowSize(ImVec2(200, 400), ImGuiSetCond_FirstUseEver);
 
             ImGui::Begin(
                 "Manipulate", nullptr,
@@ -117,6 +110,21 @@ void WeaveHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
                     loadTraces();
                 if (ImGui::Button("Load Sampled Traces", ImVec2(-1, 0)))
                     loadSampledTraces();
+            }
+            if (ImGui::CollapsingHeader("Traces", ImGuiTreeNodeFlags_DefaultOpen))
+            {
+                if (ImGui::Button("Draw Trace", ImVec2(-1, 0)))
+                {
+                    isDrawTrace = true;
+                }
+                if (ImGui::Button("Delete Last Trace", ImVec2(-1, 0)))
+                {
+                    isDeleteLastTrace = true;
+                }
+                if (ImGui::Button("Save Traces", ImVec2(-1, 0)))
+                {
+                    isSaveTrace = true;
+                }
             }
             ImGui::End();
         };
@@ -226,6 +234,32 @@ void WeaveHook::initSimulation()
         delete weave;
     weave = new Weave(meshName, 3);    
     clear();    
+}
+
+void WeaveHook::resample()
+{
+    Eigen::MatrixXd Vcurr = weave->fs->data().V;
+    Eigen::MatrixXi Fcurr  = weave->fs->data().F;
+    while ( Fcurr.rows() < targetResolution * 2)
+    {
+        Eigen::MatrixXd Vtmp = Vcurr;
+        Eigen::MatrixXi Ftmp = Fcurr;
+        igl::upsample(Vtmp, Ftmp, Vcurr, Fcurr);
+    }
+    Eigen::MatrixXd V;
+    Eigen::MatrixXi F;
+    Eigen::VectorXi J;
+    
+    igl::decimate(Vcurr, Fcurr, targetResolution, V, F, J);
+    igl::writeOBJ("resampled.obj",V,F);
+    
+    delete weave;
+    
+    weave = new Weave(V, F, 3);    
+    clear();  
+
+    // Hacky... 
+    updateRenderGeometry();
 }
 
 void WeaveHook::setFaceColorsCover(igl::opengl::glfw::Viewer &viewer)
