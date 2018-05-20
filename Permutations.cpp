@@ -186,9 +186,8 @@ void findSingularVertices(const Weave &weave, std::vector<int> &topologicalSingu
 
         Eigen::MatrixXi totperm(m, m);
         totperm.setIdentity();
-        std::vector<double> angles;
-        for (int j = 0; j < m; j++)
-            angles.push_back(0);
+        Eigen::VectorXd angles(m);
+        angles.setZero();
 
         int curface = startface;
         int curspoke = startspoke;
@@ -207,24 +206,47 @@ void findSingularVertices(const Weave &weave, std::vector<int> &topologicalSingu
                 isboundary = true;
                 break;
             }
+            
+            Eigen::MatrixXi nextperm;
             if (side == 0)
             {
-                totperm *= weave.fs->Ps(edge).transpose();
+                nextperm = weave.fs->Ps(edge).transpose();
             }
             else
             {
-                totperm *= weave.fs->Ps(edge);
+                nextperm = weave.fs->Ps(edge);
             }
-
+            
             Eigen::Vector3d normal = weave.fs->faceNormal(curface);
 
             for (int j = 0; j < m; j++)
             {
                 Eigen::Vector3d curv = weave.fs->data().Bs[curface] * weave.fs->v(curface, j);
-                Eigen::Vector2d nextvbary = weave.fs->v(nextface, j);
+                Eigen::Vector2d nextvbary(0,0);
+                for(int k=0; k<m; k++)
+                {
+                    nextvbary += nextperm(k,j) * weave.fs->v(nextface, k);
+                }
                 Eigen::Vector3d nextv = weave.fs->data().Bs[curface] * weave.fs->data().Ts.block<2, 2>(2 * edge, 2 - 2 * side) * nextvbary;
                 angles[j] += angle(curv, nextv, normal);
             }
+            
+            Eigen::VectorXd nextangles(m);
+            nextangles.setZero();
+            for(int j=0; j<m; j++)
+            {
+                for(int k=0; k<m; k++)
+                {
+                    if(nextperm(j,k) != 0)
+                    {
+                        nextangles[j] = angles[k];
+                    }
+                }
+            }
+            
+            angles = nextangles;
+            
+            totperm *= nextperm;
 
             int spokep1 = (curspoke + 1) % 3;
             int apex = (curspoke + 2) % 3;
@@ -256,13 +278,17 @@ void findSingularVertices(const Weave &weave, std::vector<int> &topologicalSingu
             }
             if (!isidentity)
                 topologicalSingularVerts.push_back(i);
-
-            for (int j = 0; j < m; j++)
+            else
             {
-                const double PI = 3.1415926535898;
-                double index = angles[j] + 2 * PI - totangle;
-                if (fabs(index) > PI)
-                    geometricSingularVerts.push_back(std::pair<int, int>(i, j));
+                for (int j = 0; j < m; j++)
+                {
+                    const double PI = 3.1415926535898;
+                    double index = angles[j] + 2 * PI - totangle;
+                    if (fabs(index) > PI)
+                    {
+                        geometricSingularVerts.push_back(std::pair<int, int>(i, j));
+                    }
+                }
             }
         }
     }
