@@ -10,25 +10,41 @@
 
 #include <igl/unproject_onto_mesh.h>
 
-enum Shading_Enum {
-    NONE = 0,
+class CoverMesh;
+
+enum WeaveShading_Enum {
+    WS_NONE = 0,
     F1_ENERGY,
     F2_ENERGY,
     F3_ENERGY,
     TOT_ENERGY,
+    WS_CONNECTION_ENERGY
+};
+
+enum CoverShading_Enum {
+    CS_NONE = 0,
+    CS_S_VAL,
     FUN_VAL,
-    CONNECTION_ENERGY
+    CS_CONNECTION_ENERGY
+};
+
+enum GUIMode_Enum {
+    WEAVE = 0,
+    COVER
 };
 
 class WeaveHook : public PhysicsHook
 {
 public:
-    WeaveHook() : PhysicsHook(), weave(NULL), vectorScale(1.0), normalizeVectors(true)
+    WeaveHook() : PhysicsHook(), weave(NULL), cover(NULL), vectorScale(1.0), normalizeVectors(true)
     {
+        gui_mode = GUIMode_Enum::WEAVE;
+        weave_shading_state = WeaveShading_Enum::WS_NONE;
+        cover_shading_state = CoverShading_Enum::CS_NONE;
         // meshName = "meshes/bunny_coarser.obj";
         meshName = "meshes/tet.obj";
         // vectorFieldName = "bunny_coarser_nosing";
-        vectorFieldName = "tet.relax";
+        vectorFieldName = "tet.rlx";
         traceFile = "example.tr";
         params.lambdacompat = 100;
         params.lambdareg = 1e-3;
@@ -52,8 +68,11 @@ public:
         handleParams(4) = 1;
         handleParams(5) = -1;
 
-        drawLine = false;
+        showCoverCuts = true;
         trace = new Trace();
+        
+        initSReg = 1e-4;
+        globalSScale = 1.0;
     }
 
     virtual void drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu);
@@ -62,9 +81,10 @@ public:
     void reassignPermutations();
     void normalizeFields();
     void serializeVectorField();
-    void deserializeVectorField();
-    void exportVectorField();
+    void deserializeVectorField();    
+    void deserializeVectorFieldOld();
     void augmentField();
+    void initializeS();
     void computeFunc();
     void drawISOLines();
     void resetCutSelection();
@@ -78,35 +98,14 @@ public:
     
     virtual void initSimulation();
 
-    virtual void updateRenderGeometry()
-    {
-        renderQ = weave->surf->data().V;
-        renderF = weave->surf->data().F;        
-        weave->createVisualizationEdges(edgePts, edgeVecs, edgeSegs, edgeColors);
-        weave->createVisualizationCuts(cutPos1, cutPos2);
-        faceColors.resize(weave->surf->nFaces(), 3);
-        faceColors.setConstant(0.3);
-        baseLength = weave->surf->data().averageEdgeLength;
-        curFaceEnergies = tempFaceEnergies;
-
-
-    weave->handles[0].face = handleLocation; 
-    weave->handles[0].dir(0) = handleParams(0); 
-    weave->handles[0].dir(1) = handleParams(1); 
-    weave->handles[1].face = handleLocation; 
-    weave->handles[1].dir(0) = handleParams(2); 
-    weave->handles[1].dir(1) = handleParams(3); 
-    weave->handles[2].face = handleLocation; 
-    weave->handles[2].dir(0) = handleParams(4); 
-    weave->handles[2].dir(1) = handleParams(5); 
-
-    }
+    virtual void updateRenderGeometry();
 
     virtual bool simulateOneStep();    
 
     virtual void renderRenderGeometry(igl::opengl::glfw::Viewer &viewer);    
 
-    void setFaceColors(igl::opengl::glfw::Viewer &viewer);
+    void setFaceColorsWeave(igl::opengl::glfw::Viewer &viewer);
+    void setFaceColorsCover(igl::opengl::glfw::Viewer &viewer);
  
     void drawTraceCenterlines(igl::opengl::glfw::Viewer &viewer);
     void drawCuts(igl::opengl::glfw::Viewer &viewer);
@@ -114,8 +113,10 @@ public:
     void showCutVertexSelection(igl::opengl::glfw::Viewer &viewer);
     void updateSingularVerts(igl::opengl::glfw::Viewer &viewer);
 private:
+    void clear();
     std::string meshName;
     Weave *weave;
+    CoverMesh *cover;
     SolverParams params;
 
     std::string traceFile;
@@ -129,20 +130,30 @@ private:
     Eigen::VectorXd handleParams;
     int handleLocation;
 
-    Eigen::MatrixXd faceColors;
     Eigen::MatrixXd curFaceEnergies;
     Eigen::MatrixXd tempFaceEnergies;
-    Eigen::MatrixXd renderQ;
-    Eigen::MatrixXi renderF;
-    Eigen::MatrixXd edgePts;
-    Eigen::MatrixXd edgeVecs;
-    Eigen::MatrixXi edgeSegs;
-    Eigen::MatrixXd edgeColors;    
+    Eigen::MatrixXd renderQWeave;
+    Eigen::MatrixXi renderFWeave;
+    Eigen::MatrixXd edgePtsWeave;
+    Eigen::MatrixXd edgeVecsWeave;
+    Eigen::MatrixXi edgeSegsWeave;
+    Eigen::MatrixXd edgeColorsWeave;    
+    Eigen::MatrixXd edgePtsCover;
+    Eigen::MatrixXd edgeVecsCover;
+    Eigen::MatrixXi edgeSegsCover;
+    Eigen::MatrixXd edgeColorsCover;    
     std::vector<Eigen::Vector3d> renderSelectedVertices; // teal selected vertex spheres
     bool normalizeVectors;
     bool hideVectors;
+    bool showCoverCuts;
 
-    Shading_Enum shading_state = Shading_Enum::NONE;
+    Eigen::MatrixXd renderQCover;
+    Eigen::MatrixXi renderFCover;
+    
+
+    GUIMode_Enum gui_mode;
+    WeaveShading_Enum weave_shading_state;
+    CoverShading_Enum cover_shading_state;
     Trace_Mode trace_state = Trace_Mode::GEODESIC;
     
     int traceIdx;
@@ -159,15 +170,18 @@ private:
     Eigen::MatrixXd singularVerts_topo;
     Eigen::MatrixXd singularVerts_geo;
     Eigen::MatrixXd nonIdentityEdges;
-    Eigen::MatrixXd cutPos1; // endpoints of cut edges
-    Eigen::MatrixXd cutPos2;
+    Eigen::MatrixXd cutPos1Weave; // endpoints of cut edges
+    Eigen::MatrixXd cutPos2Weave;
+    Eigen::MatrixXd cutPos1Cover;
+    Eigen::MatrixXd cutPos2Cover;
+    Eigen::MatrixXd cutColorsCover;
 
     std::string vectorFieldName;
 
-    bool drawLine;
     std::vector<Eigen::MatrixXd> paths;
     int numISOLines;
-    double scalesInit;
+    double initSReg;
+    double globalSScale;
 };
 
 #endif

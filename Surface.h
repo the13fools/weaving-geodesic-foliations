@@ -32,8 +32,9 @@ class Surface
 {
 public:
     Surface(const Eigen::MatrixXd &V, const Eigen::MatrixXi &F);
+    virtual ~Surface() {}
 
-    const SurfaceData &data() { return data_; }
+    const SurfaceData &data() const { return data_; }
 
     int nVerts() const { return data_.V.rows(); }
     int nFaces() const { return data_.F.rows(); }
