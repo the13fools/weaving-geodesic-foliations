@@ -457,6 +457,20 @@ CoverMesh *Weave::createCover() const
         }
     }
     //igl::writeOBJ("debug.obj", VAug, FAug);
+    igl::writeOBJ("debug_single.obj",fs->data().V,fs->data().F);
+    std::ofstream debugField("debug.field");
+    for (int cId = 0; cId < nCover; cId++)
+    {
+        for (int fId = 0; fId < nfaces; fId++)
+        {
+            int field = cId % fs->nFields();
+            double sign = (cId < fs->nFields() ? 1.0 : -1.0);
+            Eigen::Vector2d vec = sign*fs->v(fId, field).transpose();
+            Eigen::Vector3d embvec = fs->data().Bs[fId] * vec;
+            debugField << embvec.normalized().transpose() << "\n";
+        }
+    }
+
     cout << "finish augmenting the mesh" << endl;
     CoverMesh *ret = new CoverMesh(*this, VAug, FAug, oldId2NewId, flattenedField, nCover); 
     return ret;
