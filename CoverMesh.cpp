@@ -617,8 +617,8 @@ void CoverMesh::initializeS(double reg)
             Eigen::Vector3d v0 = surf.data().V.row(vert0).transpose();
             Eigen::Vector3d v1 = surf.data().V.row(vert1).transpose();
             Eigen::Vector3d edgeVec = v1-v0;
-            Eigen::Vector3d scaledvec0 = surf.data().Bs[f0] * fs->v(compFacesToGlobal[f0], 0);           
-            Eigen::Vector3d scaledvec1 = surf.data().Bs[f1] * fs->v(compFacesToGlobal[f1], 0);
+            Eigen::Vector3d scaledvec0 = surf.data().Bs[f0] * surf.data().Js.block<2,2>(2*f0,0) * fs->v(compFacesToGlobal[f0], 0);           
+            Eigen::Vector3d scaledvec1 = surf.data().Bs[f1] * surf.data().Js.block<2,2>(2*f1,0) * fs->v(compFacesToGlobal[f1], 0);
             DvecCoeffs.push_back(Eigen::Triplet<double>(i, f0, -scaledvec0.dot(edgeVec)));
             DvecCoeffs.push_back(Eigen::Triplet<double>(i, f1, scaledvec1.dot(edgeVec)));
             DCoeffs.push_back(Eigen::Triplet<double>(i, f0, -1));
@@ -658,7 +658,7 @@ void CoverMesh::initializeS(double reg)
         cnt.setZero();
         for (int i = 0; i < nfaces; i++)
         {
-            Eigen::Vector3d scaledvec = componentS[i] * surf.data().Bs[i] * fs->v(compFacesToGlobal[i], 0);   
+            Eigen::Vector3d scaledvec = componentS[i] * surf.data().Bs[i] * surf.data().Js.block<2,2>(2*i,0) * fs->v(compFacesToGlobal[i], 0);   
             for (int j = 0; j < 3; j++)
             {
                 int edge = surf.data().faceEdges(i, j);

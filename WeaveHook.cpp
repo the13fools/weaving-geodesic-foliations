@@ -227,8 +227,8 @@ void WeaveHook::clear()
     cutPos2Weave.resize(0,3);
 
     weave->fixFields = false;    
-    pathstarts.clear();
-    pathends.clear();
+    pathstarts.resize(0,3);
+    pathends.resize(0,3);
 
     delete trace;
     trace = new Trace;
@@ -321,13 +321,9 @@ void WeaveHook::setFaceColorsCover(igl::opengl::glfw::Viewer &viewer)
         break;
     }
     
-    int npaths = pathstarts.size();
-    for (int i = 0; i < npaths; i ++)
-    {
-        const Eigen::RowVector3d green(.1,.9,.1);
-        viewer.data().add_edges( pathstarts[i], pathends[i], green);
-    }
-
+    const Eigen::RowVector3d green(.1,.9,.1);
+    viewer.data().add_edges( pathstarts, pathends, green);
+    
     viewer.data().set_colors(faceColors);
 }
 
@@ -649,22 +645,31 @@ void WeaveHook::computeFunc()
 
 void WeaveHook::drawISOLines()
 {
-    pathstarts.clear();
-    pathends.clear();
+    pathstarts.resize(0,3);
+    pathends.resize(0,3);
     if(cover)
     {
         std::vector<IsoLine> isolines;
         cover->recomputeIsolines(numISOLines, isolines);
         std::vector<std::vector<Eigen::Vector3d> > isolineVerts;
         std::vector<std::vector<Eigen::Vector3d> > isolineNormals;
+        int totsegs = 0;
+        for (auto &it : isolines)
+            totsegs += it.segs.size();
+        pathstarts.resize(totsegs,3);
+        pathends.resize(totsegs, 3);
+        int idx = 0;
         for (auto &it : isolines)
         {
-            if(it.segs.size() < 10)
-                continue;
             Eigen::MatrixXd pathstart, pathend;
             cover->drawIsolineOnSplitMesh(it, pathstart, pathend);
-            pathstarts.push_back(pathstart);
-            pathends.push_back(pathend);
+            int nsegs = it.segs.size();
+            for(int i=0; i<nsegs; i++)
+            {
+                pathstarts.row(idx) = pathstart.row(i);
+                pathends.row(idx) = pathend.row(i);
+                idx++;
+            }
             std::vector<Eigen::Vector3d> verts;
             std::vector<Eigen::Vector3d> normals;
             cover->isolineToPath(it, verts, normals);
