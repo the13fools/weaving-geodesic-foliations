@@ -42,6 +42,25 @@ Weave::Weave(Eigen::MatrixXd Vtmp, Eigen::MatrixXi Ftmp, int m)
     fs = new FieldSurface(Vtmp, Ftmp, m);       
 }
 
+Weave::Weave(const Weave &w)
+{
+    fs = nullptr;
+    operator=(w);
+}
+
+Weave& Weave::operator=(const Weave &w)
+{
+    delete fs;
+    handles = w.handles;
+    cuts = w.cuts;
+    fixFields = w.fixFields;
+    fs = new FieldSurface(w.fs->data().V, w.fs->data().F, w.fs->nFields());
+    fs->vectorFields = w.fs->vectorFields;
+    fs->Ps_ = w.fs->Ps_;
+
+    return *this;
+}
+
 Weave::~Weave()
 {    
     delete fs;

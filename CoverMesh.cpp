@@ -471,6 +471,7 @@ int CoverMesh::visMeshToCoverMesh(int vertid)
     return data_.splitToCoverVerts[vertid];
 }
 
+
 void CoverMesh::initializeS(double reg)
 {
     theta.resize(fs->nVerts());
@@ -536,6 +537,8 @@ void CoverMesh::initializeS(double reg)
     Eigen::MatrixXd cutV;
     Eigen::MatrixXi cutF;    
     cutMesh(fs->data().V, fs->data().F, cuts, cutV, cutF);
+
+    igl::writeOBJ("debug_cut.obj",cutV,cutF);
 
 
     // separate cut mesh into connected components
@@ -644,11 +647,24 @@ void CoverMesh::initializeS(double reg)
 
         double eval = inversePowerIteration(Lreg, componentS, 1000);
         std::cout << "Smallest eigenvalue: " << eval << std::endl;
+
+        double maxS = 0;
+        for(int i=0; i<nfaces; i++)
+        {
+            if ( componentS[i] > maxS ) 
+            {
+                maxS = componentS[i];
+            }
+        }
+
+        double s_scale = 3.1415 / maxS;
+
         
         // map component s to the global s vector
         for(int i=0; i<nfaces; i++)
         {
-            s[compFacesToGlobal[i]] = componentS[i];
+            componentS[i] *= s_scale;
+            s[compFacesToGlobal[i]] = componentS[i] ;
         }
 
         // compute theta from s

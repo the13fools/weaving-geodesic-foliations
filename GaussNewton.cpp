@@ -182,7 +182,7 @@ void GNEnergy(const Weave &weave, SolverParams params, Eigen::VectorXd &E)
                 vpermut += permut(i, field) * weave.fs->v(g, field);  
             }
             E[term] = (weave.fs->data().Bs[f] * (vif)).dot(edge) - (weave.fs->data().Bs[g] * ( vpermut)).dot(edge);
-            E[term] *= params.curlreg;
+            E[term] *= params.curlreg * params.edgeWeights(e);
             term++;
         }
     }   
@@ -289,12 +289,12 @@ void GNGradient(const Weave &weave, SolverParams params, Eigen::SparseMatrix<dou
                 Eigen::MatrixXi permut = weave.fs->Ps(e);
                 for (int k = 0; k < 2; k++)
                 {
-                    Jcoeffs.push_back(Triplet<double>(term, weave.fs->vidx(f, i) + k, (edge.transpose() * weave.fs->data().Bs[f] )[k] * params.curlreg));
+                    Jcoeffs.push_back(Triplet<double>(term, weave.fs->vidx(f, i) + k, (edge.transpose() * weave.fs->data().Bs[f] )[k] * params.curlreg * params.edgeWeights(e)));
                 }
 
                 for (int field = 0; field < m; field++)
                 {
-                    Eigen::Vector2d dE = -permut(i, field) * (edge.transpose() * weave.fs->data().Bs[g] )* params.curlreg;
+                    Eigen::Vector2d dE = -permut(i, field) * (edge.transpose() * weave.fs->data().Bs[g] )* params.curlreg * params.edgeWeights(e);
                     for (int k = 0; k < 2; k++)
                     {
                         Jcoeffs.push_back(Triplet<double>(term, weave.fs->vidx(g, field) + k, dE[k]));
@@ -314,12 +314,17 @@ void GNtestFiniteDifferences(Weave &weave, SolverParams params)
     Weave test = weave;
     test.fs->vectorFields.setRandom();
 
+    params.lambdacompat = 0; // weight of compatibility term
+    params.lambdareg = 0;    // Tilhonov regularization
+    params.curlreg = 1; // Weight on the curl component of v
+
     Eigen::VectorXd orig;
     GNEnergy(test, params, orig);
     Eigen::SparseMatrix<double> J;
     GNGradient(test, params, J);
 
     std::ofstream ofs("dump.txt");
+
 
     for (int i = 0; i < test.fs->vectorFields.size(); i++)
     {
@@ -366,6 +371,8 @@ void oneStep(Weave &weave, SolverParams params)
     
     GNEnergy(weave, params, r);
     std::cout << "Done, new energy: " << 0.5 * r.transpose()*M*r << std::endl;
+   // GNtestFiniteDifferences(weave, params);
+  //  exit(-1);
 }
 
 double lineSearch(Weave &weave, SolverParams params, const Eigen::VectorXd &update)

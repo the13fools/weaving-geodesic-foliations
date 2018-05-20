@@ -26,7 +26,10 @@ class Weave
 public:
     Weave(const std::string &objname, int m);
     Weave(const Eigen::MatrixXd Vtmp, const Eigen::MatrixXi Ftmp, int m);
+    Weave(const Weave &w);
     ~Weave();
+
+    Weave &operator=(const Weave &w);
    
     FieldSurface *fs;
     
