@@ -4,10 +4,9 @@
 #include "PhysicsHook.h"
 #include "Weave.h"
 #include "GaussNewton.h"
-#include "Trace.h"
+#include "Traces.h"
 #include <string>
 #include "Surface.h"
-
 #include <igl/unproject_onto_mesh.h>
 
 class CoverMesh;
@@ -53,10 +52,8 @@ public:
         traceSign = 1;
         traceSteps = 100;
         traceFaceId = 0;
-        isDrawTrace = false;
-
+        
         hideVectors = false;
-        showBending = false;
         showSingularities = false;
 
         targetResolution = 5000;
@@ -71,7 +68,7 @@ public:
         handleParams(5) = -1;
 
         showCoverCuts = true;
-        trace = new Trace();
+        numISOLines = 0;
         
         initSReg = 1e-4;
         globalSScale = 1.0;
@@ -97,7 +94,9 @@ public:
     void saveTraces();
     void loadTraces();
     void loadSampledTraces();
-    
+    void deleteLastTrace();
+    void computeTrace();   
+    void exportTracesAsRods();
     
     virtual void initSimulation();
 
@@ -110,7 +109,6 @@ public:
     void setFaceColorsWeave(igl::opengl::glfw::Viewer &viewer);
     void setFaceColorsCover(igl::opengl::glfw::Viewer &viewer);
  
-    void drawTraceCenterlines(igl::opengl::glfw::Viewer &viewer);
     void drawCuts(igl::opengl::glfw::Viewer &viewer);
 
     void showCutVertexSelection(igl::opengl::glfw::Viewer &viewer);
@@ -123,7 +121,7 @@ private:
     SolverParams params;
 
     std::string traceFile;
-    Trace *trace;
+    TraceSet traces;
 
     std::vector<std::pair<int, int > > selectedVertices; // (face, vert) pairs
     
@@ -164,12 +162,7 @@ private:
     int traceFaceId;
     int traceSteps;
     int targetResolution;
-    // nutton Variables for weave hook
-    bool isDrawTrace;
-    bool isDeleteLastTrace;
-    bool isSaveTrace;
     
-    bool showBending;
     bool showSingularities;
     Eigen::MatrixXd singularVerts_topo;
     Eigen::MatrixXd singularVerts_geo;
@@ -182,8 +175,13 @@ private:
 
     std::string vectorFieldName;
 
+    // isolines on the split mesh
     Eigen::MatrixXd pathstarts;
     Eigen::MatrixXd pathends;
+    // traces on the single mesh
+    Eigen::MatrixXd tracestarts;
+    Eigen::MatrixXd traceends;
+    Eigen::MatrixXd tracecolors;
     int numISOLines;
     double initSReg;
     double globalSScale;

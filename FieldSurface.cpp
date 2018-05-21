@@ -106,40 +106,29 @@ FieldSurface *FieldSurface::removePointsFromMesh(std::vector<int> vIds, std::map
         ret->Ps_ = Ps_;
         return ret;
     }
-
-    /*for (int i = 0; i < faceIds.size(); i++)
-        cout << faceIds[i] << " " ;
-    cout << "face ids \n";*/
-
+    
     int fieldIdx = 0;
-    int faceIdIdx = 0;
     int newNFaces = nFaces() - faceIds.size();
     Eigen::VectorXd vectorFields_clean = Eigen::VectorXd::Zero( 5*nFields()*newNFaces );
     Eigen::MatrixXi F_temp = Eigen::MatrixXi::Zero(newNFaces, 3); 
 
-    //cout << "fieldIdx \n";
-    for (int i = 0; i < newNFaces; i++)   
+    
+    for (int i = 0; i < nFaces(); i++)   
     { 
-        if ( fieldIdx == faceIds[faceIdIdx] )
-        {
-            fieldIdx++;
-            faceIdIdx++;
-            //cout << fieldIdx << " ";
-            i--;
-            continue; // in case two ids to remove appear in sequence
-        } 
-
+        if (facesToDelete.count(i))
+            continue;
+        
         // vec field
-        vectorFields_clean.segment(2*i*nFields(), 2*nFields()) = vectorFields.segment(2*fieldIdx*nFields(), 2*nFields());
+        vectorFields_clean.segment(2*fieldIdx*nFields(), 2*nFields()) = vectorFields.segment(2*i*nFields(), 2*nFields());
         // beta
-        vectorFields_clean.segment(2*i*nFields() + 2*newNFaces*nFields(), 2*nFields()) 
-            = vectorFields.segment(2*fieldIdx*nFields() + 2*nFaces()*nFields(), 2*nFields() );
+        vectorFields_clean.segment(2*fieldIdx*nFields() + 2*newNFaces*nFields(), 2*nFields()) 
+            = vectorFields.segment(2*i*nFields() + 2*nFaces()*nFields(), 2*nFields() );
         // alpha
-        vectorFields_clean.segment(i*nFields() + 4*newNFaces*nFields(), nFields()) 
-            = vectorFields.segment(fieldIdx * nFields() + 4*nFaces()*nFields(), nFields() );
+        vectorFields_clean.segment(fieldIdx*nFields() + 4*newNFaces*nFields(), nFields()) 
+            = vectorFields.segment(i * nFields() + 4*nFaces()*nFields(), nFields() );
         // faces 
-        F_temp.row(i) = data().F.row(fieldIdx);
-        faceMap[fieldIdx] = i;
+        F_temp.row(fieldIdx) = data().F.row(i);
+        faceMap[i] = fieldIdx;
         fieldIdx++;
     }
 

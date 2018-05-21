@@ -34,6 +34,7 @@ void WeaveHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
             ImGui::InputDoubleScientific("Compatilibity Lambda", &params.lambdacompat);
             ImGui::InputDoubleScientific("Tikhonov Reg", &params.lambdareg);
             ImGui::InputDoubleScientific("V curl reg", &params.curlreg);
+
             if (ImGui::Button("Remove Singularities", ImVec2(-1, 0)))
                 removeSingularities();
             if (ImGui::Button("Create Cover", ImVec2(-1, 0)))
@@ -105,7 +106,7 @@ void WeaveHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
                 ImGui::InputInt("Trace Field", &traceIdx, 0, 0);
                 ImGui::InputInt("Trace Sign", &traceSign, 0, 0);
                 ImGui::Combo("Trace Mode", (int *)&trace_state, "Geodesic\0Field\0\0");
-                ImGui::Checkbox("Show Bending", &showBending);
+                //ImGui::Checkbox("Show Bending", &showBending);
                 ImGui::InputText("Trace File", traceFile);
                 if (ImGui::Button("Save Traces", ImVec2(-1, 0)))
                     saveTraces();
@@ -118,16 +119,15 @@ void WeaveHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
             {
                 if (ImGui::Button("Draw Trace", ImVec2(-1, 0)))
                 {
-                    isDrawTrace = true;
+                    computeTrace();
                 }
                 if (ImGui::Button("Delete Last Trace", ImVec2(-1, 0)))
                 {
-                    isDeleteLastTrace = true;
+                    deleteLastTrace();
                 }
                 if (ImGui::Button("Save Traces", ImVec2(-1, 0)))
                 {
-                    isSaveTrace = true;
-                    trace->logRibbonsToFile( "rods", "example", *weave );
+                    saveTraces();
                 }
             }
             ImGui::End();
@@ -234,8 +234,7 @@ void WeaveHook::clear()
     pathstarts.resize(0,3);
     pathends.resize(0,3);
 
-    delete trace;
-    trace = new Trace;
+    traces.clear();
 }
 
 void WeaveHook::initSimulation()
@@ -425,57 +424,25 @@ void WeaveHook::drawCuts(igl::opengl::glfw::Viewer &viewer)
     }
 }
 
-void WeaveHook::drawTraceCenterlines(igl::opengl::glfw::Viewer &viewer)
+void WeaveHook::deleteLastTrace()
 {
-    if (isDeleteLastTrace)
-    {
-        trace->popLastCurve();
-        isDeleteLastTrace = false;
-    }
-    if (isDrawTrace)
-    {
-        for (int i = 0; i < 3; i++)
-        {
-            trace->traceCurve(*weave, trace_state, i, 1, traceFaceId, traceSteps);
-            trace->traceCurve(*weave, trace_state, i, -1, traceFaceId, traceSteps);
-        }
+    traces.popLastCurve();
+    updateRenderGeometry();
+}
 
-     //   trace->traceCurve(*weave, trace_state, traceIdx, traceSign, traceFaceId, traceSteps);
-        isDrawTrace = false;
-    }
-    if (isSaveTrace)
+void WeaveHook::computeTrace()
+{
+    for (int i = 0; i < 3; i++)
     {
-        trace->logRibbonsToFile( "rods", "example", *weave );
-        isSaveTrace = false;    
+        traces.traceCurve(*weave->fs, trace_state, i, 1, traceFaceId, traceSteps);
+        traces.traceCurve(*weave->fs, trace_state, i, -1, traceFaceId, traceSteps);
     }
+    updateRenderGeometry();
+}
 
-    Eigen::RowVector3d red(0.9, .1, .1), green(.1, .9, .1);
-    for (int i = 0; i < trace->curves.size(); i++)
-    {
-        int rows = trace->curves[i].rows();
-        Eigen::MatrixXd s1 = trace->curves[i].block(0, 0, rows - 1, 3);
-        Eigen::MatrixXd s2 = trace->curves[i].block(1, 0, rows - 1, 3);
-        Eigen::MatrixXd norms = trace->normals[i].block(0, 0, rows - 1, 3);
-         
-        switch (trace->modes[i])
-        {
-            case GEODESIC:
-                viewer.data().add_edges(s1, s2, red);
-                break;
-            case FIELD:
-                viewer.data().add_edges(s1, s2, green);
-             ///   cout << s1.rows() << " " << trace->normals[i].rows() << "\n";
-//z                viewer.data.add_edges(s1, s1 + norms, red);
-                if( showBending )
-                {
-                    Eigen::MatrixXd bend_colors = Eigen::MatrixXd::Zero(s2.rows(),3);
-                    igl::ColorMapType viz_color = igl::COLOR_MAP_TYPE_JET;
-                    igl::colormap(viz_color,trace->bending[i].tail(s2.rows()), true, bend_colors);
-                    viewer.data().add_points( s2, bend_colors );
-                }
-                break;
-        }
-    }
+void WeaveHook::saveTraces()
+{
+    // trace->logRibbonsToFile( "rods", "example", *weave );
 }
 
 void WeaveHook::updateSingularVerts(igl::opengl::glfw::Viewer &viewer)
@@ -531,7 +498,8 @@ void WeaveHook::renderRenderGeometry(igl::opengl::glfw::Viewer &viewer)
             viewer.data().set_edges(renderPts, edgeSegsWeave, edgeColorsWeave);
         }
         setFaceColorsWeave(viewer);
-        drawTraceCenterlines(viewer);
+        viewer.data().add_edges( tracestarts, traceends, tracecolors );
+
         updateSingularVerts(viewer);
         drawCuts(viewer);
     }
@@ -634,7 +602,11 @@ void WeaveHook::serializeVectorField()
 
 void WeaveHook::augmentField()
 {
-    if (cover) delete cover;
+    if (cover)
+    {
+        traces.purgeTraces(cover->fs);
+        delete cover;
+    }
     cover = weave->createCover();    
     updateRenderGeometry();
     gui_mode = GUIMode_Enum::COVER;
@@ -649,39 +621,16 @@ void WeaveHook::computeFunc()
 
 void WeaveHook::drawISOLines()
 {
-    pathstarts.resize(0,3);
-    pathends.resize(0,3);
     if(cover)
     {
-        std::vector<IsoLine> isolines;
-        cover->recomputeIsolines(numISOLines, isolines);
-        std::vector<std::vector<Eigen::Vector3d> > isolineVerts;
-        std::vector<std::vector<Eigen::Vector3d> > isolineNormals;
-        int totsegs = 0;
-        for (auto &it : isolines)
-            totsegs += it.segs.size();
-        pathstarts.resize(totsegs,3);
-        pathends.resize(totsegs, 3);
-        int idx = 0;
-        for (auto &it : isolines)
-        {
-            Eigen::MatrixXd pathstart, pathend;
-            cover->drawIsolineOnSplitMesh(it, pathstart, pathend);
-            int nsegs = it.segs.size();
-            for(int i=0; i<nsegs; i++)
-            {
-                pathstarts.row(idx) = pathstart.row(i);
-                pathends.row(idx) = pathend.row(i);
-                idx++;
-            }
-            std::vector<Eigen::Vector3d> verts;
-            std::vector<Eigen::Vector3d> normals;
-            cover->isolineToPath(it, verts, normals);
-            isolineVerts.push_back(verts);
-            isolineNormals.push_back(normals);
-        }
-        trace->loadGeneratedCurves(isolineVerts, isolineNormals);
+        traces.purgeTraces(cover->fs);
+        std::vector<Trace> newtraces;
+        cover->recomputeIsolines(numISOLines, newtraces);
+        for (auto it : newtraces)
+            traces.addTrace(it);
     }
+
+    updateRenderGeometry();
 }
 
 void WeaveHook::deserializeVectorField()
@@ -753,19 +702,19 @@ void WeaveHook::removePrevCut()
     updateRenderGeometry();
 } 
 
-void WeaveHook::saveTraces()
+void WeaveHook::exportTracesAsRods()
 {
-    trace->save(traceFile);
+    //trace->save(traceFile);
 }
 
 void WeaveHook::loadTraces()
 {
-    trace->load(traceFile);
+    //trace->load(traceFile);
 }
 
 void WeaveHook::loadSampledTraces()
 {
-    trace->loadSampledCurves(traceFile);
+    //trace->loadSampledCurves(traceFile);
 }
 
 void WeaveHook::updateRenderGeometry()
@@ -777,7 +726,8 @@ void WeaveHook::updateRenderGeometry()
     baseLength = weave->fs->data().averageEdgeLength;
     curFaceEnergies = tempFaceEnergies;
 
-
+    if (weave->handles.size() < 3)
+        weave->handles.resize(3);
     weave->handles[0].face = handleLocation;
     weave->handles[0].dir(0) = handleParams(0);
     weave->handles[0].dir(1) = handleParams(1);
@@ -788,10 +738,72 @@ void WeaveHook::updateRenderGeometry()
     weave->handles[2].dir(0) = handleParams(4);
     weave->handles[2].dir(1) = handleParams(5);
 
+    int tracesegs = 0;
+    for (int i = 0; i < traces.nTraces(); i++)
+    {
+        tracesegs += traces.trace(i).segs.size();
+    }
+    tracestarts.resize(tracesegs, 3);
+    traceends.resize(tracesegs, 3);
+    tracecolors.resize(tracesegs, 3);
+    Eigen::RowVector3d red(0.9, .1, .1), green(.1, .9, .1);
+
+    int tridx = 0;
+    for (int i = 0; i < traces.nTraces(); i++)
+    {
+        int nsegs = traces.trace(i).segs.size();
+        std::vector<Eigen::Vector3d> verts;
+        std::vector<Eigen::Vector3d> normals;
+        traces.renderTrace(i, verts, normals);
+        for (int j = 0; j < nsegs; j++)
+        {
+            tracestarts.row(tridx) = verts[j].transpose() + 0.0001*normals[j].transpose();
+            traceends.row(tridx) = verts[j + 1].transpose() + 0.0001*normals[j].transpose();
+
+            switch (traces.trace(i).type_)
+            {
+            case GEODESIC:
+                tracecolors.row(tridx) = red;
+                break;
+            case FIELD:
+                tracecolors.row(tridx) = green;
+                break;
+            }
+
+            tridx++;
+        }
+    }
+
     if (cover)
     {
-        cover->createVisualization(renderQCover, renderFCover, edgePtsCover, edgeVecsCover, edgeSegsCover, edgeColorsCover, 
+        cover->createVisualization(renderQCover, renderFCover, edgePtsCover, edgeVecsCover, edgeSegsCover, edgeColorsCover,
             cutPos1Cover, cutPos2Cover, cutColorsCover);
+
+        int totsegs = 0;
+        int ntraces = traces.nTraces();
+        for (int i = 0; i < ntraces; i++)
+        {
+            if (traces.trace(i).parent_ == cover->fs)
+                totsegs += traces.trace(i).segs.size();
+        }
+        pathstarts.resize(totsegs, 3);
+        pathends.resize(totsegs, 3);
+        int idx = 0;
+        for (int j = 0; j < ntraces; j++)
+        {
+            if (traces.trace(j).parent_ != cover->fs)
+                continue;
+
+            Eigen::MatrixXd pathstart, pathend;
+            cover->drawTraceOnSplitMesh(traces.trace(j), pathstart, pathend);
+            int nsegs = traces.trace(j).segs.size();
+            for (int i = 0; i < nsegs; i++)
+            {
+                pathstarts.row(idx) = pathstart.row(i);
+                pathends.row(idx) = pathend.row(i);
+                idx++;
+            }
+        }
     }
     else
     {
@@ -804,6 +816,8 @@ void WeaveHook::updateRenderGeometry()
         cutPos1Cover.resize(0, 3);
         cutPos2Cover.resize(0, 3);
         cutColorsCover.resize(0, 3);
+        pathstarts.resize(0, 3);
+        pathends.resize(0, 3);
     }
 }
 
