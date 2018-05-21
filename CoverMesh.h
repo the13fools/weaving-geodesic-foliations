@@ -4,10 +4,13 @@
 #include <vector>
 #include <Eigen/Core>
 #include <Eigen/Sparse>
+#include "Traces.h"
 
 class FieldSurface;
 class Weave;
 class Surface;
+class TraceSet;
+
 
 struct CoverData
 {
@@ -19,21 +22,6 @@ struct CoverData
 
     std::vector<int> splitMeshCuts; // edges of the split mesh that are cuts
 };
-
-// one piece of an isoline
-struct IsoSegment
-{
-    int face; // index into the faces of the CoverMesh
-    int side[2]; // integer [0,3]; the first endpoint of the segment lies on edge fs->data().faceEdges(side[0]), etc
-    double bary[2]; // barycentric coordinates of segment endpoint along each edge
-};
-
-struct IsoLine
-{
-    double value; // in [-pi,pi] probably
-    std::vector<IsoSegment> segs;
-};
-
 
 class CoverMesh
 {
@@ -55,9 +43,8 @@ public:
     
     // maps indices of vertices on the visualization mesh to corresponding "parent" vertices on the cover mesh
     int visMeshToCoverMesh(int vertid);
-    void recomputeIsolines(int numISOLines, std::vector<IsoLine> &isolines);
-    void drawIsolineOnSplitMesh(const IsoLine &line, Eigen::MatrixXd &pathStarts, Eigen::MatrixXd &pathEnds);
-    void isolineToPath(const IsoLine &line, std::vector<Eigen::Vector3d> &verts, std::vector<Eigen::Vector3d> &normals);
+    void recomputeIsolines(int numISOLines, std::vector<Trace> &isotraces);
+    void drawTraceOnSplitMesh(const Trace &trace, Eigen::MatrixXd &pathStarts, Eigen::MatrixXd &pathEnds) const;    
    
 private:
     double inversePowerIteration(Eigen::SparseMatrix<double> &M, Eigen::VectorXd &evec, int iters);
@@ -67,9 +54,8 @@ private:
     double barycentric(double val1, double val2, double target);
     bool crosses(double isoval, double val1, double val2, double minval, 
         double maxval, double &bary);
-    int extractIsoline(const Eigen::VectorXd &func, 
-        double isoval, double minval, double maxval,
-        std::vector<IsoLine> &isolines);
+    void extractIsoline(const Eigen::VectorXd &func, 
+        double isoval, double minval, double maxval, std::vector<Trace> &isotrace);
     
     std::vector<std::vector<Eigen::Vector3d> > isoNormal;
 

@@ -11,6 +11,7 @@
 #include <igl/cotmatrix_entries.h>
 #include <igl/facet_components.h>
 #include <igl/remove_unreferenced.h>
+#include "Traces.h"
 
 typedef Eigen::Triplet<double> triplet;
 # define M_PI           3.14159265358979323846
@@ -87,14 +88,13 @@ bool CoverMesh::crosses(double isoval, double val1, double val2, double minval, 
 } 
 
 
-int CoverMesh::extractIsoline(const Eigen::VectorXd &func, double isoval, double minval, double maxval, std::vector<IsoLine> &isolines)
-{
+void CoverMesh::extractIsoline(const Eigen::VectorXd &func, double isoval, double minval, double maxval, std::vector<Trace> &isotrace)
+{    
     int nfaces = fs->nFaces();
     bool *visited = new bool[nfaces];
     for(int i=0; i<nfaces; i++)
         visited[i] = false;
         
-    int ret = 0;
 
     // Iterate between faces until encountering a zero level set.  
     // Trace out the level set in both directions from this face (marking faces as visited)
@@ -104,9 +104,11 @@ int CoverMesh::extractIsoline(const Eigen::VectorXd &func, double isoval, double
         if(visited[i])
             continue;
         visited[i] = true;
-        std::vector<std::vector<IsoSegment> > traces;
         std::vector<int> crossings;
         std::vector<double> crossingsbary;
+
+        std::vector<std::vector<TraceSegment> > tracePieces;
+
         for(int j=0; j<3; j++)
         {            
             int vp1 = fs->data().F(i, (j+1)%3);
@@ -116,14 +118,14 @@ int CoverMesh::extractIsoline(const Eigen::VectorXd &func, double isoval, double
             {
                 crossings.push_back(j);
                 crossingsbary.push_back(bary);
-                std::vector<IsoSegment> trace;
+                std::vector<TraceSegment> trace;                
                 
                 int prevface = i;
                 int curface = fs->data().faceNeighbors(i, j);
                 while(curface != -1 && !visited[curface])
                 {                
                     visited[curface] = true;
-                    IsoSegment nextseg;
+                    TraceSegment nextseg;
                     nextseg.face = curface;
                     for(int k=0; k<3; k++)
                     {
@@ -152,36 +154,33 @@ int CoverMesh::extractIsoline(const Eigen::VectorXd &func, double isoval, double
                         }                       
                     }
                 }
-                traces.push_back(trace);
+                tracePieces.push_back(trace);
             }
         }
-        assert(traces.size() < 3);
+        assert(tracePieces.size() < 3);
 
 
-        if(traces.size() == 1)
+        if(tracePieces.size() == 1)
         {
             // lucky! no stitching together needed
-            IsoLine line;
-            line.segs = traces[0];
-            line.value = isoval;
-            isolines.push_back(line);
-            ret++;
+            Trace line(fs, Trace_Mode::FIELD);
+            line.segs = tracePieces[0];
+            isotrace.push_back(line);
         }
-        if(traces.size() == 2)
+        if(tracePieces.size() == 2)
         {
             // must stitch together both traces into one isoline
-            IsoLine line;
-            line.value = isoval;
+            Trace line(fs, Trace_Mode::FIELD);
             // first, reverse the order and orientation of the segments in traces[0]
-            for(auto it = traces[0].rbegin(); it != traces[0].rend(); ++it)
+            for(auto it = tracePieces[0].rbegin(); it != tracePieces[0].rend(); ++it)
             {
-                IsoSegment rev = *it;
+                TraceSegment rev = *it;
                 std::swap(rev.side[0], rev.side[1]);
                 std::swap(rev.bary[0], rev.bary[1]);
                 line.segs.push_back(rev);
             }
             // add in the connecting segment
-            IsoSegment con;
+            TraceSegment con;
             con.face = i;
             con.side[0] = crossings[0];
             con.side[1] = crossings[1];
@@ -189,32 +188,29 @@ int CoverMesh::extractIsoline(const Eigen::VectorXd &func, double isoval, double
             con.bary[1] = crossingsbary[1];
             line.segs.push_back(con);
             // finally append all of traces[1]
-            for(auto &it : traces[1])
+            for(auto &it : tracePieces[1])
                 line.segs.push_back(it);
                 
-            isolines.push_back(line);
-            ret++;
+            isotrace.push_back(line);
         }
     }
     delete[] visited;
-    return ret;
 }
 
-void CoverMesh::recomputeIsolines(int numISOLines, std::vector<IsoLine> &isolines)
+void  CoverMesh::recomputeIsolines(int numISOLines, std::vector<Trace> &isotraces)
 {
     double minval = -M_PI;
     double maxval = M_PI;
     double numlines = numISOLines;
 
-    int ntraces = 0;
-    isolines.clear();
+    isotraces.clear();
+
     for(int i=0; i<numlines; i++)
     {
         double isoval = minval + (maxval-minval) * double(i)/double(numlines);
-        ntraces += extractIsoline(theta, isoval, minval, maxval, isolines);
+        extractIsoline(theta, isoval, minval, maxval, isotraces);
     }
-    std::cout << "Extracted " << ntraces << " isolines" << std::endl;
-    //std::cout << ntraces << " 0 0 " << ntraces <<  " 0 0 " << std::endl;
+    std::cout << "Extracted " << isotraces.size() << " isolines" << std::endl;
 }
 
 void CoverMesh::computeFunc(double globalScale)
@@ -807,51 +803,24 @@ const Surface &CoverMesh::splitMesh() const
     return *data_.splitMesh;
 }
 
-void CoverMesh::drawIsolineOnSplitMesh(const IsoLine &line, Eigen::MatrixXd &pathStarts, Eigen::MatrixXd &pathEnds)
+void CoverMesh::drawTraceOnSplitMesh(const Trace &trace, Eigen::MatrixXd &pathStarts, Eigen::MatrixXd &pathEnds) const
 {
-    int nsegs = line.segs.size();
+    int nsegs = trace.segs.size();
     pathStarts.resize(nsegs, 3);
     pathEnds.resize(nsegs, 3);
     for(int i=0; i<nsegs; i++)
     {
-        Eigen::Vector3d offset = 0.0001 * data_.splitMesh->faceNormal(line.segs[i].face);        
-        int v0 = data_.splitMesh->data().F(line.segs[i].face, (line.segs[i].side[0]+1)%3);
-        int v1 = data_.splitMesh->data().F(line.segs[i].face, (line.segs[i].side[0]+2)%3);
-        Eigen::Vector3d pos = (1.0 - line.segs[i].bary[0])*data_.splitMesh->data().V.row(v0).transpose() + line.segs[i].bary[0] * data_.splitMesh->data().V.row(v1).transpose();
+        Eigen::Vector3d offset = 0.0001 * data_.splitMesh->faceNormal(trace.segs[i].face);        
+        int v0 = data_.splitMesh->data().F(trace.segs[i].face, (trace.segs[i].side[0]+1)%3);
+        int v1 = data_.splitMesh->data().F(trace.segs[i].face, (trace.segs[i].side[0]+2)%3);
+        Eigen::Vector3d pos = (1.0 - trace.segs[i].bary[0])*data_.splitMesh->data().V.row(v0).transpose() + trace.segs[i].bary[0] * data_.splitMesh->data().V.row(v1).transpose();
         pathStarts.row(i) = pos.transpose() + offset.transpose();
                 
-        v0 = data_.splitMesh->data().F(line.segs[i].face, (line.segs[i].side[1]+1)%3);
-        v1 = data_.splitMesh->data().F(line.segs[i].face, (line.segs[i].side[1]+2)%3);
-        pos = (1.0 - line.segs[i].bary[1])*data_.splitMesh->data().V.row(v0).transpose() + line.segs[i].bary[1] * data_.splitMesh->data().V.row(v1).transpose();
+        v0 = data_.splitMesh->data().F(trace.segs[i].face, (trace.segs[i].side[1]+1)%3);
+        v1 = data_.splitMesh->data().F(trace.segs[i].face, (trace.segs[i].side[1]+2)%3);
+        pos = (1.0 - trace.segs[i].bary[1])*data_.splitMesh->data().V.row(v0).transpose() + trace.segs[i].bary[1] * data_.splitMesh->data().V.row(v1).transpose();
         pathEnds.row(i) = pos.transpose() + offset.transpose();
     }
 }
 
-void CoverMesh::isolineToPath(const IsoLine &line, std::vector<Eigen::Vector3d> &verts, std::vector<Eigen::Vector3d> &normals)
-{
-    int nsegs = line.segs.size();
-    int nverts = nsegs + 1;
-    verts.resize(nverts);
-    for (int i = 0; i < nverts; i++)
-        verts[i].setZero();
-    normals.resize(nsegs);
-    for (int i = 0; i < nsegs; i++)
-    {
-        int v0 = fs->data().F(line.segs[i].face, (line.segs[i].side[0]+1)%3);
-        int v1 = fs->data().F(line.segs[i].face, (line.segs[i].side[0]+2)%3);
-        Eigen::Vector3d pos = (1.0 - line.segs[i].bary[0])*fs->data().V.row(v0).transpose() + line.segs[i].bary[0] * fs->data().V.row(v1).transpose();
-        verts[i] += pos;
 
-        v0 = fs->data().F(line.segs[i].face, (line.segs[i].side[1]+1)%3);
-        v1 = fs->data().F(line.segs[i].face, (line.segs[i].side[1]+2)%3);
-        pos = (1.0 - line.segs[i].bary[1])*fs->data().V.row(v0).transpose() + line.segs[i].bary[1] * fs->data().V.row(v1).transpose();
-        verts[i + 1] += pos;
-    }
-    for (int i = 1; i < nverts - 1; i++)
-        verts[i] /= 2.0;
-
-    for (int i = 0; i < nsegs; i++)
-    {
-        normals[i] = fs->faceNormal(line.segs[i].face);
-    }
-}
