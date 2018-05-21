@@ -537,7 +537,7 @@ void CoverMesh::initializeS(double reg)
     Eigen::MatrixXd cutV;
     Eigen::MatrixXi cutF;    
     cutMesh(fs->data().V, fs->data().F, cuts, cutV, cutF);
-
+    igl::writeOBJ("debug_augmented.obj",fs->data().V, fs->data().F);
     igl::writeOBJ("debug_cut.obj",cutV,cutF);
 
 
