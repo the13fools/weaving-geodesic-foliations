@@ -651,9 +651,9 @@ void CoverMesh::initializeS(double reg)
         double maxS = 0;
         for(int i=0; i<nfaces; i++)
         {
-            if ( componentS[i] > maxS ) 
+            if ( fabs(componentS[i]) > maxS ) 
             {
-                maxS = componentS[i];
+                maxS = fabs(componentS[i]);
             }
         }
 
