@@ -620,8 +620,8 @@ void CoverMesh::initializeS(double reg)
             Eigen::Vector3d v0 = surf.data().V.row(vert0).transpose();
             Eigen::Vector3d v1 = surf.data().V.row(vert1).transpose();
             Eigen::Vector3d edgeVec = v1-v0;
-            Eigen::Vector3d scaledvec0 = surf.data().Bs[f0] * fs->v(compFacesToGlobal[f0], 0);           
-            Eigen::Vector3d scaledvec1 = surf.data().Bs[f1] * fs->v(compFacesToGlobal[f1], 0);
+            Eigen::Vector3d scaledvec0 = surf.data().Bs[f0] * surf.data().Js.block<2,2>(2*f0,0) * fs->v(compFacesToGlobal[f0], 0);           
+            Eigen::Vector3d scaledvec1 = surf.data().Bs[f1] * surf.data().Js.block<2,2>(2*f1,0) * fs->v(compFacesToGlobal[f1], 0);
             DvecCoeffs.push_back(Eigen::Triplet<double>(i, f0, -scaledvec0.dot(edgeVec)));
             DvecCoeffs.push_back(Eigen::Triplet<double>(i, f1, scaledvec1.dot(edgeVec)));
             DCoeffs.push_back(Eigen::Triplet<double>(i, f0, -1));
@@ -674,7 +674,7 @@ void CoverMesh::initializeS(double reg)
         cnt.setZero();
         for (int i = 0; i < nfaces; i++)
         {
-            Eigen::Vector3d scaledvec = componentS[i] * surf.data().Bs[i] * fs->v(compFacesToGlobal[i], 0);   
+            Eigen::Vector3d scaledvec = componentS[i] * surf.data().Bs[i] * surf.data().Js.block<2,2>(2*i,0) * fs->v(compFacesToGlobal[i], 0);   
             for (int j = 0; j < 3; j++)
             {
                 int edge = surf.data().faceEdges(i, j);
@@ -807,23 +807,51 @@ const Surface &CoverMesh::splitMesh() const
     return *data_.splitMesh;
 }
 
-void CoverMesh::drawIsolineOnSplitMesh(const IsoLine &line, Eigen::MatrixXd &pathPts)
+void CoverMesh::drawIsolineOnSplitMesh(const IsoLine &line, Eigen::MatrixXd &pathStarts, Eigen::MatrixXd &pathEnds)
 {
-    // we could do this with 0.5x as many segments
-    // but let's overdo it to catch bugs with the barycentric coordinates
     int nsegs = line.segs.size();
-    pathPts.resize(nsegs*2, 3);
+    pathStarts.resize(nsegs, 3);
+    pathEnds.resize(nsegs, 3);
     for(int i=0; i<nsegs; i++)
     {
         Eigen::Vector3d offset = 0.0001 * data_.splitMesh->faceNormal(line.segs[i].face);        
         int v0 = data_.splitMesh->data().F(line.segs[i].face, (line.segs[i].side[0]+1)%3);
         int v1 = data_.splitMesh->data().F(line.segs[i].face, (line.segs[i].side[0]+2)%3);
         Eigen::Vector3d pos = (1.0 - line.segs[i].bary[0])*data_.splitMesh->data().V.row(v0).transpose() + line.segs[i].bary[0] * data_.splitMesh->data().V.row(v1).transpose();
-        pathPts.row(2*i) = pos.transpose() + offset.transpose();
+        pathStarts.row(i) = pos.transpose() + offset.transpose();
                 
         v0 = data_.splitMesh->data().F(line.segs[i].face, (line.segs[i].side[1]+1)%3);
         v1 = data_.splitMesh->data().F(line.segs[i].face, (line.segs[i].side[1]+2)%3);
         pos = (1.0 - line.segs[i].bary[1])*data_.splitMesh->data().V.row(v0).transpose() + line.segs[i].bary[1] * data_.splitMesh->data().V.row(v1).transpose();
-        pathPts.row(2*i+1) = pos.transpose() + offset.transpose();
+        pathEnds.row(i) = pos.transpose() + offset.transpose();
+    }
+}
+
+void CoverMesh::isolineToPath(const IsoLine &line, std::vector<Eigen::Vector3d> &verts, std::vector<Eigen::Vector3d> &normals)
+{
+    int nsegs = line.segs.size();
+    int nverts = nsegs + 1;
+    verts.resize(nverts);
+    for (int i = 0; i < nverts; i++)
+        verts[i].setZero();
+    normals.resize(nsegs);
+    for (int i = 0; i < nsegs; i++)
+    {
+        int v0 = fs->data().F(line.segs[i].face, (line.segs[i].side[0]+1)%3);
+        int v1 = fs->data().F(line.segs[i].face, (line.segs[i].side[0]+2)%3);
+        Eigen::Vector3d pos = (1.0 - line.segs[i].bary[0])*fs->data().V.row(v0).transpose() + line.segs[i].bary[0] * fs->data().V.row(v1).transpose();
+        verts[i] += pos;
+
+        v0 = fs->data().F(line.segs[i].face, (line.segs[i].side[1]+1)%3);
+        v1 = fs->data().F(line.segs[i].face, (line.segs[i].side[1]+2)%3);
+        pos = (1.0 - line.segs[i].bary[1])*fs->data().V.row(v0).transpose() + line.segs[i].bary[1] * fs->data().V.row(v1).transpose();
+        verts[i + 1] += pos;
+    }
+    for (int i = 1; i < nverts - 1; i++)
+        verts[i] /= 2.0;
+
+    for (int i = 0; i < nsegs; i++)
+    {
+        normals[i] = fs->faceNormal(line.segs[i].face);
     }
 }

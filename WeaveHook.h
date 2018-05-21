@@ -182,7 +182,8 @@ private:
 
     std::string vectorFieldName;
 
-    std::vector<Eigen::MatrixXd> paths;
+    Eigen::MatrixXd pathstarts;
+    Eigen::MatrixXd pathends;
     int numISOLines;
     double initSReg;
     double globalSScale;
