@@ -34,8 +34,6 @@ void WeaveHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
             ImGui::InputDoubleScientific("Compatilibity Lambda", &params.lambdacompat);
             ImGui::InputDoubleScientific("Tikhonov Reg", &params.lambdareg);
             ImGui::InputDoubleScientific("V curl reg", &params.curlreg);
-            if (ImGui::Button("Reassign Permutations", ImVec2(-1, 0)))
-                reassignPermutations();
             if (ImGui::Button("Remove Singularities", ImVec2(-1, 0)))
                 removeSingularities();
             if (ImGui::Button("Create Cover", ImVec2(-1, 0)))
@@ -59,12 +57,17 @@ void WeaveHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
                 addCut();
             if (ImGui::Button("Remove Prev Cut", ImVec2(-1, 0)))
                 removePrevCut();
+            if (ImGui::Button("Reassign Permutations", ImVec2(-1, 0)))
+                reassignPermutations();
         }
         if (ImGui::CollapsingHeader("Misc", ImGuiTreeNodeFlags_DefaultOpen))
         {
             ImGui::InputInt("Target # faces", &targetResolution, 0, 0);
             if (ImGui::Button("Resample Mesh", ImVec2(-1, 0)))
                 resample();
+            ImGui::InputInt("Num Isolines", &numISOLines);
+            if (ImGui::Button("Draw Isolines", ImVec2(-1, 0)))
+                drawISOLines();
         }
 
         menu.callback_draw_custom_window = [&]()
@@ -124,6 +127,7 @@ void WeaveHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
                 if (ImGui::Button("Save Traces", ImVec2(-1, 0)))
                 {
                     isSaveTrace = true;
+                    trace->logRibbonsToFile( "rods", "example", *weave );
                 }
             }
             ImGui::End();
