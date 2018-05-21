@@ -64,7 +64,7 @@ public:
 
 
     // converts a trace to a set of points and normals; does *not* do any cleanup (just converts segments as-they-are)
-    void TraceSet::renderTrace(int traceid, std::vector<Eigen::Vector3d> &verts, std::vector<Eigen::Vector3d> &normals) const;
+    void renderTrace(int traceid, std::vector<Eigen::Vector3d> &verts, std::vector<Eigen::Vector3d> &normals) const;
 private:
     void findTraceStart(const FieldSurface &parent,
         int curr_face_id,
