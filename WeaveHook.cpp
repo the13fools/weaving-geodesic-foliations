@@ -131,6 +131,7 @@ void WeaveHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
                 ImGui::InputDoubleScientific("Extend Traces By", &extendTrace);
                 ImGui::InputDoubleScientific("Segment Lenght", &segLen);
                 ImGui::InputDoubleScientific("Max Curvature", &maxCurvature);
+                ImGui::InputDoubleScientific("Min Rod Length", &minRodLen);
                 if (ImGui::Button("Generate From Traces", ImVec2(-1, 0)))
                 {
                     rationalizeTraces();
@@ -448,7 +449,7 @@ void WeaveHook::clearTraces()
 
 void WeaveHook::rationalizeTraces()
 {
-    traces.rationalizeTraces(maxCurvature, extendTrace, segLen);
+    traces.rationalizeTraces(maxCurvature, extendTrace, segLen, minRodLen);
     updateRenderGeometry();
 }
 
@@ -518,8 +519,12 @@ void WeaveHook::renderRenderGeometry(igl::opengl::glfw::Viewer &viewer)
         if(showTraces)
             viewer.data().add_edges( tracestarts, traceends, tracecolors );
         Eigen::RowVector3d orange(0.9, 0.9, 0.1);
-        if(showRatTraces)
-            viewer.data().add_edges(rattracestarts, rattraceends, orange );
+        Eigen::RowVector3d red(0.9, 0.1, 0.1);
+        if (showRatTraces)
+        {
+            viewer.data().add_edges(rattracestarts, rattraceends, orange);
+            viewer.data().add_points(ratcollisions, red);
+        }
 
         updateSingularVerts(viewer);
         drawCuts(viewer);
@@ -801,6 +806,15 @@ void WeaveHook::updateRenderGeometry()
             rattraceends.row(tridx) = traces.rationalizedTrace(i).pts.row(j+1) + 0.001*normal.transpose();
             tridx++;
         }
+    }
+
+    ratcollisions.resize(2*traces.nCollisions(), 3);
+    for (int i = 0; i < traces.nCollisions(); i++)
+    {
+        Eigen::Vector3d pt0, pt1;
+        traces.collisionPoint(i, pt0, pt1);
+        ratcollisions.row(2 * i) = pt0.transpose();
+        ratcollisions.row(2 * i + 1) = pt1.transpose();
     }
 
     if (cover)

@@ -78,7 +78,8 @@ public:
         showRatTraces = true;
         extendTrace = 0.0;
         segLen = 0.1;
-        maxCurvature = 2.0 * M_PI;
+        maxCurvature = 0.5;
+        minRodLen = 1.0;
     }
 
     virtual void drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu);
@@ -187,6 +188,7 @@ private:
     double extendTrace;
     double segLen;
     double maxCurvature;
+    double minRodLen;
     // isolines on the split mesh
     Eigen::MatrixXd pathstarts;
     Eigen::MatrixXd pathends;
@@ -197,6 +199,7 @@ private:
 
     Eigen::MatrixXd rattracestarts;
     Eigen::MatrixXd rattraceends;
+    Eigen::MatrixXd ratcollisions;
     int numISOLines;
     double initSReg;
     double globalSScale;

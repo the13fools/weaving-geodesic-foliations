@@ -289,7 +289,7 @@ static double angle(Eigen::Vector3d v, Eigen::Vector3d w, Eigen::Vector3d n)
     return 2.0 * atan2( v.cross(w).dot(n), v.norm() * w.norm() + v.dot(w));
 }
 
-void TraceSet::findCurvedVerts(const Trace &tr, double maxcurvature, std::set<int> badverts) const
+void TraceSet::findCurvedVerts(const Trace &tr, double maxcurvature, std::set<int> &badverts) const
 {
     badverts.clear();
     int nsegs = tr.segs.size();
@@ -515,13 +515,15 @@ void TraceSet::findPointOnTrace(const Trace &tr, double s, int &seg, double &bar
     bary = 1.0;
 }
 
-void TraceSet::sampleTrace(const Trace &tr, double start, double end, int nsegs, RationalizedTrace &rattrace)
+void TraceSet::sampleTrace(const Trace &tr, double start, double end, int nsegs, RationalizedTrace &rattrace, std::vector<double> &samples)
 {
+    samples.clear();
     rattrace.normals.resize(nsegs, 3);
     rattrace.pts.resize(nsegs + 1, 3);    
     for (int i = 0; i < nsegs+1; i++)
     {
         double s = start + (end - start)*double(i) / double(nsegs);
+        samples.push_back(s);
         int seg;
         double bary;
         findPointOnTrace(tr, s, seg, bary);
@@ -549,7 +551,7 @@ void TraceSet::sampleTrace(const Trace &tr, double start, double end, int nsegs,
 
 }
 
-void TraceSet::rationalizeTraces(double maxcurvature, double extenddist, double seglen)
+void TraceSet::rationalizeTraces(double maxcurvature, double extenddist, double seglen, double minlen)
 {
     rattraces_.clear();
     collisions_.clear();
@@ -558,11 +560,14 @@ void TraceSet::rationalizeTraces(double maxcurvature, double extenddist, double 
     for (int i = 0; i < traces_.size(); i++)
     {
         std::set<int> badverts;
-        findCurvedVerts(traces_[i], maxcurvature, badverts);
+        findCurvedVerts(traces_[i], maxcurvature, badverts);        
         std::vector<Trace> splittr;
         splitTrace(traces_[i], badverts, splittr);
         for (auto &it : splittr)
-            cleanedtraces.push_back(it);
+        {
+            if (minlen < arclength(it))
+                cleanedtraces.push_back(it);
+        }
     }
     
     // extend traces if desired
@@ -584,14 +589,119 @@ void TraceSet::rationalizeTraces(double maxcurvature, double extenddist, double 
         ends.push_back(end);
     }
 
+    // find collisions
     int ntraces = cleanedtraces.size();
+
+    std::map<std::pair<int, int>, std::vector<TraceCollision> > cols;
+    for (int i = 0; i < ntraces; i++)
+    {
+        for (int j = i; j < ntraces; j++)
+        {
+            bool self = i == j;
+            std::vector<TraceCollision> paircols;
+            computeIntersections(cleanedtraces[i], cleanedtraces[j], self, paircols);
+            cols[std::pair<int, int>(i, j)] = paircols;
+        }
+    }
+
+    // convert collisions to pairs of arclength values
+    std::vector<std::vector<double> > svals;
+    svals.resize(ntraces);
+    for (int i = 0; i < ntraces; i++)
+    {
+        svals[i].push_back(0);
+        double s = 0;
+        int nsegs = cleanedtraces[i].segs.size();
+        for (int j = 0; j < nsegs; j++)
+        {
+            Eigen::Vector3d pt0 = pointFromBary(*cleanedtraces[i].parent_, cleanedtraces[i].segs[j].face, cleanedtraces[i].segs[j].side[0], cleanedtraces[i].segs[j].bary[0]);
+            Eigen::Vector3d pt1 = pointFromBary(*cleanedtraces[i].parent_, cleanedtraces[i].segs[j].face, cleanedtraces[i].segs[j].side[1], cleanedtraces[i].segs[j].bary[1]);
+            double dist = (pt1 - pt0).norm();
+            s += dist;
+            svals[i].push_back(s);
+        }
+    }
+    struct ArcCollision
+    {
+        int rod1, rod2;
+        double s1, s2;
+    };
+    std::vector<ArcCollision> arccols;
+    for (auto &it : cols)
+    {
+        int ncols = it.second.size();
+        for (int i = 0; i < ncols; i++)
+        {
+            ArcCollision ac;
+            ac.rod1 = it.first.first;
+            ac.rod2 = it.first.second;
+            ac.s1 = (1.0 - it.second[i].bary1)*svals[ac.rod1][it.second[i].seg1] + it.second[i].bary1 * svals[ac.rod1][it.second[i].seg1 + 1];
+            ac.s2 = (1.0 - it.second[i].bary2)*svals[ac.rod2][it.second[i].seg2] + it.second[i].bary2 * svals[ac.rod2][it.second[i].seg2 + 1];
+            arccols.push_back(ac);
+        }
+    }
+
+    // sample traces into rod segments
+    std::vector<std::vector<double> > samples;
+    samples.resize(ntraces);
     for (int i = 0; i < ntraces; i++)
     {
         int nsegs = 1 + int( (ends[i] - starts[i]) / seglen);
         RationalizedTrace rat;
-        sampleTrace(cleanedtraces[i], starts[i], ends[i], nsegs, rat);
-        std::cout << "Now has " << rat.pts.rows() << " points " << std::endl;
+        sampleTrace(cleanedtraces[i], starts[i], ends[i], nsegs, rat, samples[i]);
         rattraces_.push_back(rat);
+    }
+
+    // compute collisions on sampled rod segments
+    // should be rewritten to be O(m log n) with binary search
+    for (auto &it : arccols)
+    {
+        int seg1 = -1;
+        double bary1 = 0;
+        double curs = samples[it.rod1][0];
+        if (it.s1 < curs)
+            continue;
+        for (int i = 0; i < samples[it.rod1].size() - 1; i++)
+        {
+            double nexts = samples[it.rod1][i + 1];
+            if (curs <= it.s1 && it.s1 < nexts)
+            {
+                seg1 = i;
+                bary1 = (it.s1 - curs) / (nexts - curs);
+                break;
+            }
+            curs = nexts;
+        }
+        if (seg1 == -1)
+            continue;
+
+        int seg2 = -1;
+        double bary2 = 0;
+        curs = samples[it.rod2][0];
+        if (it.s2 < curs)
+            continue;
+        for (int i = 0; i < samples[it.rod2].size() - 1; i++)
+        {
+            double nexts = samples[it.rod2][i + 1];
+            if (curs <= it.s2 && it.s2 < nexts)
+            {
+                seg2 = i;
+                bary2 = (it.s2 - curs) / (nexts - curs);
+                break;
+            }
+            curs = nexts;
+        }
+        if (seg2 == -1)
+            continue;
+
+        Collision col;
+        col.rod1 = it.rod1;
+        col.seg1 = seg1;
+        col.bary1 = bary1;
+        col.rod2 = it.rod2;
+        col.seg2 = seg2;
+        col.bary2 = bary2;
+        collisions_.push_back(col);
     }
 
     // Project along a geodesic curve at the end point of each rod that ends at a singularity.  
@@ -868,4 +978,46 @@ void TraceSet::rationalizeTraces(double maxcurvature, double extenddist, double 
 
 
     myfile.close();*/
+}
+
+void TraceSet::computeIntersections(const Trace &tr1, const Trace &tr2, bool selfcollision, 
+    std::vector<TraceCollision> &collisions) const
+{
+    collisions.clear();
+    int nsegs1 = tr1.segs.size();
+    int nsegs2 = tr2.segs.size();
+
+    for (int i = 0; i < nsegs1; i++)
+    {
+        for (int j = 0; j < nsegs2; j++)
+        {
+            if (selfcollision && (i - j) < 2) { continue; }
+            else
+            {
+                Eigen::Vector3d p0 = pointFromBary(*tr1.parent_, tr1.segs[i].face, tr1.segs[i].side[0], tr1.segs[i].bary[0]);
+                Eigen::Vector3d p1 = pointFromBary(*tr1.parent_, tr1.segs[i].face, tr1.segs[i].side[1], tr1.segs[i].bary[1]);
+                Eigen::Vector3d q0 = pointFromBary(*tr2.parent_, tr2.segs[j].face, tr2.segs[j].side[0], tr2.segs[j].bary[0]);
+                Eigen::Vector3d q1 = pointFromBary(*tr2.parent_, tr2.segs[j].face, tr2.segs[j].side[1], tr2.segs[j].bary[1]);
+                double p0bary, p1bary, q0bary, q1bary;
+                Eigen::Vector3d dist = Distance::edgeEdgeDistance(p0, p1, q0, q1,
+                    p0bary, p1bary, q0bary, q1bary);
+                if (dist.norm() < 1e-6 && p0bary != 0 && p0bary != 1.0 && q0bary != 0 && q0bary != 1.0)
+                {
+                    TraceCollision tc;
+                    tc.seg1 = i;
+                    tc.seg2 = j;
+                    tc.bary1 = p1bary;
+                    tc.bary2 = q1bary;
+                    collisions.push_back(tc);
+                }
+            }
+        }
+    }
+}
+
+void TraceSet::collisionPoint(int collision, Eigen::Vector3d &pt0, Eigen::Vector3d &pt1) const
+{
+    const Collision &col = collisions_[collision];
+    pt0 = (1.0 - col.bary1) * rattraces_[col.rod1].pts.row(col.seg1).transpose() + col.bary1 * rattraces_[col.rod1].pts.row(col.seg1 + 1).transpose();
+    pt1 = (1.0 - col.bary2) * rattraces_[col.rod2].pts.row(col.seg2).transpose() + col.bary2 * rattraces_[col.rod2].pts.row(col.seg2 + 1).transpose();
 }

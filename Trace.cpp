@@ -473,34 +473,7 @@ int getOpVIdFromEdge(const Weave &wv, int curr_edge, int faceId)
     return -1;
 }
 
-void Trace::computeIntersections(int curveIdx1, int curveIdx2, 
-                                 const std::vector<Eigen::MatrixXd> &splitcurves, 
-                                 std::vector<Collision> &collisions)
-{
-    Eigen::MatrixXd c1 = splitcurves[curveIdx1];
-    Eigen::MatrixXd c2 = splitcurves[curveIdx2];
 
-    for (int i = 0; i < c1.rows() - 1; i++)
-    {
-        for (int j = 0; j < c2.rows() - 1; j++)
-        {
-            if (curveIdx1 == curveIdx2 && (i - j) < 2) { continue; }
-            else
-            {
-                double p0bary, p1bary, q0bary, q1bary;
-                Eigen::Vector3d dist = Distance::edgeEdgeDistance(c1.row(i),
-                    c1.row(i + 1),
-                    c2.row(j),
-                    c2.row(j + 1),
-                    p0bary, p1bary, q0bary, q1bary);
-                if (dist.norm() < 1e-6 && p0bary != 0 && p0bary != 1.0 && q0bary != 0 && q0bary != 1.0)
-                {
-                    collisions.push_back(Collision(curveIdx1, curveIdx2, i, j));
-                }
-            }
-        }
-    }
-}
 
 
 

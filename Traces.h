@@ -12,12 +12,13 @@ enum Trace_Mode {
     FIELD    
 };
 
-struct Collision {
-    Collision(int trace1, int trace2, int seg1, int seg2);
-    int trace1;
-    int trace2; // can be the same rod 
+struct Collision {    
+    int rod1;
+    int rod2; // can be the same rod 
     int seg1; 
     int seg2;
+    double bary1;
+    double bary2;
 };
 
 // one piece of a trace
@@ -26,6 +27,12 @@ struct TraceSegment
     int face; // index into the faces of the CoverMesh
     int side[2]; // integer [0,3]; the first endpoint of the segment lies on edge fs->data().faceEdges(side[0]), etc
     double bary[2]; // barycentric coordinates of segment endpoint along each edge
+};
+
+struct TraceCollision
+{
+    int seg1, seg2;
+    double bary1, bary2;
 };
 
 // trace in its exact form (as segments interpolating points on a surface's edges)
@@ -55,6 +62,8 @@ public:
     
     int nRationalizedTraces() const { return rattraces_.size(); }
     const RationalizedTrace &rationalizedTrace(int id) const { return rattraces_[id]; }
+
+    int nCollisions() const { return collisions_.size(); }
     
     void addTrace(const Trace &tr);
     void traceCurve(const FieldSurface &parent, const Trace_Mode trace_state, int traceIdx, int sign, int faceId, int steps);
@@ -66,10 +75,12 @@ public:
 
     void popLastCurve();
 
-    void TraceSet::rationalizeTraces(double maxcurvature, double extenddist, double seglen);
+    void TraceSet::rationalizeTraces(double maxcurvature, double extenddist, double seglen, double minlen);
 
     // converts a trace to a set of points and normals; does *not* do any cleanup (just converts segments as-they-are)
     void renderTrace(int traceid, std::vector<Eigen::Vector3d> &verts, std::vector<Eigen::Vector3d> &normals) const;
+
+    void collisionPoint(int collision, Eigen::Vector3d &pt0, Eigen::Vector3d &pt1) const;
 
 
 private:
@@ -88,14 +99,16 @@ private:
         int &opp_face_id,
         int &opp_edge_id) const;
 
-    void findCurvedVerts(const Trace &tr, double maxcurvature, std::set<int> badverts) const;
+    void findCurvedVerts(const Trace &tr, double maxcurvature, std::set<int> &badverts) const;
     void splitTrace(const Trace &tr, const std::set<int> &badvverts, std::vector<Trace> &splittr) const;
     // attempts to extend a trace in both directions by the given distance. Returns the amount it actually succeeded in extending (could be smaller or larger)
     void extendTrace(Trace &tr, double extbeginning, double extend, double &actualextbeginning, double &actualextend) const;
 
     double arclength(const Trace &tr) const;
-    void sampleTrace(const Trace &tr, double start, double end, int nsegs, RationalizedTrace &rattrace);
+    void sampleTrace(const Trace &tr, double start, double end, int nsegs, RationalizedTrace &rattrace, std::vector<double> &samples);
     void findPointOnTrace(const Trace &tr, double s, int &seg, double &bary);
+    void computeIntersections(const Trace &tr1, const Trace &tr2, bool selfcollision,
+        std::vector<TraceCollision> &collisions) const;
 
     Eigen::Vector3d pointFromBary(const FieldSurface &parent, int faceId, int faceEdge, double bary) const;
 
