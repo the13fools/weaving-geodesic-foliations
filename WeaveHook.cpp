@@ -24,6 +24,7 @@ void WeaveHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
             ImGui::InputDoubleScientific("Vector Scale", &vectorScale);
             ImGui::Checkbox("Normalize Vectors", &normalizeVectors);
             ImGui::Checkbox("Hide Vectors", &hideVectors);
+            ImGui::Checkbox("Wireframe", &wireframe);
             ImGui::Combo("Shading", (int *)&weave_shading_state, "None\0F1 Energy\0F2 Energy\0F3 Energy\0Total Energy\0Connection\0\0");
             if (ImGui::Button("Normalize Fields", ImVec2(-1, 0)))
                 normalizeFields();
@@ -92,7 +93,7 @@ void WeaveHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
             ImGui::End();
 
             ImGui::SetNextWindowPos(ImVec2(180.f * menu.menu_scaling(), 210), ImGuiSetCond_FirstUseEver);
-            ImGui::SetNextWindowSize(ImVec2(200, 400), ImGuiSetCond_FirstUseEver);
+            ImGui::SetNextWindowSize(ImVec2(200, 500), ImGuiSetCond_FirstUseEver);
 
             ImGui::Begin(
                 "Manipulate", nullptr,
@@ -105,18 +106,12 @@ void WeaveHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
                 ImGui::InputInt("Trace Steps", &traceSteps, 0, 0);
                 ImGui::InputInt("Trace Field", &traceIdx, 0, 0);
                 ImGui::InputInt("Trace Sign", &traceSign, 0, 0);
-                ImGui::Combo("Trace Mode", (int *)&trace_state, "Geodesic\0Field\0\0");
-                //ImGui::Checkbox("Show Bending", &showBending);
-                ImGui::InputText("Trace File", traceFile);
-                if (ImGui::Button("Save Traces", ImVec2(-1, 0)))
-                    saveTraces();
-                if (ImGui::Button("Load Traces", ImVec2(-1, 0)))
-                    loadTraces();
-                if (ImGui::Button("Load Sampled Traces", ImVec2(-1, 0)))
-                    loadSampledTraces();
+                ImGui::Combo("Trace Mode", (int *)&trace_state, "Geodesic\0Field\0\0");                
             }
             if (ImGui::CollapsingHeader("Traces", ImGuiTreeNodeFlags_DefaultOpen))
             {
+                ImGui::Checkbox("Show Traces", &showTraces);
+
                 if (ImGui::Button("Draw Trace", ImVec2(-1, 0)))
                 {
                     computeTrace();
@@ -125,9 +120,24 @@ void WeaveHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
                 {
                     deleteLastTrace();
                 }
-                if (ImGui::Button("Save Traces", ImVec2(-1, 0)))
+                if (ImGui::Button("Clear All Traces", ImVec2(-1, 0)))
                 {
-                    saveTraces();
+                    clearTraces();
+                }                
+            }
+            if (ImGui::CollapsingHeader("Rods", ImGuiTreeNodeFlags_DefaultOpen))
+            {
+                ImGui::Checkbox("Show Rod Segments", &showRatTraces);
+                ImGui::InputDoubleScientific("Extend Traces By", &extendTrace);
+                ImGui::InputDoubleScientific("Segment Lenght", &segLen);
+                ImGui::InputDoubleScientific("Max Curvature", &maxCurvature);
+                if (ImGui::Button("Generate From Traces", ImVec2(-1, 0)))
+                {
+                    rationalizeTraces();
+                }
+                if (ImGui::Button("Save To Rod File", ImVec2(-1, 0)))
+                {
+//                    saveRods();
                 }
             }
             ImGui::End();
@@ -430,6 +440,18 @@ void WeaveHook::deleteLastTrace()
     updateRenderGeometry();
 }
 
+void WeaveHook::clearTraces()
+{
+    traces.clear();
+    updateRenderGeometry();
+}
+
+void WeaveHook::rationalizeTraces()
+{
+    traces.rationalizeTraces(maxCurvature, extendTrace, segLen);
+    updateRenderGeometry();
+}
+
 void WeaveHook::computeTrace()
 {
     for (int i = 0; i < 3; i++)
@@ -438,11 +460,6 @@ void WeaveHook::computeTrace()
         traces.traceCurve(*weave->fs, trace_state, i, -1, traceFaceId, traceSteps);
     }
     updateRenderGeometry();
-}
-
-void WeaveHook::saveTraces()
-{
-    // trace->logRibbonsToFile( "rods", "example", *weave );
 }
 
 void WeaveHook::updateSingularVerts(igl::opengl::glfw::Viewer &viewer)
@@ -498,7 +515,11 @@ void WeaveHook::renderRenderGeometry(igl::opengl::glfw::Viewer &viewer)
             viewer.data().set_edges(renderPts, edgeSegsWeave, edgeColorsWeave);
         }
         setFaceColorsWeave(viewer);
-        viewer.data().add_edges( tracestarts, traceends, tracecolors );
+        if(showTraces)
+            viewer.data().add_edges( tracestarts, traceends, tracecolors );
+        Eigen::RowVector3d orange(0.9, 0.9, 0.1);
+        if(showRatTraces)
+            viewer.data().add_edges(rattracestarts, rattraceends, orange );
 
         updateSingularVerts(viewer);
         drawCuts(viewer);
@@ -524,6 +545,8 @@ void WeaveHook::renderRenderGeometry(igl::opengl::glfw::Viewer &viewer)
         if(showCoverCuts)
             drawCuts(viewer);
     }
+
+    viewer.data().show_faces = !wireframe;
 }
 
 bool WeaveHook::simulateOneStep()
@@ -702,21 +725,6 @@ void WeaveHook::removePrevCut()
     updateRenderGeometry();
 } 
 
-void WeaveHook::exportTracesAsRods()
-{
-    //trace->save(traceFile);
-}
-
-void WeaveHook::loadTraces()
-{
-    //trace->load(traceFile);
-}
-
-void WeaveHook::loadSampledTraces()
-{
-    //trace->loadSampledCurves(traceFile);
-}
-
 void WeaveHook::updateRenderGeometry()
 {
     renderQWeave = weave->fs->data().V;
@@ -770,6 +778,27 @@ void WeaveHook::updateRenderGeometry()
                 break;
             }
 
+            tridx++;
+        }
+    }
+
+    int rattracesegs = 0;
+    for (int i = 0; i < traces.nRationalizedTraces(); i++)
+    {
+        rattracesegs += traces.rationalizedTrace(i).pts.rows() - 1;
+    }
+    rattracestarts.resize(rattracesegs, 3);
+    rattraceends.resize(rattracesegs, 3);
+
+    tridx = 0;
+    for (int i = 0; i < traces.nRationalizedTraces(); i++)
+    {
+        int nsegs = traces.rationalizedTrace(i).pts.rows() - 1;
+        for (int j = 0; j < nsegs; j++)
+        {
+            Eigen::Vector3d normal = traces.rationalizedTrace(i).normals.row(j);
+            rattracestarts.row(tridx) = traces.rationalizedTrace(i).pts.row(j) + 0.001*normal.transpose();
+            rattraceends.row(tridx) = traces.rationalizedTrace(i).pts.row(j+1) + 0.001*normal.transpose();
             tridx++;
         }
     }

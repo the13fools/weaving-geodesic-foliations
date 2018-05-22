@@ -55,6 +55,7 @@ public:
         
         hideVectors = false;
         showSingularities = false;
+        wireframe = false;
 
         targetResolution = 5000;
     
@@ -72,6 +73,12 @@ public:
         
         initSReg = 1e-4;
         globalSScale = 1.0;
+
+        showTraces = true;
+        showRatTraces = true;
+        extendTrace = 0.0;
+        segLen = 0.1;
+        maxCurvature = 2.0 * M_PI;
     }
 
     virtual void drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu);
@@ -91,12 +98,11 @@ public:
     void resample();
     void removeSingularities();
     void removePrevCut(); 
-    void saveTraces();
-    void loadTraces();
-    void loadSampledTraces();
+    void clearTraces();
     void deleteLastTrace();
     void computeTrace();   
-    void exportTracesAsRods();
+    void rationalizeTraces();
+    void saveRods();
     
     virtual void initSimulation();
 
@@ -147,6 +153,7 @@ private:
     bool normalizeVectors;
     bool hideVectors;
     bool showCoverCuts;
+    bool wireframe;
 
     Eigen::MatrixXd renderQCover;
     Eigen::MatrixXi renderFCover;
@@ -175,6 +182,11 @@ private:
 
     std::string vectorFieldName;
 
+    bool showTraces;
+    bool showRatTraces;
+    double extendTrace;
+    double segLen;
+    double maxCurvature;
     // isolines on the split mesh
     Eigen::MatrixXd pathstarts;
     Eigen::MatrixXd pathends;
@@ -182,6 +194,9 @@ private:
     Eigen::MatrixXd tracestarts;
     Eigen::MatrixXd traceends;
     Eigen::MatrixXd tracecolors;
+
+    Eigen::MatrixXd rattracestarts;
+    Eigen::MatrixXd rattraceends;
     int numISOLines;
     double initSReg;
     double globalSScale;

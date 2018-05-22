@@ -34,18 +34,6 @@ void Trace::popLastCurve()
     }
 }
 
-Eigen::Vector3d parallelTransport(const Eigen::Vector3d &v, const Eigen::Vector3d &e1, const Eigen::Vector3d &e2)
-{
-    Eigen::Vector3d t1 = e1 / e1.norm();
-    Eigen::Vector3d t2 = e2 / e2.norm();
-    Eigen::Vector3d n = t1.cross(t2);
-    if (n.norm() < 1e-8)
-        return v;
-    n /= n.norm();
-    Eigen::Vector3d p1 = n.cross(t1);
-    Eigen::Vector3d p2 = n.cross(t2);
-    return v.dot(n)*n + v.dot(t1)*t2 + v.dot(p1)*p2;
-}
 
 
 void Trace::loadSampledCurves(const std::string &filename)
