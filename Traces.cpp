@@ -2,6 +2,7 @@
 #include "FieldSurface.h"
 #include "Distance.h"
 #include <algorithm>
+#include <fstream>
 
 void TraceSet::addTrace(const Trace &tr)
 {
@@ -703,281 +704,70 @@ void TraceSet::rationalizeTraces(double maxcurvature, double extenddist, double 
         col.bary2 = bary2;
         collisions_.push_back(col);
     }
+}
+    
 
-    // Project along a geodesic curve at the end point of each rod that ends at a singularity.  
-    /*
-    Eigen::VectorXd sqrD;
-    Eigen::VectorXi nearFace;
-    Eigen::MatrixXd C;
-    Eigen::MatrixXd point = Eigen::MatrixXd::Zero(1,3); 
-    igl::AABB<Eigen::MatrixXd,3> tree; 
-
-    tree.init(wv.fs->data().V,wv.fs->data().F);
-
-
-    // need to deal with boundary case
-    int stepstoextend = 0;
-    int backoff = 0; // The very ends of curves seem generally bad.  Taking a few steps to back off
-
-    for (int i = 0; i < curves.size(); i++)
-    { 
-        int len = curves[i].rows();
-        int cols = curves[i].cols();
-        curves[i].conservativeResize(len + stepstoextend - backoff, cols);
-        normals[i].conservativeResize(len + stepstoextend - backoff, cols);
-
-        Eigen::Vector3d endpoint = curves[i].row(len-1 - backoff);
-        Eigen::Vector3d prevpoint = curves[i].row(len-2 - backoff);
-        Eigen::Vector3d curr_dir = endpoint - prevpoint;
-        // hack-y way of figuring out the edge of the end-point 
-        point.row(0) = prevpoint + curr_dir * .01;
-
-        curr_dir *= 1000.0; // Assumes mesh is roughly deluanay
-
-        tree.squared_distance(wv.fs->data().V,wv.fs->data().F,point,sqrD,nearFace,C);
-        int curr_face_id = nearFace(0);
-
-        TracePoint tp;
-        startTraceFromPoint(wv, curr_face_id, point.row(0), curr_dir, tp);
-        //        std::cout << point.row(0) - prevpoint << " should be same \n";
-        int curr_edge_id = tp.edge_id;
-        getNextTracePoint(wv, curr_face_id, tp.edge_id, prevpoint, tp.op_v_id, curr_dir, tp); 
-        //        std::cout << tp.point - endpoint << " endpoints should be same \n";
-
-        for (int j = 0; j < stepstoextend; j++)
-        {
-            curr_dir = mapVectorToAdjacentFace(wv.fs->data().F, wv.fs->data().V, wv.fs->data().edgeVerts,
-                tp.edge_id, curr_face_id, tp.face_id, curr_dir);
-            curr_face_id = tp.face_id;  
-            curves[i].row(len + j - backoff)  = tp.point;
-            normals[i].row(len + j - backoff) = tp.n;
-            std::cout << normals[i] << "\n";
-
-            getNextTracePoint(wv, curr_face_id, tp.edge_id, tp.point, tp.op_v_id, curr_dir, tp); 
-        }
-
-        Eigen::MatrixXd revcurve = curves[i];
-        Eigen::MatrixXd revnorm = normals[i];
-        int c_len = curves[i].rows();
-        for (int r = 0; r < c_len; r++)
-        {
-            revcurve.row(r) = curves[i].row(c_len - r - 1);
-            revnorm.row(r) = normals[i].row(c_len - r - 1);
-        }
-        curves[i] = revcurve;
-        normals[i] = revnorm;
-    }   
-
-    // Cut strips at areas of high curvature.
-
-    std::vector<Eigen::MatrixXd> splitcurves;
-    std::vector<Eigen::MatrixXd> splitnormals;
-
-    double maxcurvature = 2000; // angle - currently disabled
-    double minrodlen = 2;
-
-    for(int i=0; i<curves.size(); i++)
-    {
-        if(curves[i].rows() < 3)
-            continue;
-        std::vector<Eigen::Vector3d> curpts;
-        std::vector<Eigen::Vector3d> curnormals;
-        curpts.push_back(curves[i].row(0));
-        curpts.push_back(curves[i].row(1));
-        curnormals.push_back(normals[i].row(0));
-        curnormals.push_back(normals[i].row(1));
-        Eigen::Vector3d prevedge = curves[i].row(1) - curves[i].row(0);
-        for(int j=2; j<curves[i].rows(); j++)
-        {
-            Eigen::Vector3d nextedge = curves[i].row(j).transpose() - curpts.back();
-            Eigen::Vector3d prevproj = prevedge - prevedge.dot(normals[i].row(j)) * normals[i].row(j).transpose();
-            if(fabs(angle(prevproj, nextedge, normals[i].row(j)))/(prevedge.norm() + nextedge.norm()) > maxcurvature)
-            {
-                // cut
-                if(curpts.size() > minrodlen)
-                {
-                    Eigen::MatrixXd newcurve(curpts.size(), 3);
-                    Eigen::MatrixXd newnormal(curpts.size(), 3);
-                    for(int j=0; j<curpts.size(); j++)
-                    {
-                        newcurve.row(j) = curpts[j].transpose();
-                        newnormal.row(j) = curnormals[j].transpose();
-                    }
-                    splitcurves.push_back(newcurve);
-                    splitnormals.push_back(newnormal);
-                }
-                curpts.clear();
-                curnormals.clear();
-                curpts.push_back(curves[i].row(j-1));
-                curpts.push_back(curves[i].row(j));
-                curnormals.push_back(normals[i].row(j-1));
-                curnormals.push_back(normals[i].row(j));
-            }
-            else
-            {
-                curpts.push_back(curves[i].row(j));
-                curnormals.push_back(normals[i].row(j));
-            }
-            prevedge = nextedge;
-        }
-        if(curpts.size() > minrodlen)
-        {
-            Eigen::MatrixXd newcurve(curpts.size(), 3);
-            Eigen::MatrixXd newnormal(curpts.size(), 3);
-            for(int j=0; j<curpts.size(); j++)
-            {
-                newcurve.row(j) = curpts[j].transpose();
-                newnormal.row(j) = curnormals[j].transpose();
-            }
-            splitcurves.push_back(newcurve);
-            splitnormals.push_back(newnormal);
-        }             
-    }
-
-
-
-
-
-
-
-
-
-    // Find collisions between rods
-    std::vector<Collision> collisions;
-    for (int i = 0; i < splitcurves.size(); i++)
-    {
-        for (int j = i; j < splitcurves.size(); j++)
-        {
-            computeIntersections(i, j, splitcurves, collisions);
-        }
-    }
-
-    // Decimate and log rods
-    std::vector<Eigen::VectorXd> desc_maps;
-    std::vector< std::vector<Eigen::Vector3d> > desc_curves; //eeew
-    std::vector< std::vector<Eigen::Vector3d> > desc_normals;
-
-    double decimation_factor = 1.; // make this bigger and add intelligent subdivision
-
-    for (int curveId = 0; curveId < splitcurves.size(); curveId++)
-    {
-        Eigen::MatrixXd curve = splitcurves[curveId];
-        Eigen::MatrixXd curveNormals = splitnormals[curveId];
-
-        double max_length = 0.;
-        for (int i = 0; i < curve.rows() - 1; i++)
-        {
-            double seg_length = (curve.row(i) - curve.row(i + 1)).norm();
-            if (seg_length > max_length)
-            {
-                max_length = seg_length;
-                //        max_length = 0.;
-            }
-        }
-
-        // Decimate 
-        std::vector<Eigen::Vector3d> cnew;
-        std::vector<Eigen::Vector3d> nnew;
-        cnew.push_back(curve.row(0));
-        int seg_counter = 0;
-        Eigen::VectorXd desc_mapping = Eigen::VectorXd::Zero(curve.rows());
-        Eigen::Vector3d prev_point = cnew.back();
-        for (int i = 1; i < curve.rows(); i++)
-        {
-            Eigen::Vector3d curr_point = curve.row(i);
-            double seg_length = (prev_point - curr_point).norm();
-            desc_mapping(i-1) = seg_counter;
-            if (seg_length > max_length / decimation_factor)
-            {
-                seg_counter++;
-                cnew.push_back(curve.row(i));
-                Eigen::Vector3d currEdge = curve.row(i) - curve.row(i - 1);
-                Eigen::Vector3d targEdge = cnew[seg_counter] - cnew[seg_counter - 1];
-                nnew.push_back(parallelTransport(curveNormals.row(i), currEdge, targEdge));
-                prev_point = cnew.back();
-            }
-        }
-
-        desc_maps.push_back(desc_mapping);
-        desc_curves.push_back(cnew);
-        desc_normals.push_back(nnew);
-    }
-
-
-    std::vector<Collision> desc_collisions;
-    for (int i = 0; i < collisions.size(); i++)
-    {
-        Collision col = collisions[i];
-        std::vector<Eigen::Vector3d> &c1 = desc_curves[col.rod1];
-        std::vector<Eigen::Vector3d> &c2 = desc_curves[col.rod2];
-        int idx1 = desc_maps[col.rod1](col.seg1);
-        int idx2 = desc_maps[col.rod2](col.seg2);
-        if(idx1 < c1.size() - 1 && idx2 < c2.size() - 1)
-        {
-            Collision newcol(col.rod1, col.rod2, idx1, idx2);
-            desc_collisions.push_back(newcol);
-        }
-    }
-
+void TraceSet::exportRodFile(const char*filename)
+{
+    std::ofstream myfile(filename);
     // Write Header 
-    myfile << desc_curves.size() << std::endl;;
-    myfile << desc_collisions.size() << std::endl;;
-    //  myfile << 0 << std::endl;;
+    myfile << -217 << std::endl;
+    myfile << 1 << std::endl;
+    myfile << rattraces_.size() << std::endl;;
+    myfile << collisions_.size() << std::endl;;
     myfile << "0.001"  << std::endl;;
     myfile << "1e+08"  << std::endl;;
     myfile << "1"  << std::endl  << std::endl  << std::endl;;
 
-
-    for (int curveId = 0; curveId < desc_curves.size(); curveId++)
+    int color=0;
+    for (auto &it : rattraces_)
     {
-        std::vector<Eigen::Vector3d> &cnew = desc_curves[curveId];
-        std::vector<Eigen::Vector3d> &nnew = desc_normals[curveId];
-        myfile << cnew.size() << "\n";
-        myfile << "0\n";
-        for (int i = 0; i < cnew.size(); i++)
+        int nverts = it.pts.rows();
+        int nsegs = it.normals.rows();        
+        myfile << nverts << std::endl;
+        myfile << 0 << std::endl;
+        myfile << 1 << std::endl;
+        myfile << color << std::endl;
+        color = (color+1)%7;
+        
+        for (int i = 0; i < nverts; i++)
         {
-            myfile << cnew[i](0) << " " << cnew[i](1) << " " << cnew[i](2) << " ";
+            myfile << it.pts(i,0) << " " << it.pts(i,1) << " " << it.pts(i,2) << " ";
         }
-        myfile << "\n";
+        myfile << std::endl;
 
-        for (int i = 0; i < nnew.size(); i++)
+        for (int i = 0; i < nsegs; i++)
         {
-            myfile << nnew[i](0) << " " << nnew[i](1) << " " << nnew[i](2) << " ";
+            myfile << it.normals(i,0) << " " << it.normals(i,1) << " " << it.normals(i,2) << " ";
         }
-        myfile << "\n";
+        myfile << std::endl;
 
-        for (int i = 0; i < cnew.size()-1; i++)
+        for (int i = 0; i < nsegs; i++)
         {
-            myfile << " 0.02";
+            myfile << "0 ";
         }
-        myfile << "\n";
+        myfile << std::endl;
+        
+        for(int i=0; i<nsegs; i++)
+        {
+            myfile << "0.02 " << std::endl;
+        }
+        myfile << std::endl;
+    }
+    
+    int ncollisions = collisions_.size();
+    for (int i = 0; i < ncollisions; i++)
+    {
+        Collision &col = collisions_[i];
+        myfile << col.rod1 << std::endl;
+        myfile << col.rod2 << std::endl;
+        myfile << col.seg1 << std::endl;
+        myfile << col.seg2 << std::endl;
+        myfile << col.bary1 << std::endl;
+        myfile << col.bary2 << std::endl;
+        myfile << "1000." << std::endl;
 
     }
-    for (int i = 0; i < desc_collisions.size(); i++)
-    {
-        Collision col = desc_collisions[i];
-        std::vector<Eigen::Vector3d> c1 = desc_curves[col.rod1];
-        std::vector<Eigen::Vector3d> c2 = desc_curves[col.rod2];
-        int idx1 = col.seg1;
-        int idx2 = col.seg2;
-
-        double p0bary, p1bary, q0bary, q1bary;
-
-        if(idx1 >= c1.size()-1) exit(-1);
-
-        Eigen::Vector3d dist = Distance::edgeEdgeDistance(c1[idx1],
-            c1[idx1 + 1],
-            c2[idx2],
-            c2[idx2 + 1],
-            p0bary, p1bary, q0bary, q1bary);
-
-        myfile << col.rod1 << " " << col.rod2 << " " << idx1 << " " << idx2
-            << " " << p1bary << " " << q1bary << " " << 1000. << "\n";
-
-    }
-
-
-    myfile.close();*/
 }
 
 void TraceSet::computeIntersections(const Trace &tr1, const Trace &tr2, bool selfcollision, 

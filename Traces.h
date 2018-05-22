@@ -75,13 +75,14 @@ public:
 
     void popLastCurve();
 
-    void TraceSet::rationalizeTraces(double maxcurvature, double extenddist, double seglen, double minlen);
+    void rationalizeTraces(double maxcurvature, double extenddist, double seglen, double minlen);
 
     // converts a trace to a set of points and normals; does *not* do any cleanup (just converts segments as-they-are)
     void renderTrace(int traceid, std::vector<Eigen::Vector3d> &verts, std::vector<Eigen::Vector3d> &normals) const;
 
     void collisionPoint(int collision, Eigen::Vector3d &pt0, Eigen::Vector3d &pt1) const;
 
+    void exportRodFile(const char*filename);
 
 private:
     void findTraceStart(const FieldSurface &parent,

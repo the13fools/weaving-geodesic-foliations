@@ -136,9 +136,10 @@ void WeaveHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
                 {
                     rationalizeTraces();
                 }
+                ImGui::InputText("Rod Filename", rodFilename);
                 if (ImGui::Button("Save To Rod File", ImVec2(-1, 0)))
                 {
-//                    saveRods();
+                    saveRods();
                 }
             }
             ImGui::End();
@@ -868,4 +869,9 @@ void WeaveHook::initializeS()
 {
     if(cover) cover->initializeS(initSReg);
     updateRenderGeometry();
+}
+
+void WeaveHook::saveRods()
+{
+    traces.exportRodFile(rodFilename.c_str());
 }

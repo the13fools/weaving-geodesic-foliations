@@ -44,7 +44,7 @@ public:
         meshName = "meshes/tet.obj";
         // vectorFieldName = "bunny_coarser_nosing";
         vectorFieldName = "tet.rlx";
-        traceFile = "example.tr";
+        rodFilename = "example.rod";
         params.lambdacompat = 100;
         params.lambdareg = 1e-3;
 
@@ -127,7 +127,6 @@ private:
     CoverMesh *cover;
     SolverParams params;
 
-    std::string traceFile;
     TraceSet traces;
 
     std::vector<std::pair<int, int > > selectedVertices; // (face, vert) pairs
@@ -196,6 +195,8 @@ private:
     Eigen::MatrixXd tracestarts;
     Eigen::MatrixXd traceends;
     Eigen::MatrixXd tracecolors;
+    
+    std::string rodFilename;
 
     Eigen::MatrixXd rattracestarts;
     Eigen::MatrixXd rattraceends;
