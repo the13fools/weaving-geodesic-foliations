@@ -12,6 +12,7 @@
 #include <igl/facet_components.h>
 #include <igl/remove_unreferenced.h>
 #include "Traces.h"
+#include "igl/massmatrix.h"
 
 typedef Eigen::Triplet<double> triplet;
 # define M_PI           3.14159265358979323846
@@ -575,6 +576,8 @@ void CoverMesh::initializeS(double reg)
         igl::remove_unreferenced(cutV, compF, prunedV, prunedF, I);
         // connected component surface
         Surface surf(prunedV, prunedF);
+        
+        std::cout << "Built connected component surface" << std::endl;
 
         // build edge metric matrix and inverse (cotan weights)
         Eigen::MatrixXd C;
@@ -601,6 +604,8 @@ void CoverMesh::initializeS(double reg)
         Eigen::VectorXd faceAreas;
         igl::doublearea(surf.data().V, surf.data().F, faceAreas);
         faceAreas *= 0.5;
+        
+        std::cout << "Built mass matrices" << std::endl;
 
         std::vector<Eigen::Triplet<double> > AhalfCoeffs;
 
@@ -635,27 +640,10 @@ void CoverMesh::initializeS(double reg)
                 AhalfCoeffs.push_back(Eigen::Triplet<double>(i, nverts + f1, scaledvec1.dot(edgeVec) / denom));
             }
         }
-        int nverts = surf.nVerts();
-        Eigen::SparseMatrix<double> Dvert(nedges, nverts);
-        Dvert.setFromTriplets(DvertCoeffs.begin(), DvertCoeffs.end());
-        Eigen::SparseMatrix<double> D(nedges, nfaces);
-        D.setFromTriplets(DCoeffs.begin(), DCoeffs.end());
-        Eigen::SparseMatrix<double> Dvec(nedges, nfaces);
-        Dvec.setFromTriplets(DvecCoeffs.begin(), DvecCoeffs.end());
-        // the integrability operator
-        Eigen::SparseMatrix<double> Lint = Dvec.transpose() * edgeMetricInv * Dvec;
-        // the Laplacian
-        Eigen::SparseMatrix<double> Lface = D.transpose() * edgeMetricInv * D;    
-        Eigen::SparseMatrix<double> Lvert = Dvert.transpose() * edgeMetric * Dvert;    
-    
-        Eigen::SparseMatrix<double> Lreg = Lint + reg*Lface;
-        std::cout << "Solving eigenproblem..." << std::endl;
-        // find values of S on this connected component
-        Eigen::VectorXd componentS;        
 
         Eigen::SparseMatrix<double> Ahalf(nedges, nverts + nfaces);
         Ahalf.setFromTriplets(AhalfCoeffs.begin(), AhalfCoeffs.end());
-
+        
         Eigen::SparseMatrix<double> A = Ahalf.transpose() * edgeMetric * Ahalf;
 
         std::vector<Eigen::Triplet<double> > DfaceCoeffs;
@@ -669,9 +657,9 @@ void CoverMesh::initializeS(double reg)
                 DfaceCoeffs.push_back(Eigen::Triplet<double>(i, nverts + f1, 1.0));
             }
         }
-        Eigen::SparseMatrix<double> Dface(nverts + nfaces, nverts + nfaces);
+        Eigen::SparseMatrix<double> Dface(nedges, nverts + nfaces);
         Dface.setFromTriplets(DfaceCoeffs.begin(), DfaceCoeffs.end());
-
+        
         std::vector<Eigen::Triplet<double> > inverseEdgeMetricCoeffs;
         for (int i = 0; i < nedges; i++)
         {
@@ -696,6 +684,8 @@ void CoverMesh::initializeS(double reg)
 
         Eigen::SparseMatrix<double> B(nverts+nfaces, nverts+nfaces);
         B.setFromTriplets(Bcoeffs.begin(), Bcoeffs.end());
+        
+        std::cout << "Starting power iteration" << std::endl;
 
         // inverse power iteration
         Eigen::SimplicialLDLT<Eigen::SparseMatrix<double> > solver(Areg);
@@ -767,13 +757,6 @@ void CoverMesh::initializeS(double reg)
         else
             theta[i] = 0;
     }        
-
-    std::ifstream ifs("anuerism_small.theta");
-    for (int i = 0; i < fs->nVerts(); i++)
-    {
-        ifs >> theta[i];
-    }   
-
 }
 
 double CoverMesh::inversePowerIteration(Eigen::SparseMatrix<double> &M, Eigen::VectorXd &evec, int iters)
@@ -879,5 +862,6 @@ void CoverMesh::drawTraceOnSplitMesh(const Trace &trace, Eigen::MatrixXd &pathSt
         pathEnds.row(i) = pos.transpose() + offset.transpose();
     }
 }
+
 
 
