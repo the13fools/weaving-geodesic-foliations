@@ -302,7 +302,7 @@ void CoverMesh::computeFunc(double globalScale)
             eigenVec = solverL.solve(eigenVec);
             eigenVec /= eigenVec.norm();
         }
-        double eigenVal = eigenVec.transpose() * Lmat * eigenVec;
+        double eigenVal = eigenVec.transpose() * (Lmat * eigenVec);
         cout << "Current iteration = " << iter << " currents error is: " << eigenVal << endl;
         // Extract the function value
         vector<double> curTheta;
@@ -575,7 +575,7 @@ void CoverMesh::initializeS(double reg)
         igl::remove_unreferenced(cutV, compF, prunedV, prunedF, I);
         // connected component surface
         Surface surf(prunedV, prunedF);
-    
+
         // build edge metric matrix and inverse (cotan weights)
         Eigen::MatrixXd C;
         igl::cotmatrix_entries(surf.data().V, surf.data().F, C);
@@ -592,36 +592,48 @@ void CoverMesh::initializeS(double reg)
         } 
         Eigen::SparseMatrix<double> edgeMetric(nedges, nedges);
         edgeMetric.setFromTriplets(edgeMetricCoeffs.begin(), edgeMetricCoeffs.end());
-    
-        std::vector<Eigen::Triplet<double> > edgeMetricInvCoeffs;
-        for(int i=0; i<nedges; i++)
-            edgeMetricInvCoeffs.push_back(Eigen::Triplet<double>(i, i, 1.0/edgeMetric.coeff(i,i)));
-        Eigen::SparseMatrix<double> edgeMetricInv(nedges, nedges);
-        edgeMetricInv.setFromTriplets(edgeMetricInvCoeffs.begin(), edgeMetricInvCoeffs.end());
-    
-        // edge gradient matrices
-        std::vector<Eigen::Triplet<double> > DCoeffs;    
-        std::vector<Eigen::Triplet<double> > DvecCoeffs;    
-        std::vector<Eigen::Triplet<double> > DvertCoeffs;    
+
+        // vertex mass matrix
+        Eigen::SparseMatrix<double> Mvert;
+        igl::massmatrix(surf.data().V, surf.data().F, igl::MassMatrixType::MASSMATRIX_TYPE_BARYCENTRIC, Mvert);
+
+        // face mass matrix
+        Eigen::VectorXd faceAreas;
+        igl::doublearea(surf.data().V, surf.data().F, faceAreas);
+        faceAreas *= 0.5;
+
+        std::vector<Eigen::Triplet<double> > AhalfCoeffs;
+
+        int nverts = surf.nVerts();
+
         for(int i=0; i<nedges; i++)
         {
             int f0 = surf.data().E(i,0);
             int f1 = surf.data().E(i,1);
             int vert0 = surf.data().edgeVerts(i, 0);
             int vert1 = surf.data().edgeVerts(i, 1);
-            DvertCoeffs.push_back(Eigen::Triplet<double>(i, vert0, -1));
-            DvertCoeffs.push_back(Eigen::Triplet<double>(i, vert1, 1));
-            if(f0 == -1 || f1 == -1)
-                continue;
+            AhalfCoeffs.push_back(Eigen::Triplet<double>(i, vert0, -1));
+            AhalfCoeffs.push_back(Eigen::Triplet<double>(i, vert1, 1));
+            double denom = 0.0;
+            if (f0 != -1)
+                denom += 1.0;
+            if (f1 != -1)
+                denom += 1.0;
+
             Eigen::Vector3d v0 = surf.data().V.row(vert0).transpose();
             Eigen::Vector3d v1 = surf.data().V.row(vert1).transpose();
             Eigen::Vector3d edgeVec = v1-v0;
-            Eigen::Vector3d scaledvec0 = surf.data().Bs[f0] * surf.data().Js.block<2,2>(2*f0,0) * fs->v(compFacesToGlobal[f0], 0);           
-            Eigen::Vector3d scaledvec1 = surf.data().Bs[f1] * surf.data().Js.block<2,2>(2*f1,0) * fs->v(compFacesToGlobal[f1], 0);
-            DvecCoeffs.push_back(Eigen::Triplet<double>(i, f0, -scaledvec0.dot(edgeVec)));
-            DvecCoeffs.push_back(Eigen::Triplet<double>(i, f1, scaledvec1.dot(edgeVec)));
-            DCoeffs.push_back(Eigen::Triplet<double>(i, f0, -1));
-            DCoeffs.push_back(Eigen::Triplet<double>(i, f1, 1));
+
+            if (f0 != -1)
+            {
+                Eigen::Vector3d scaledvec0 = surf.data().Bs[f0] * surf.data().Js.block<2, 2>(2 * f0, 0) * fs->v(compFacesToGlobal[f0], 0);
+                AhalfCoeffs.push_back(Eigen::Triplet<double>(i, nverts + f0, scaledvec0.dot(edgeVec) / denom));
+            }
+            if (f1 != -1)
+            {
+                Eigen::Vector3d scaledvec1 = surf.data().Bs[f1] * surf.data().Js.block<2, 2>(2 * f1, 0) * fs->v(compFacesToGlobal[f1], 0);
+                AhalfCoeffs.push_back(Eigen::Triplet<double>(i, nverts + f1, scaledvec1.dot(edgeVec) / denom));
+            }
         }
         int nverts = surf.nVerts();
         Eigen::SparseMatrix<double> Dvert(nedges, nverts);
@@ -641,8 +653,75 @@ void CoverMesh::initializeS(double reg)
         // find values of S on this connected component
         Eigen::VectorXd componentS;        
 
-        double eval = inversePowerIteration(Lreg, componentS, 1000);
-        std::cout << "Smallest eigenvalue: " << eval << std::endl;
+        Eigen::SparseMatrix<double> Ahalf(nedges, nverts + nfaces);
+        Ahalf.setFromTriplets(AhalfCoeffs.begin(), AhalfCoeffs.end());
+
+        Eigen::SparseMatrix<double> A = Ahalf.transpose() * edgeMetric * Ahalf;
+
+        std::vector<Eigen::Triplet<double> > DfaceCoeffs;
+        for (int i = 0; i < nedges; i++)
+        {
+            int f0 = surf.data().E(i,0);
+            int f1 = surf.data().E(i,1);
+            if (f0 != -1 && f1 != -1)
+            {
+                DfaceCoeffs.push_back(Eigen::Triplet<double>(i, nverts + f0, -1.0));
+                DfaceCoeffs.push_back(Eigen::Triplet<double>(i, nverts + f1, 1.0));
+            }
+        }
+        Eigen::SparseMatrix<double> Dface(nverts + nfaces, nverts + nfaces);
+        Dface.setFromTriplets(DfaceCoeffs.begin(), DfaceCoeffs.end());
+
+        std::vector<Eigen::Triplet<double> > inverseEdgeMetricCoeffs;
+        for (int i = 0; i < nedges; i++)
+        {
+            inverseEdgeMetricCoeffs.push_back(Eigen::Triplet<double>(i, i, 1.0 / edgeMetric.coeff(i, i)));
+        }
+        Eigen::SparseMatrix<double> inverseEdgeMetric(nedges, nedges);
+        inverseEdgeMetric.setFromTriplets(inverseEdgeMetricCoeffs.begin(), inverseEdgeMetricCoeffs.end());
+
+        Eigen::SparseMatrix<double> Lface = Dface.transpose() * inverseEdgeMetric * Dface;
+
+        Eigen::SparseMatrix<double> Areg = A + reg * Lface;
+
+        std::vector<Eigen::Triplet<double> > Bcoeffs;
+        for (int i = 0; i < nverts; i++)
+        {
+            Bcoeffs.push_back(Eigen::Triplet<double>(i, i, Mvert.coeff(i, i)));
+        }
+        for (int i = 0; i < nfaces; i++)
+        {
+            Bcoeffs.push_back(Eigen::Triplet<double>(nverts + i, nverts + i, faceAreas[i]));
+        }
+
+        Eigen::SparseMatrix<double> B(nverts+nfaces, nverts+nfaces);
+        B.setFromTriplets(Bcoeffs.begin(), Bcoeffs.end());
+
+        // inverse power iteration
+        Eigen::SimplicialLDLT<Eigen::SparseMatrix<double> > solver(Areg);
+        Eigen::VectorXd x(nverts + nfaces);
+        x.setRandom();
+        double xnorm = x.transpose() * (B * x);
+        x /= sqrt(xnorm);
+        Eigen::VectorXd ones(nverts + nfaces);
+        for (int i = 0; i < nverts; i++)
+            ones[i] = 1.0;
+        for (int i = 0; i < nfaces; i++)
+            ones[nverts + i] = 0.0;
+        ones.normalize();
+        for (int i = 0; i < 1000; i++)
+        {
+            Eigen::VectorXd newx = solver.solve(B*x);
+            // project out ones component
+            newx = newx - ones.dot(newx)*ones;
+            x = newx / sqrt(newx.transpose() * A * newx);
+        }
+
+        std::cout << "Rayleigh quotient: " << (x.transpose() * (A * x)) / (x.transpose() * (B * x)) << std::endl;
+
+        Eigen::VectorXd componentS(nfaces);
+        for (int i = 0; i < nfaces; i++)
+            componentS[i] = x[nverts + i];
 
         double maxS = 0;
         for(int i=0; i<nfaces; i++)
@@ -663,40 +742,10 @@ void CoverMesh::initializeS(double reg)
             s[compFacesToGlobal[i]] = componentS[i] ;
         }
 
-        // compute theta from s
-        Eigen::VectorXd b(nedges);
-        b.setZero();
-        Eigen::VectorXi cnt(nedges);
-        cnt.setZero();
-        for (int i = 0; i < nfaces; i++)
-        {
-            Eigen::Vector3d scaledvec = componentS[i] * surf.data().Bs[i] * surf.data().Js.block<2,2>(2*i,0) * fs->v(compFacesToGlobal[i], 0);   
-            for (int j = 0; j < 3; j++)
-            {
-                int edge = surf.data().faceEdges(i, j);
-                Eigen::Vector3d v0 = surf.data().V.row(surf.data().edgeVerts(edge,0)).transpose();
-                Eigen::Vector3d v1 = surf.data().V.row(surf.data().edgeVerts(edge,1)).transpose();
-                Eigen::Vector3d edgeVec = v1-v0;
-                b[edge] += edgeVec.dot(scaledvec);
-                cnt[edge]++;
-            }
-        }
-        for (int i = 0; i < nedges; i++)
-            b[i] /= cnt[i];
-    
-        Eigen::VectorXd rhs = Dvert.transpose() * edgeMetric * b;
-    
-        Eigen::SimplicialLDLT<Eigen::SparseMatrix<double> > solver(Lvert);
-        Eigen::VectorXd cuttheta = solver.solve(rhs);
-        
-        // normalize cuttheta to have mean zero
-        
-        double meantheta = 0;
-        for(int i=0; i<cuttheta.size(); i++)
-            meantheta += cuttheta[i];
-        meantheta /= cuttheta.size();
-        for(int i=0; i<cuttheta.size(); i++)
-            cuttheta[i] -= meantheta;
+        // compute theta
+        Eigen::VectorXd componentTheta(nverts);
+        for (int i = 0; i < nverts; i++)
+            componentTheta[i] = x[i];
         
         for (int i = 0; i < nfaces; i++)
         {
@@ -704,7 +753,7 @@ void CoverMesh::initializeS(double reg)
             {
                 int cutv = surf.data().F(i, j);
                 int coverv = fs->data().F(compFacesToGlobal[i], j);
-                theta[coverv] += cuttheta[cutv];
+                theta[coverv] += componentTheta[cutv];
                 thetacnt[coverv]++;
             }
         }
@@ -713,15 +762,11 @@ void CoverMesh::initializeS(double reg)
     // finally, we have the global theta initialization
     for (int i = 0; i < fs->nVerts(); i++)
     {
-        if(thetacnt[i])
-            theta[i] /= thetacnt[i];    
+        if (thetacnt[i])
+            theta[i] /= thetacnt[i];
+        else
+            theta[i] = 0;
     }        
-
-    std::ifstream ifs_sval("anuerism_small.sval");
-    for(int i=0; i<s.size(); i++)
-    {
-        ifs_sval >> s[i];
-    }
 
     std::ifstream ifs("anuerism_small.theta");
     for (int i = 0; i < fs->nVerts(); i++)

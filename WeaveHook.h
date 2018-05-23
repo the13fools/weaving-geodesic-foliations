@@ -44,7 +44,7 @@ public:
         meshName = "meshes/tet.obj";
         // vectorFieldName = "bunny_coarser_nosing";
         vectorFieldName = "tet.rlx";
-        traceFile = "example.tr";
+        rodFilename = "example.rod";
         params.lambdacompat = 100;
         params.lambdareg = 1e-3;
 
@@ -55,6 +55,7 @@ public:
         
         hideVectors = false;
         showSingularities = false;
+        wireframe = false;
 
         targetResolution = 5000;
     
@@ -72,6 +73,13 @@ public:
         
         initSReg = 1e-4;
         globalSScale = 1.0;
+
+        showTraces = true;
+        showRatTraces = true;
+        extendTrace = 0.0;
+        segLen = 0.1;
+        maxCurvature = 0.5;
+        minRodLen = 1.0;
     }
 
     virtual void drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu);
@@ -91,12 +99,11 @@ public:
     void resample();
     void removeSingularities();
     void removePrevCut(); 
-    void saveTraces();
-    void loadTraces();
-    void loadSampledTraces();
+    void clearTraces();
     void deleteLastTrace();
     void computeTrace();   
-    void exportTracesAsRods();
+    void rationalizeTraces();
+    void saveRods();
     
     virtual void initSimulation();
 
@@ -120,7 +127,6 @@ private:
     CoverMesh *cover;
     SolverParams params;
 
-    std::string traceFile;
     TraceSet traces;
 
     std::vector<std::pair<int, int > > selectedVertices; // (face, vert) pairs
@@ -147,6 +153,7 @@ private:
     bool normalizeVectors;
     bool hideVectors;
     bool showCoverCuts;
+    bool wireframe;
 
     Eigen::MatrixXd renderQCover;
     Eigen::MatrixXi renderFCover;
@@ -175,6 +182,12 @@ private:
 
     std::string vectorFieldName;
 
+    bool showTraces;
+    bool showRatTraces;
+    double extendTrace;
+    double segLen;
+    double maxCurvature;
+    double minRodLen;
     // isolines on the split mesh
     Eigen::MatrixXd pathstarts;
     Eigen::MatrixXd pathends;
@@ -182,6 +195,12 @@ private:
     Eigen::MatrixXd tracestarts;
     Eigen::MatrixXd traceends;
     Eigen::MatrixXd tracecolors;
+    
+    std::string rodFilename;
+
+    Eigen::MatrixXd rattracestarts;
+    Eigen::MatrixXd rattraceends;
+    Eigen::MatrixXd ratcollisions;
     int numISOLines;
     double initSReg;
     double globalSScale;
