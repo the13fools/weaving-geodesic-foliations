@@ -717,6 +717,12 @@ void CoverMesh::initializeS(double reg)
             theta[i] /= thetacnt[i];    
     }        
 
+    std::ifstream ifs_sval("anuerism_small.sval");
+    for(int i=0; i<s.size(); i++)
+    {
+        ifs_sval >> s[i];
+    }
+
     std::ifstream ifs("anuerism_small.theta");
     for (int i = 0; i < fs->nVerts(); i++)
     {
