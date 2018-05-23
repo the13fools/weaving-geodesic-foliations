@@ -649,7 +649,7 @@ void CoverMesh::initializeS(double reg)
             edgeMetricMatrixCoeffs.push_back(Eigen::Triplet<double>(i, i, edgeMetric[i]));
         }
         
-        Eigen::SparseMatrix<double> edgeMetricMatrix;
+        Eigen::SparseMatrix<double> edgeMetricMatrix(nedges, nedges);
         edgeMetricMatrix.setFromTriplets(edgeMetricMatrixCoeffs.begin(), edgeMetricMatrixCoeffs.end());
         
         Eigen::SparseMatrix<double> A = Ahalf.transpose() * edgeMetricMatrix * Ahalf;
