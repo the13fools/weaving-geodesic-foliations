@@ -286,7 +286,9 @@ void FieldSurface::connectionEnergy(Eigen::VectorXd &energies)
             continue;
 
         int face = data().E(i,0);
+        double facearea = faceArea(face);
         int opp = data().E(i,1);
+        double opparea = faceArea(opp);
 
         for(int j=0; j<nfields; j++)
         {
@@ -302,8 +304,8 @@ void FieldSurface::connectionEnergy(Eigen::VectorXd &energies)
             Eigen::Vector3d v2 = data().Bs[opp]*oppvec;
             Eigen::Vector3d n = faceNormal(opp);
             double angle = 2.0 * atan2(v1.cross(v2).dot(n), v1.norm() * v2.norm() + v1.dot(v2));
-            energies[face] += fabs(angle);
-            energies[opp] += fabs(angle);
+            energies[face] += facearea*fabs(angle);
+            energies[opp] += opparea*fabs(angle);
         }
     }
 }

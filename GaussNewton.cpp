@@ -4,6 +4,7 @@
 #include <fstream>
 #include <Eigen/CholmodSupport>
 #include "Surface.h"
+#include <igl/cotmatrix.h>
 
 using namespace Eigen;
 
@@ -66,6 +67,7 @@ void GNmetric(const Weave &weave, Eigen::SparseMatrix<double> &M)
 
     int term = 2 * nhandles;
 
+    // compatibliity terms
     for (int e = 0; e < nedges; e++)
     {
         if(weave.fs->data().E(e,0) == -1 || weave.fs->data().E(e,1) == -1)
@@ -75,13 +77,13 @@ void GNmetric(const Weave &weave, Eigen::SparseMatrix<double> &M)
             for (int side = 0; side < 2; side++)
             {
                 int f = (side == 0 ? weave.fs->data().E(e, 0) : weave.fs->data().E(e, 1));
-                
+                double area = weave.fs->faceArea(f);
                 Eigen::Matrix2d BTB = weave.fs->data().Bs[f].transpose() * weave.fs->data().Bs[f];
                 for (int j = 0; j < 2; j++)
                 {
                     for (int k = 0; k < 2; k++)
                     {
-                        Mcoeffs.push_back(Triplet<double>(term + j, term + k, BTB(j, k)));
+                        Mcoeffs.push_back(Triplet<double>(term + j, term + k, area*BTB(j, k)));
                     }
                 }
                 term += 2;
@@ -89,6 +91,22 @@ void GNmetric(const Weave &weave, Eigen::SparseMatrix<double> &M)
         }
     }
 
+
+    // build edge metric matrix and inverse (cotan weights)
+    Eigen::MatrixXd C;
+    igl::cotmatrix_entries(weave.fs->data().V, weave.fs->data().F, C);
+
+    Eigen::VectorXd edgeMetric(nedges);
+    edgeMetric.setZero();
+    int nfaces = weave.fs->nFaces();
+    for(int i=0; i<nfaces; i++)
+    {
+        for (int j = 0; j < 3; j++)
+        {
+            int eidx = weave.fs->data().faceEdges(i, j);
+            edgeMetric[eidx] += C(i,j);
+        }                
+    } 
 
     // Curl free terms
     for (int e = 0; e < nedges; e++)
@@ -99,7 +117,7 @@ void GNmetric(const Weave &weave, Eigen::SparseMatrix<double> &M)
         {
             for (int i = 0; i < m; i++)
             {
-                    Mcoeffs.push_back(Triplet<double>(term, term, 1));
+                    Mcoeffs.push_back(Triplet<double>(term, term, edgeMetric[e]));
                     term += 1;
             }
         }

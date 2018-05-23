@@ -582,19 +582,18 @@ void CoverMesh::initializeS(double reg)
         // build edge metric matrix and inverse (cotan weights)
         Eigen::MatrixXd C;
         igl::cotmatrix_entries(surf.data().V, surf.data().F, C);
-        std::vector<Eigen::Triplet<double> > edgeMetricCoeffs;
         int nedges = surf.nEdges();
+        Eigen::VectorXd edgeMetric(nedges);
+        edgeMetric.setZero();
         int nfaces = surf.nFaces();
         for(int i=0; i<nfaces; i++)
         {
             for (int j = 0; j < 3; j++)
             {
                 int eidx = surf.data().faceEdges(i, j);
-                edgeMetricCoeffs.push_back(Eigen::Triplet<double>(eidx,eidx,C(i,j)));
+                edgeMetric[eidx] += C(i,j);
             }                
         } 
-        Eigen::SparseMatrix<double> edgeMetric(nedges, nedges);
-        edgeMetric.setFromTriplets(edgeMetricCoeffs.begin(), edgeMetricCoeffs.end());
 
         // vertex mass matrix
         Eigen::SparseMatrix<double> Mvert;
@@ -644,7 +643,16 @@ void CoverMesh::initializeS(double reg)
         Eigen::SparseMatrix<double> Ahalf(nedges, nverts + nfaces);
         Ahalf.setFromTriplets(AhalfCoeffs.begin(), AhalfCoeffs.end());
         
-        Eigen::SparseMatrix<double> A = Ahalf.transpose() * edgeMetric * Ahalf;
+        std::vector<Eigen::Triplet<double> > edgeMetricMatrixCoeffs;
+        for(int i = 0; i < nedges; i++)
+        {
+            edgeMetricMatrixCoeffs.push_back(Eigen::Triplet<double>(i, i, edgeMetric[i]));
+        }
+        
+        Eigen::SparseMatrix<double> edgeMetricMatrix;
+        edgeMetricMatrix.setFromTriplets(edgeMetricMatrixCoeffs.begin(), edgeMetricMatrixCoeffs.end());
+        
+        Eigen::SparseMatrix<double> A = Ahalf.transpose() * edgeMetricMatrix * Ahalf;
 
         std::vector<Eigen::Triplet<double> > DfaceCoeffs;
         for (int i = 0; i < nedges; i++)
@@ -663,7 +671,7 @@ void CoverMesh::initializeS(double reg)
         std::vector<Eigen::Triplet<double> > inverseEdgeMetricCoeffs;
         for (int i = 0; i < nedges; i++)
         {
-            inverseEdgeMetricCoeffs.push_back(Eigen::Triplet<double>(i, i, 1.0 / edgeMetric.coeff(i, i)));
+            inverseEdgeMetricCoeffs.push_back(Eigen::Triplet<double>(i, i, 1.0 / edgeMetric[i]));
         }
         Eigen::SparseMatrix<double> inverseEdgeMetric(nedges, nedges);
         inverseEdgeMetric.setFromTriplets(inverseEdgeMetricCoeffs.begin(), inverseEdgeMetricCoeffs.end());
@@ -685,7 +693,7 @@ void CoverMesh::initializeS(double reg)
         Eigen::SparseMatrix<double> B(nverts+nfaces, nverts+nfaces);
         B.setFromTriplets(Bcoeffs.begin(), Bcoeffs.end());
         
-        std::cout << "Starting power iteration" << std::endl;
+        std::cout << "Factoring A" << std::endl;
 
         // inverse power iteration
         Eigen::SimplicialLDLT<Eigen::SparseMatrix<double> > solver(Areg);
@@ -699,6 +707,9 @@ void CoverMesh::initializeS(double reg)
         for (int i = 0; i < nfaces; i++)
             ones[nverts + i] = 0.0;
         ones.normalize();
+
+        std::cout << "Starting power iteration" << std::endl;
+
         for (int i = 0; i < 1000; i++)
         {
             Eigen::VectorXd newx = solver.solve(B*x);

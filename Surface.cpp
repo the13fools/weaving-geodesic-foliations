@@ -125,6 +125,14 @@ Eigen::Vector3d Surface::faceNormal(int face) const
 }
 
 
+double Surface::faceArea(int face) const
+{
+    Eigen::Vector3d e1 = (data_.V.row(data_.F(face, 1)) - data_.V.row(data_.F(face, 0)));
+    Eigen::Vector3d e2 = (data_.V.row(data_.F(face, 2)) - data_.V.row(data_.F(face, 0)));
+    Eigen::Vector3d result = e1.cross(e2);
+    return 0.5 * result.norm();
+}
+
 void Surface::buildGeometricStructures()
 {
     // compute barycentric matrices and Js

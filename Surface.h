@@ -42,6 +42,7 @@ public:
     int numInteriorEdges() const;
 
     Eigen::Vector3d faceNormal(int face) const;
+    double faceArea(int face) const;
 
     // Finds shortest (combinatorial) path from start to end vertex. Each path entry is a combination of (1) the edge index along the path, and (2) the orientation: the jth path segment goes from
     // edgeVerts(path[j].first, path[j].second) to edgeVerts(path[j].first, 1 - path[j].second).
