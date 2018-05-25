@@ -590,8 +590,33 @@ void TraceSet::rationalizeTraces(double maxcurvature, double extenddist, double 
         ends.push_back(end);
     }
 
-    // find collisions
     int ntraces = cleanedtraces.size();
+    std::vector<int> permutation;
+    for (int i = 0; i < ntraces; i++)
+    {
+        permutation.push_back(i);
+    }
+
+    // sort traces by length
+
+    std::sort(permutation.begin(), permutation.end(),
+        [ends, starts](int a, int b) -> bool
+    {
+        return (ends[a] - starts[a]) < (ends[b] - starts[b]);
+    });
+
+    std::vector<Trace> orderedtraces;
+    std::vector<double> orderedstarts;
+    std::vector<double> orderedends;
+    for (int i = 0; i < ntraces; i++)
+    {
+        orderedtraces.push_back(cleanedtraces[permutation[i]]);
+        orderedstarts.push_back(starts[permutation[i]]);
+        orderedends.push_back(ends[permutation[i]]);
+    }
+    
+    // find collisions
+    
 
     std::map<std::pair<int, int>, std::vector<TraceCollision> > cols;
     for (int i = 0; i < ntraces; i++)
@@ -600,7 +625,7 @@ void TraceSet::rationalizeTraces(double maxcurvature, double extenddist, double 
         {
             bool self = i == j;
             std::vector<TraceCollision> paircols;
-            computeIntersections(cleanedtraces[i], cleanedtraces[j], self, paircols);
+            computeIntersections(orderedtraces[i], orderedtraces[j], self, paircols);
             cols[std::pair<int, int>(i, j)] = paircols;
         }
     }
@@ -612,11 +637,11 @@ void TraceSet::rationalizeTraces(double maxcurvature, double extenddist, double 
     {
         svals[i].push_back(0);
         double s = 0;
-        int nsegs = cleanedtraces[i].segs.size();
+        int nsegs = orderedtraces[i].segs.size();
         for (int j = 0; j < nsegs; j++)
         {
-            Eigen::Vector3d pt0 = pointFromBary(*cleanedtraces[i].parent_, cleanedtraces[i].segs[j].face, cleanedtraces[i].segs[j].side[0], cleanedtraces[i].segs[j].bary[0]);
-            Eigen::Vector3d pt1 = pointFromBary(*cleanedtraces[i].parent_, cleanedtraces[i].segs[j].face, cleanedtraces[i].segs[j].side[1], cleanedtraces[i].segs[j].bary[1]);
+            Eigen::Vector3d pt0 = pointFromBary(*orderedtraces[i].parent_, orderedtraces[i].segs[j].face, orderedtraces[i].segs[j].side[0], orderedtraces[i].segs[j].bary[0]);
+            Eigen::Vector3d pt1 = pointFromBary(*orderedtraces[i].parent_, orderedtraces[i].segs[j].face, orderedtraces[i].segs[j].side[1], orderedtraces[i].segs[j].bary[1]);
             double dist = (pt1 - pt0).norm();
             s += dist;
             svals[i].push_back(s);
@@ -647,9 +672,9 @@ void TraceSet::rationalizeTraces(double maxcurvature, double extenddist, double 
     samples.resize(ntraces);
     for (int i = 0; i < ntraces; i++)
     {
-        int nsegs = 1 + int( (ends[i] - starts[i]) / seglen);
+        int nsegs = 1 + int( (orderedends[i] - orderedstarts[i]) / seglen);
         RationalizedTrace rat;
-        sampleTrace(cleanedtraces[i], starts[i], ends[i], nsegs, rat, samples[i]);
+        sampleTrace(orderedtraces[i], orderedstarts[i], orderedends[i], nsegs, rat, samples[i]);
         rattraces_.push_back(rat);
     }
 

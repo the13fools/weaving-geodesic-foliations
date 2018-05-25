@@ -569,8 +569,7 @@ void CoverMesh::initializeSAlt(double reg)
             for(int j=0; j<3; j++)
             {
                 ACoeffs.push_back(Eigen::Triplet<double>(3*i+j, 3*i+j, faceAreas[i]));
-            }
-            ACoeffs.push_back(Eigen::Triplet<double>(3*nfaces +i, 3*nfaces+i, 1e-6));
+            }            
         }
         
         for(int i=0; i<Lface.outerSize(); i++)
@@ -650,9 +649,11 @@ void CoverMesh::initializeSAlt(double reg)
         }
         Eigen::SparseMatrix<double> D(nconstraints, 4*nfaces);
         D.setFromTriplets(DCoeffs.begin(), DCoeffs.end());
+
+        Eigen::SparseMatrix<double> Areg = A + 1e-6 * B;
         
         std::cout << "Factoring A" << std::endl;
-        Eigen::SimplicialLDLT<Eigen::SparseMatrix<double> > solveA(A);
+        Eigen::SimplicialLDLT<Eigen::SparseMatrix<double> > solveA(Areg);
         if(solveA.info() != Eigen::Success)
             std::cout << "failed" << std::endl;
         
@@ -673,20 +674,15 @@ void CoverMesh::initializeSAlt(double reg)
         x /= sqrt(x.transpose() * (B * x));
         for(int i=0; i<1000; i++)
         {
-            std::cout << "x: " << x.norm() << std::endl;
             Eigen::VectorXd newx = solveA.solve(B*x);
-            std::cout << "Bx: " << (B*x).norm() << std::endl;
-            std::cout << "newx : " << newx.norm() << std::endl;
             Eigen::VectorXd rhs = D*newx;
             Eigen::VectorXd lambda = solveC.solve(rhs);
-            std::cout << "lambda: " << lambda.norm() << std::endl;
             Eigen::VectorXd projx = newx - BInv * (D.transpose() * lambda);
-            double xnorm = sqrt(projx.transpose() * (B*x));
-            x = projx/xnorm;
-            std::cout << "eval now " << x.transpose() * (A*x) << std::endl;
+            double xnorm = sqrt(projx.transpose() * (B*projx));
+            x = projx/xnorm;            
         }
         
-        std::cout << "Rayleigh quotient: " << (x.transpose() * (A * x)) / (x.transpose() * (B * x)) << std::endl;
+        std::cout << "Rayleight quotient: " << x.transpose() * (A * x) / (x.transpose() * (B*x)) << std::endl;
 
         Eigen::VectorXd componentS(nfaces);
         for (int i = 0; i < nfaces; i++)
