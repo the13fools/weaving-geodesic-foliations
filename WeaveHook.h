@@ -92,6 +92,7 @@ public:
     void deserializeVectorFieldOld();
     void augmentField();
     void initializeS();
+    void initializeSAlt();
     void computeFunc();
     void drawISOLines();
     void resetCutSelection();

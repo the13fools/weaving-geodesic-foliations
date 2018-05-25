@@ -160,6 +160,8 @@ void WeaveHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
             ImGui::InputDoubleScientific("Regularization", &initSReg);
             if (ImGui::Button("Initialize S", ImVec2(-1,0)))
                 initializeS();
+            if (ImGui::Button("Initialize S (alt)", ImVec2(-1,0)))
+                initializeSAlt();
             ImGui::InputDoubleScientific("Global Rescaling", &globalSScale);
             if (ImGui::Button("Compute Function Value", ImVec2(-1, 0)))
                 computeFunc();
@@ -868,6 +870,12 @@ void WeaveHook::updateRenderGeometry()
 void WeaveHook::initializeS()
 {
     if(cover) cover->initializeS(initSReg);
+    updateRenderGeometry();
+}
+
+void WeaveHook::initializeSAlt()
+{
+    if(cover) cover->initializeSAlt(initSReg);
     updateRenderGeometry();
 }
 
