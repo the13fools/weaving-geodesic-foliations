@@ -697,7 +697,7 @@ void CoverMesh::initializeSAlt(double reg)
             }
         }
 
-        double s_scale = 3.1415 / maxS;
+        double s_scale = 3.1415 / fs->data().averageEdgeLength / maxS;
 
         
         // map component s to the global s vector
