@@ -7,10 +7,11 @@
 
 FieldSurface::FieldSurface(const Eigen::MatrixXd &V, const Eigen::MatrixXi &F, int numFields) : Surface(V,F), nFields_(numFields)
 {
+    int nfaces = data().F.rows();
     // initialize vector fields
-    vectorFields.resize(5*data().F.rows()*numFields);
+    vectorFields.resize(5*nfaces*numFields);
     vectorFields.setZero();
-    vectorFields.segment(0, 2 * data().F.rows()*numFields).setRandom();
+    vectorFields.segment(0, 2 * nfaces*numFields).setRandom();
     normalizeFields();
 
     // initialize permutation matrices
@@ -21,6 +22,10 @@ FieldSurface::FieldSurface(const Eigen::MatrixXd &V, const Eigen::MatrixXi &F, i
         Ps_[i].resize(numFields, numFields);
         Ps_[i].setIdentity();
     }
+    
+    faceDeleted_.resize(nfaces);
+    for(int i=0; i<nfaces; i++)
+        faceDeleted_[i] = false;
 }
 
 
@@ -69,9 +74,10 @@ void FieldSurface::normalizeFields()
     }
 }
 
-FieldSurface *FieldSurface::removePointsFromMesh(std::vector<int> vIds, std::map<int, int> &faceMap) const
+FieldSurface *FieldSurface::removeDeletedFacesFromMesh(std::map<int, int> &faceMap, std::map<int, int> &vertMap) const
 {
     faceMap.clear();
+    vertMap.clear();
     
     std::set<int> facesToDelete;
     
@@ -82,16 +88,10 @@ FieldSurface *FieldSurface::removePointsFromMesh(std::vector<int> vIds, std::map
         edgeMap[p] = e; 
     }
 
-    for (int v = 0; v < vIds.size(); v++)
+    for(int i=0; i<nFaces(); i++)
     {
-        for (int f = 0; f < nFaces(); f++)
-        {
-            for (int j = 0; j < 3; j++) 
-            {
-                if ( data().F(f, j) == vIds[v] ) 
-                    facesToDelete.insert(f);       
-            }
-        }
+        if(isFaceDeleted(i))
+            facesToDelete.insert(i);
     }
 
     std::vector<int> faceIds;
@@ -104,6 +104,10 @@ FieldSurface *FieldSurface::removePointsFromMesh(std::vector<int> vIds, std::map
         FieldSurface *ret = new FieldSurface(data().V, data().F, nFields());
         ret->vectorFields = vectorFields;
         ret->Ps_ = Ps_;
+        for(int i=0; i<nFaces(); i++)
+            faceMap[i] = i;
+        for(int i=0; i<nVerts(); i++)
+            vertMap[i] = i;
         return ret;
     }
     
@@ -112,6 +116,7 @@ FieldSurface *FieldSurface::removePointsFromMesh(std::vector<int> vIds, std::map
     Eigen::VectorXd vectorFields_clean = Eigen::VectorXd::Zero( 5*nFields()*newNFaces );
     Eigen::MatrixXi F_temp = Eigen::MatrixXi::Zero(newNFaces, 3); 
 
+    std::vector<bool> newdeleted(newNFaces);
     
     for (int i = 0; i < nFaces(); i++)   
     { 
@@ -128,6 +133,7 @@ FieldSurface *FieldSurface::removePointsFromMesh(std::vector<int> vIds, std::map
             = vectorFields.segment(i * nFields() + 4*nFaces()*nFields(), nFields() );
         // faces 
         F_temp.row(fieldIdx) = data().F.row(i);
+        newdeleted[fieldIdx] = faceDeleted_[i];
         faceMap[i] = fieldIdx;
         fieldIdx++;
     }
@@ -135,20 +141,24 @@ FieldSurface *FieldSurface::removePointsFromMesh(std::vector<int> vIds, std::map
     Eigen::MatrixXd V_new;
     Eigen::MatrixXi F_new;
     Eigen::VectorXi marked; 
-    Eigen::VectorXi vertMap; 
+    Eigen::VectorXi vertMapVec; 
 
-    igl::remove_unreferenced(data().V, F_temp, V_new, F_new, marked, vertMap);
+    igl::remove_unreferenced(data().V, F_temp, V_new, F_new, marked, vertMapVec);
 
     FieldSurface *result = new FieldSurface(V_new, F_new, nFields());
     result->vectorFields = vectorFields_clean;
+    result->faceDeleted_ = newdeleted;
 
-    //cout << faceIdIdx << " face id idx\n";
+    for(int i=0; i<vertMapVec.rows(); i++)
+    {
+        vertMap[vertMapVec(i)] = i;
+    }
            
     std::vector<Eigen::MatrixXi> Ps_new;
     for( int i = 0; i < result->nEdges(); i++) 
     {
-        int v0 = vertMap( result->data().edgeVerts(i, 0) );
-        int v1 = vertMap( result->data().edgeVerts(i, 1) );
+        int v0 = vertMapVec( result->data().edgeVerts(i, 0) );
+        int v1 = vertMapVec( result->data().edgeVerts(i, 1) );
         if ( v0 > v1 ) 
         { 
             std::swap(v0, v1);
@@ -169,6 +179,10 @@ const Eigen::MatrixXi FieldSurface::Ps(int edge) const
 
 void FieldSurface::serialize(std::ostream &os) const
 {
+    int magic = -777;
+    os.write((char *)&magic, sizeof(int));
+    int version = 1;
+    os.write((char *)&version, sizeof(int));
     int nverts = nVerts();
     os.write((char *)&nverts, sizeof(int));
     int nfaces = nFaces();
@@ -209,12 +223,29 @@ void FieldSurface::serialize(std::ostream &os) const
             }
         }
     }
+    for(int i=0; i<nfaces; i++)
+    {
+        int deleted = faceDeleted_[i] ? 1 : 0;
+        os.write((char *)&deleted, sizeof(int));
+    }
 }
 
 FieldSurface *FieldSurface::deserialize(std::istream &is)
 {
+    int version = 0;
+    int magic;
     int nverts;
-    is.read((char *)&nverts, sizeof(int));
+    is.read((char *)&magic, sizeof(int));
+    if(magic == -777)
+    {
+        is.read((char *)&version, sizeof(int));
+        is.read((char *)&nverts, sizeof(int));
+    }
+    else
+    {
+        // old format
+        nverts = magic;
+    }
     Eigen::MatrixXd V(nverts, 3);
     int nfaces;
     is.read((char *)&nfaces, sizeof(int));
@@ -264,6 +295,15 @@ FieldSurface *FieldSurface::deserialize(std::istream &is)
             }
         }
     }
+    if(version > 0)
+    {
+        for(int i=0; i<nfaces; i++)
+        {
+            int deleted;
+            is.read((char *)&deleted, sizeof(int));
+            ret->faceDeleted_[i] = deleted;
+        }
+    }
     if (!is)
     {
         delete ret;
@@ -308,4 +348,42 @@ void FieldSurface::connectionEnergy(Eigen::VectorXd &energies)
             energies[opp] += opparea*fabs(angle);
         }
     }
+}
+
+void FieldSurface::deleteVertex(int vid)
+{
+    int nfaces = data().F.rows();
+    for(int i=0; i<nfaces; i++)
+    {
+        for(int j=0; j<3; j++)
+        {
+            if(data().F(i,j) == vid)
+                faceDeleted_[i] = true;
+        }
+    }
+}
+
+
+void FieldSurface::undeleteAllFaces()
+{
+    int nfaces = data().F.rows();
+    for(int i=0; i<nfaces; i++)
+    {
+        faceDeleted_[i] = false;
+    }
+}
+
+void FieldSurface::setFaceDeleted(int fid, bool newstatus)
+{
+    faceDeleted_[fid] = newstatus;
+}
+
+int FieldSurface::numUndeletedFaces() const
+{
+    int ret = 0;
+    int nfaces = data().F.rows();
+    for(int i=0; i<nfaces; i++)
+        if(!faceDeleted_[i])
+            ret++;
+    return ret;
 }

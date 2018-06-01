@@ -39,7 +39,6 @@ public:
     void computeFunc(double globalScale);
     double renderScale() {return renderScale_;}
     void initializeS(double reg);
-    void initializeSAlt(double reg);
     const Surface &splitMesh() const;
     
     // maps indices of vertices on the visualization mesh to corresponding "parent" vertices on the cover mesh
@@ -51,7 +50,6 @@ private:
     double inversePowerIteration(Eigen::SparseMatrix<double> &M, Eigen::VectorXd &evec, int iters);
     void initializeSplitMesh(const Eigen::VectorXi &oldToNewVertMap);
 
-    Eigen::SparseMatrix<double> faceLaplacian();
     double barycentric(double val1, double val2, double target);
     bool crosses(double isoval, double val1, double val2, double minval, 
         double maxval, double &bary);

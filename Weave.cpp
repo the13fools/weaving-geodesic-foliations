@@ -151,31 +151,6 @@ bool Weave::addHandle(Handle h)
 
 using namespace std;
 
-void Weave::removePointsFromMesh(std::vector<int> vIds)
-{   
-    std::map<int, int> facemap;
-    FieldSurface *newfs = fs->removePointsFromMesh(vIds, facemap);
-
-    std::vector<Handle> newhandles;
-    for (int h = 0; h < handles.size(); h++)
-    {
-        Handle hand = handles[h];
-
-        auto it = facemap.find(hand.face);
-        if (it != facemap.end())
-        {
-            hand.face = it->second;
-            newhandles.push_back(hand);
-        }
-    }
-    delete fs;
-    fs = newfs;
-    handles = newhandles;
-
-    // for now, clear (now stale) cuts
-    cuts.clear();
-}
-
 /*
  * Writes vector field to file. Format is:
  *
@@ -481,8 +456,8 @@ CoverMesh *Weave::createCover() const
             flattenedField.row(fId + cId * nfaces) = vec/norm;
         }
     }
-    //igl::writeOBJ("debug.obj", VAug, FAug);
-    igl::writeOBJ("debug_single.obj",fs->data().V,fs->data().F);
+    
+    /*igl::writeOBJ("debug_single.obj",fs->data().V,fs->data().F);
     std::ofstream debugField("debug.field");
     for (int cId = 0; cId < nCover; cId++)
     {
@@ -494,10 +469,17 @@ CoverMesh *Weave::createCover() const
             Eigen::Vector3d embvec = fs->data().Bs[fId] * vec;
             debugField << embvec.normalized().transpose() << "\n";
         }
-    }
+    }*/
 
-    cout << "finish augmenting the mesh" << endl;
     CoverMesh *ret = new CoverMesh(*this, VAug, FAug, oldId2NewId, flattenedField, nCover); 
+    // transfer deleted faces
+    for(int i=0; i<nfaces; i++)
+    {
+        for(int j=0; j<nCover; j++)
+        {
+            ret->fs->setFaceDeleted(j*nfaces + i, fs->isFaceDeleted(i));
+        }
+    }
     return ret;
 }
 

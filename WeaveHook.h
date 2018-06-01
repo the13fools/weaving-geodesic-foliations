@@ -45,6 +45,7 @@ public:
         // vectorFieldName = "bunny_coarser_nosing";
         vectorFieldName = "tet.rlx";
         rodFilename = "example.rod";
+        exportPrefix = "export/example";
         params.lambdacompat = 100;
         params.lambdareg = 1e-3;
 
@@ -105,6 +106,7 @@ public:
     void computeTrace();   
     void rationalizeTraces();
     void saveRods();
+    void exportForRendering();
     
     virtual void initSimulation();
 
@@ -174,7 +176,8 @@ private:
     bool showSingularities;
     Eigen::MatrixXd singularVerts_topo;
     Eigen::MatrixXd singularVerts_geo;
-    Eigen::MatrixXd nonIdentityEdges;
+    Eigen::MatrixXd nonIdentity1Weave;
+    Eigen::MatrixXd nonIdentity2Weave;
     Eigen::MatrixXd cutPos1Weave; // endpoints of cut edges
     Eigen::MatrixXd cutPos2Weave;
     Eigen::MatrixXd cutPos1Cover;
@@ -182,6 +185,7 @@ private:
     Eigen::MatrixXd cutColorsCover;
 
     std::string vectorFieldName;
+    std::string exportPrefix;
 
     bool showTraces;
     bool showRatTraces;

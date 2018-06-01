@@ -46,7 +46,6 @@ public:
     void createVisualizationEdges(Eigen::MatrixXd &edgePts, Eigen::MatrixXd &edgeVecs, Eigen::MatrixXi &edgeSegs, Eigen::MatrixXd &colors);
     void createVisualizationCuts(Eigen::MatrixXd &cutPts1, Eigen::MatrixXd &cutPts2);
     
-    void removePointsFromMesh(std::vector<int> vIds);
     CoverMesh *createCover() const;
 
     void serialize(std::ostream &os);    

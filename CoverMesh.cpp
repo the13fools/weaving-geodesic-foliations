@@ -94,7 +94,7 @@ void CoverMesh::extractIsoline(const Eigen::VectorXd &func, double isoval, doubl
     int nfaces = fs->nFaces();
     bool *visited = new bool[nfaces];
     for(int i=0; i<nfaces; i++)
-        visited[i] = false;
+        visited[i] = fs->isFaceDeleted(i);
         
 
     // Iterate between faces until encountering a zero level set.  
@@ -216,10 +216,15 @@ void  CoverMesh::recomputeIsolines(int numISOLines, std::vector<Trace> &isotrace
 
 void CoverMesh::computeFunc(double globalScale)
 {
-    std::ofstream debugOut("debug.txt");
-    std::ofstream debugVectsOut("debug.field");
-    int nfaces = fs->nFaces();
-    int nverts = fs->nVerts();
+    theta.setZero();
+    // create a mesh without deleted faces
+    std::map<int, int> faceMap;
+    std::map<int, int> vertMap;
+    FieldSurface *delfs = fs->removeDeletedFacesFromMesh(faceMap, vertMap);
+        
+
+    int nfaces = delfs->nFaces();
+    int nverts = delfs->nVerts();
     cout << "nfaces: " << nfaces << endl;
     cout << "nverts: " << nverts << endl;
     vector<int> rowsL;
@@ -227,33 +232,36 @@ void CoverMesh::computeFunc(double globalScale)
     vector<double> difVecUnscaled;
     for (int fId = 0; fId < nfaces; fId++)
     { // Compute rowsL, colsL, difVecUnscaled
-        int vId0 = fs->data().F(fId, 0);
-        int vId1 = fs->data().F(fId, 1);
-        int vId2 = fs->data().F(fId, 2);
+        int vId0 = delfs->data().F(fId, 0);
+        int vId1 = delfs->data().F(fId, 1);
+        int vId2 = delfs->data().F(fId, 2);
         rowsL.push_back(vId0); rowsL.push_back(vId1); rowsL.push_back(vId2);
         colsL.push_back(vId1); colsL.push_back(vId2); colsL.push_back(vId0);
-        Eigen::Vector3d p0 = fs->data().V.row(vId0);
-        Eigen::Vector3d p1 = fs->data().V.row(vId1);
-        Eigen::Vector3d p2 = fs->data().V.row(vId2);
+        Eigen::Vector3d p0 = delfs->data().V.row(vId0);
+        Eigen::Vector3d p1 = delfs->data().V.row(vId1);
+        Eigen::Vector3d p2 = delfs->data().V.row(vId2);
         Eigen::Vector3d e01 = p0 - p1;
         Eigen::Vector3d e12 = p1 - p2;
         Eigen::Vector3d e20 = p2 - p0;
         Eigen::Vector3d faceVec;
-        if (true)
-        {
-            faceVec = fs->data().Bs[fId] * fs->v(fId, 0); // The original vec            
-        }
-        faceVec = faceVec.cross(fs->faceNormal(fId));
+
+        faceVec = delfs->data().Bs[fId] * delfs->v(fId, 0); // The original vec            
+
+        faceVec = faceVec.cross(delfs->faceNormal(fId));
         faceVec /= faceVec.norm();
-        debugVectsOut << faceVec.transpose() << endl;
+
         difVecUnscaled.push_back(e01.dot(faceVec));
         difVecUnscaled.push_back(e12.dot(faceVec));
         difVecUnscaled.push_back(e20.dot(faceVec));
     }
     assert((rowsL.size() == 3 * nfaces) && (colsL.size() == 3 * nfaces) && (difVecUnscaled.size() == 3 * nfaces));
 
-    // Eigen::SparseMatrix<double> faceLapMat = faceLaplacian();
-    Eigen::VectorXd scales = globalScale * s;
+    Eigen::VectorXd scales(nfaces);
+    scales.setZero();
+    for(auto it : faceMap)
+    {
+        scales[it.second] = globalScale * s[it.first];
+    }
     int totalIter = 6;
     for (int iter = 0; iter < totalIter; iter++)
     {
@@ -352,42 +360,21 @@ void CoverMesh::computeFunc(double globalScale)
         // Solve for scale
         Eigen::SimplicialLDLT<Eigen::SparseMatrix<double> > solverScales(AScalesMat);
         Eigen::VectorXd curScales = solverScales.solve(bScales);
+        
         for (int i = 0; i < nfaces; i++)
             scales(i) = curScales(i);
-        for(int i=0; i<nverts; i++)
-            theta[i] = curTheta[i];
+        for(auto it : vertMap)
+            theta[it.first] = curTheta[it.second];
+    }    
+    
+    // update s to new value
+    for(auto it : faceMap)
+    {
+        s[it.first] = scales[it.second];
     }
-    for (int i = 0; i < nverts; i++)
-        debugOut << theta[i] << endl;
-    debugOut.close();
+    
+    delete delfs;
 }
-
-Eigen::SparseMatrix<double> CoverMesh::faceLaplacian()
-{ // Only augment vector
-    int nfaces = fs->nFaces();
-    // TODO: boundary
-    // ids = find(min(adjFaces) > 0);
-    // adjFaces = adjFaces(:, ids);
-    std::vector<triplet> AContent;
-    for (int i = 0; i < fs->data().E.rows(); i ++)
-        AContent.push_back(triplet(fs->data().E(i,0), fs->data().E(i,1), 1));
-    Eigen::SparseMatrix<double> AFaceMat (nfaces, nfaces);
-    AFaceMat.setFromTriplets(AContent.begin(),AContent.end());
-    // Ge the degree of face
-    vector<int> degreeFace;
-    for (int i = 0; i < nfaces; i ++)
-        degreeFace.push_back(AFaceMat.row(i).sum());
-    // Get LFace
-    std::vector<triplet> LContent;
-    for (int i = 0; i < degreeFace.size(); i ++)
-        LContent.push_back(triplet(i, i, degreeFace[i]));
-    Eigen::SparseMatrix<double> LFaceMat (nfaces, nfaces);
-    LFaceMat.setFromTriplets(LContent.begin(), LContent.end());
-    LFaceMat -= AFaceMat;
-    // Eigen::SparseMatrix<double> LFaceMat;
-    return LFaceMat;
-}
-
 
 void CoverMesh::createVisualization(Eigen::MatrixXd &V, Eigen::MatrixXi &F, Eigen::MatrixXd &edgePts, Eigen::MatrixXd &edgeVecs, Eigen::MatrixXi &edgeSegs, Eigen::MatrixXd &colors, 
     Eigen::MatrixXd &cutPts1, Eigen::MatrixXd &cutPts2, Eigen::MatrixXd &cutColors)
@@ -468,12 +455,30 @@ int CoverMesh::visMeshToCoverMesh(int vertid)
     return data_.splitToCoverVerts[vertid];
 }
 
-void CoverMesh::initializeSAlt(double reg)
+void CoverMesh::initializeS(double reg)
 {
-    // separate cut mesh into connected components
-    Eigen::VectorXi components;
+
+    // create a mesh without deleted faces
+    int undeletedFaces = fs->numUndeletedFaces();
+    Eigen::MatrixXi undelF(undeletedFaces, 3);
+    Eigen::VectorXi undelFaceMap(undeletedFaces);
+    int fid=0;
+    int globalfaces = fs->nFaces();
+    for(int i=0; i<globalfaces; i++)
+    {
+        if(!fs->isFaceDeleted(i))
+        {
+            undelFaceMap[fid] = i;
+            undelF.row(fid) = fs->data().F.row(i);
+            fid++;
+        }        
+    }
     
-    igl::facet_components(fs->data().F, components);
+    s.setZero();
+
+    // separate cut mesh into connected components
+    Eigen::VectorXi components;    
+    igl::facet_components(undelF, components);
     int ncomponents = 0;
     for(int i=0; i<components.size(); i++)    
         ncomponents = std::max(ncomponents, components[i]);
@@ -496,8 +501,8 @@ void CoverMesh::initializeSAlt(double reg)
         {
             if(components[i] == component)
             {
-                compFacesToGlobal[idx] = i;
-                compF.row(idx) = fs->data().F.row(i);
+                compFacesToGlobal[idx] = undelFaceMap[i];
+                compF.row(idx) = undelF.row(i);
                 idx++;
             }
         }
@@ -709,307 +714,6 @@ void CoverMesh::initializeSAlt(double reg)
     }
 }
 
-void CoverMesh::initializeS(double reg)
-{
-    theta.resize(fs->nVerts());
-    theta.setZero();
-    Eigen::VectorXi thetacnt(fs->nVerts());
-    thetacnt.setZero();
-
-    // some sanity checks
-    Eigen::VectorXi B;
-    if(!igl::is_vertex_manifold(fs->data().F, B))
-        std::cout << "ERROR: cover mesh not vertex-manifold!" << std::endl;
-    if(!igl::is_edge_manifold(fs->data().F))
-        std::cout << "ERROR: cover mesh not edge-manifold!" << std::endl;
-    // compute how to cut the mesh
-    std::vector<std::vector<int> > cuts;
-    findCuts(fs->data().V, fs->data().F, cuts);
-    std::cout << "Found " << cuts.size() << " cuts";
-    if (cuts.size() == 0)
-        std::cout << std::endl;
-    else
-    {
-        std::cout << " of lengths ";
-        for (int i = 0; i < cuts.size(); i++)
-        {
-            if (i != 0)
-                std::cout << ", ";
-            std::cout << cuts[i].size();
-        }
-        std::cout << std::endl;
-    }
-
-    // update data structures for visualizing the new cuts
-    std::set<std::pair<int, int> > cutsegs;
-    for (auto &it : cuts)
-    {
-        for (int i = 0; i < it.size() - 1; i++)
-        {
-            int v0 = it[i];
-            int v1 = it[i + 1];
-            if (v0 > v1)
-                std::swap(v0, v1);
-            cutsegs.insert(std::pair<int, int>(v0, v1));
-        }
-    }
-
-    slicedEdges.clear();
-    int splitedges = data_.splitMesh->nEdges();
-    for (int i = 0; i < splitedges; i++)
-    {
-        int v0 = data_.splitMesh->data().edgeVerts(i, 0);
-        int v1 = data_.splitMesh->data().edgeVerts(i, 1);
-        int mappedv0 = data_.splitToCoverVerts[v0];
-        int mappedv1 = data_.splitToCoverVerts[v1];
-        if (mappedv0 > mappedv1)
-            std::swap(mappedv0, mappedv1);
-        if (cutsegs.count(std::pair<int, int>(mappedv0, mappedv1)))
-        {
-            slicedEdges.push_back(i);
-        }
-    }
-    
-    // cut the mesh
-    Eigen::MatrixXd cutV;
-    Eigen::MatrixXi cutF;    
-    cutMesh(fs->data().V, fs->data().F, cuts, cutV, cutF);
-    igl::writeOBJ("debug_augmented.obj",fs->data().V, fs->data().F);
-    igl::writeOBJ("debug_cut.obj",cutV,cutF);
-
-
-    // separate cut mesh into connected components
-    Eigen::VectorXi components;
-    
-    igl::facet_components(cutF, components);
-    int ncomponents = 0;
-    for(int i=0; i<components.size(); i++)    
-        ncomponents = std::max(ncomponents, components[i]);
-    ncomponents++;
-    std::vector<int> componentsizes;
-    for(int i=0; i<ncomponents; i++)
-        componentsizes.push_back(0);
-    for(int i=0; i<components.size(); i++)
-        componentsizes[components[i]]++;    
-    std::cout << "Covering mesh has " << ncomponents << " connected components" << std::endl;
-    // loop over the connected components
-    for(int component = 0; component < ncomponents; component++)
-    {
-        std::cout << "Component " << component << ": " << componentsizes[component] << " faces" << std::endl;
-        // faces for just this connected component
-        Eigen::VectorXi compFacesToGlobal(componentsizes[component]);
-        Eigen::MatrixXi compF(componentsizes[component], 3);
-        int idx=0;
-        for(int i=0; i<components.size(); i++)
-        {
-            if(components[i] == component)
-            {
-                compFacesToGlobal[idx] = i;
-                compF.row(idx) = cutF.row(i);
-                idx++;
-            }
-        }
-        
-        Eigen::MatrixXd prunedV;
-        Eigen::MatrixXi prunedF;
-        Eigen::VectorXi I;
-        igl::remove_unreferenced(cutV, compF, prunedV, prunedF, I);
-        // connected component surface
-        Surface surf(prunedV, prunedF);
-        
-        std::cout << "Built connected component surface" << std::endl;
-
-        // build edge metric matrix and inverse (cotan weights)
-        Eigen::MatrixXd C;
-        igl::cotmatrix_entries(surf.data().V, surf.data().F, C);
-        int nedges = surf.nEdges();
-        Eigen::VectorXd edgeMetric(nedges);
-        edgeMetric.setZero();
-        int nfaces = surf.nFaces();
-        for(int i=0; i<nfaces; i++)
-        {
-            for (int j = 0; j < 3; j++)
-            {
-                int eidx = surf.data().faceEdges(i, j);
-                edgeMetric[eidx] += C(i,j);
-            }                
-        } 
-
-        // vertex mass matrix
-        Eigen::SparseMatrix<double> Mvert;
-        igl::massmatrix(surf.data().V, surf.data().F, igl::MassMatrixType::MASSMATRIX_TYPE_BARYCENTRIC, Mvert);
-
-        // face mass matrix
-        Eigen::VectorXd faceAreas;
-        igl::doublearea(surf.data().V, surf.data().F, faceAreas);
-        faceAreas *= 0.5;
-        
-        std::cout << "Built mass matrices" << std::endl;
-
-        std::vector<Eigen::Triplet<double> > AhalfCoeffs;
-
-        int nverts = surf.nVerts();
-
-        for(int i=0; i<nedges; i++)
-        {
-            int f0 = surf.data().E(i,0);
-            int f1 = surf.data().E(i,1);
-            int vert0 = surf.data().edgeVerts(i, 0);
-            int vert1 = surf.data().edgeVerts(i, 1);
-            AhalfCoeffs.push_back(Eigen::Triplet<double>(i, vert0, -1));
-            AhalfCoeffs.push_back(Eigen::Triplet<double>(i, vert1, 1));
-            double denom = 0.0;
-            if (f0 != -1)
-                denom += 1.0;
-            if (f1 != -1)
-                denom += 1.0;
-
-            Eigen::Vector3d v0 = surf.data().V.row(vert0).transpose();
-            Eigen::Vector3d v1 = surf.data().V.row(vert1).transpose();
-            Eigen::Vector3d edgeVec = v1-v0;
-
-            if (f0 != -1)
-            {
-                Eigen::Vector3d scaledvec0 = surf.data().Bs[f0] * surf.data().Js.block<2, 2>(2 * f0, 0) * fs->v(compFacesToGlobal[f0], 0);
-                AhalfCoeffs.push_back(Eigen::Triplet<double>(i, nverts + f0, scaledvec0.dot(edgeVec) / denom));
-            }
-            if (f1 != -1)
-            {
-                Eigen::Vector3d scaledvec1 = surf.data().Bs[f1] * surf.data().Js.block<2, 2>(2 * f1, 0) * fs->v(compFacesToGlobal[f1], 0);
-                AhalfCoeffs.push_back(Eigen::Triplet<double>(i, nverts + f1, scaledvec1.dot(edgeVec) / denom));
-            }
-        }
-
-        Eigen::SparseMatrix<double> Ahalf(nedges, nverts + nfaces);
-        Ahalf.setFromTriplets(AhalfCoeffs.begin(), AhalfCoeffs.end());
-        
-        std::vector<Eigen::Triplet<double> > edgeMetricMatrixCoeffs;
-        for(int i = 0; i < nedges; i++)
-        {
-            edgeMetricMatrixCoeffs.push_back(Eigen::Triplet<double>(i, i, edgeMetric[i]));
-        }
-        
-        Eigen::SparseMatrix<double> edgeMetricMatrix(nedges, nedges);
-        edgeMetricMatrix.setFromTriplets(edgeMetricMatrixCoeffs.begin(), edgeMetricMatrixCoeffs.end());
-        
-        Eigen::SparseMatrix<double> A = Ahalf.transpose() * edgeMetricMatrix * Ahalf;
-
-        std::vector<Eigen::Triplet<double> > DfaceCoeffs;
-        for (int i = 0; i < nedges; i++)
-        {
-            int f0 = surf.data().E(i,0);
-            int f1 = surf.data().E(i,1);
-            if (f0 != -1 && f1 != -1)
-            {
-                DfaceCoeffs.push_back(Eigen::Triplet<double>(i, nverts + f0, -1.0));
-                DfaceCoeffs.push_back(Eigen::Triplet<double>(i, nverts + f1, 1.0));
-            }
-        }
-        Eigen::SparseMatrix<double> Dface(nedges, nverts + nfaces);
-        Dface.setFromTriplets(DfaceCoeffs.begin(), DfaceCoeffs.end());
-        
-        std::vector<Eigen::Triplet<double> > inverseEdgeMetricCoeffs;
-        for (int i = 0; i < nedges; i++)
-        {
-            inverseEdgeMetricCoeffs.push_back(Eigen::Triplet<double>(i, i, 1.0 / edgeMetric[i]));
-        }
-        Eigen::SparseMatrix<double> inverseEdgeMetric(nedges, nedges);
-        inverseEdgeMetric.setFromTriplets(inverseEdgeMetricCoeffs.begin(), inverseEdgeMetricCoeffs.end());
-
-        Eigen::SparseMatrix<double> Lface = Dface.transpose() * inverseEdgeMetric * Dface;
-
-        Eigen::SparseMatrix<double> Areg = A + reg * Lface;
-
-        std::vector<Eigen::Triplet<double> > Bcoeffs;
-        for (int i = 0; i < nverts; i++)
-        {
-            Bcoeffs.push_back(Eigen::Triplet<double>(i, i, Mvert.coeff(i, i)));
-        }
-        for (int i = 0; i < nfaces; i++)
-        {
-            Bcoeffs.push_back(Eigen::Triplet<double>(nverts + i, nverts + i, faceAreas[i]));
-        }
-
-        Eigen::SparseMatrix<double> B(nverts+nfaces, nverts+nfaces);
-        B.setFromTriplets(Bcoeffs.begin(), Bcoeffs.end());
-        
-        std::cout << "Factoring A" << std::endl;
-
-        // inverse power iteration
-        Eigen::SimplicialLDLT<Eigen::SparseMatrix<double> > solver(Areg);
-        Eigen::VectorXd x(nverts + nfaces);
-        x.setRandom();
-        double xnorm = x.transpose() * (B * x);
-        x /= sqrt(xnorm);
-        Eigen::VectorXd ones(nverts + nfaces);
-        for (int i = 0; i < nverts; i++)
-            ones[i] = 1.0;
-        for (int i = 0; i < nfaces; i++)
-            ones[nverts + i] = 0.0;
-        ones.normalize();
-
-        std::cout << "Starting power iteration" << std::endl;
-
-        for (int i = 0; i < 1000; i++)
-        {
-            Eigen::VectorXd newx = solver.solve(B*x);
-            // project out ones component
-            newx = newx - ones.dot(newx)*ones;
-            x = newx / sqrt(newx.transpose() * A * newx);
-        }
-
-        std::cout << "Rayleigh quotient: " << (x.transpose() * (A * x)) / (x.transpose() * (B * x)) << std::endl;
-
-        Eigen::VectorXd componentS(nfaces);
-        for (int i = 0; i < nfaces; i++)
-            componentS[i] = x[nverts + i];
-
-        double maxS = 0;
-        for(int i=0; i<nfaces; i++)
-        {
-            if ( fabs(componentS[i]) > maxS ) 
-            {
-                maxS = fabs(componentS[i]);
-            }
-        }
-
-        double s_scale = 3.1415 / maxS;
-
-        
-        // map component s to the global s vector
-        for(int i=0; i<nfaces; i++)
-        {
-            componentS[i] *= s_scale;
-            s[compFacesToGlobal[i]] = componentS[i] ;
-        }
-
-        // compute theta
-        Eigen::VectorXd componentTheta(nverts);
-        for (int i = 0; i < nverts; i++)
-            componentTheta[i] = x[i];
-        
-        for (int i = 0; i < nfaces; i++)
-        {
-            for (int j = 0; j < 3; j++)
-            {
-                int cutv = surf.data().F(i, j);
-                int coverv = fs->data().F(compFacesToGlobal[i], j);
-                theta[coverv] += componentTheta[cutv];
-                thetacnt[coverv]++;
-            }
-        }
-    }
-    
-    // finally, we have the global theta initialization
-    for (int i = 0; i < fs->nVerts(); i++)
-    {
-        if (thetacnt[i])
-            theta[i] /= thetacnt[i];
-        else
-            theta[i] = 0;
-    }        
-}
-
 double CoverMesh::inversePowerIteration(Eigen::SparseMatrix<double> &M, Eigen::VectorXd &evec, int iters)
 {
     evec.resize(M.cols());
@@ -1075,6 +779,8 @@ void CoverMesh::initializeSplitMesh(const Eigen::VectorXi &oldToNewVertMap)
         for (int j = 0; j < 3; j++)
         {
             int edge = fs->data().faceEdges(i, j);
+            if(edge == -1)
+                continue;
             int f0 = fs->data().E(edge, 0);
             int f1 = fs->data().E(edge, 1);
             if (f0 == -1 || f1 == -1)

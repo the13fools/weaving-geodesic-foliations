@@ -32,12 +32,21 @@ public:
 
     void normalizeFields(); // make all vectors unit-length
 
-    // returns copy of the surface with the given vertices (and adjacent faces) deleted and all appropriate data structures reindexed
+    // returns copy of the surface with all deleted faces completely removed, and all appropriate data structures reindexed
     // faceMap maps old face ids to new face ids (deleted faces are not in the map).
-    FieldSurface *removePointsFromMesh(std::vector<int> vIds, std::map<int, int> &faceMap) const; 
+    // likewise for vertMap
+    FieldSurface *removeDeletedFacesFromMesh(std::map<int, int> &faceMap, std::map<int, int> &vertMap) const; 
     
     void serialize(std::ostream &ofs) const;
-    static FieldSurface *deserialize(std::istream &is);
+    static FieldSurface *deserialize(std::istream &is);    
+    
+    // mark a vertex and all neighboring faces as deleted
+    void deleteVertex(int vid);
+    
+    void setFaceDeleted(int fid, bool newstatus);
+    void undeleteAllFaces();    
+    bool isFaceDeleted(int fid) const {return faceDeleted_[fid];}
+    int numUndeletedFaces() const;
 
     // compute an energy on each face that measures the failure of the vector fields on that face to parallel transport to the
     // equivalent vector on the neighboring faces, using the trivial connection between faces
@@ -53,7 +62,7 @@ public:
 
 private:
     int nFields_;
-
+    std::vector<bool> faceDeleted_;
 };
 
 #endif

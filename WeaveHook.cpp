@@ -36,8 +36,6 @@ void WeaveHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
             ImGui::InputDoubleScientific("Tikhonov Reg", &params.lambdareg);
             ImGui::InputDoubleScientific("V curl reg", &params.curlreg);
 
-            if (ImGui::Button("Remove Singularities", ImVec2(-1, 0)))
-                removeSingularities();
             if (ImGui::Button("Create Cover", ImVec2(-1, 0)))
                 augmentField();            
         }
@@ -160,14 +158,15 @@ void WeaveHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
             ImGui::InputDoubleScientific("Regularization", &initSReg);
             if (ImGui::Button("Initialize S", ImVec2(-1,0)))
                 initializeS();
-            if (ImGui::Button("Initialize S (alt)", ImVec2(-1,0)))
-                initializeSAlt();
             ImGui::InputDoubleScientific("Global Rescaling", &globalSScale);
             if (ImGui::Button("Compute Function Value", ImVec2(-1, 0)))
                 computeFunc();
             ImGui::InputInt("Num Isolines", &numISOLines);
             if (ImGui::Button("Draw Isolines", ImVec2(-1, 0)))
                 drawISOLines();
+            ImGui::InputText("Export Prefix", exportPrefix);
+            if (ImGui::Button("Export for Rendering", ImVec2(-1,0)))
+                exportForRendering();
         }
 
         menu.callback_draw_custom_window = NULL;
@@ -240,7 +239,8 @@ void WeaveHook::clear()
     
     singularVerts_topo.resize(0,3);
     singularVerts_geo.resize(0,3);
-    nonIdentityEdges.resize(0,3);
+    nonIdentity1Weave.resize(0,3);
+    nonIdentity2Weave.resize(0,3);
     cutPos1Weave.resize(0,3);
     cutPos2Weave.resize(0,3);
 
@@ -304,12 +304,7 @@ void WeaveHook::setFaceColorsCover(igl::opengl::glfw::Viewer &viewer)
         for (int i = 0; i < nsplitverts; i++)
         {            
             FVAL(i) = cover->theta[cover->visMeshToCoverMesh(i)];            
-        }
-        viewer.data().set_face_based(false);
-    }
-    else
-    {
-        viewer.data().set_face_based(true);
+        }        
     }
 
     if (cover_shading_state == CS_CONNECTION_ENERGY)
@@ -338,10 +333,30 @@ void WeaveHook::setFaceColorsCover(igl::opengl::glfw::Viewer &viewer)
         break;
     }
     
+    // fade deleted faces
+    for(int i=0; i<cover->fs->nFaces(); i++)
+    {
+        if(cover->fs->isFaceDeleted(i))
+        {
+            faceColors(i,0) = 0.5 + 0.5 * faceColors(i,0);
+            faceColors(i,1) *= 0.5;
+            faceColors(i,2) *= 0.5;
+        }
+    }
+    
     const Eigen::RowVector3d green(.1,.9,.1);
     viewer.data().add_edges( pathstarts, pathends, green);
     
-    viewer.data().set_colors(faceColors);
+    if(cover_shading_state == FUN_VAL)
+    {
+        viewer.data().set_colors(FVAL);
+        viewer.data().set_face_based(false);
+    }
+    else
+    {
+        viewer.data().set_colors(faceColors);
+        viewer.data().set_face_based(true);
+    }
 }
 
 void WeaveHook::setFaceColorsWeave(igl::opengl::glfw::Viewer &viewer)
@@ -391,7 +406,7 @@ void WeaveHook::setFaceColorsWeave(igl::opengl::glfw::Viewer &viewer)
     case WS_NONE:
         faceColors.setConstant(0.7);
         for (int i = 0; i < (int)selectedVertices.size(); i++)
-            faceColors.row(selectedVertices[i].first) << 1, 0, 0;
+            faceColors.row(selectedVertices[i].first) << 0.5, 0.5, 0;
         showCutVertexSelection(viewer);
         break;
     default:
@@ -399,6 +414,16 @@ void WeaveHook::setFaceColorsWeave(igl::opengl::glfw::Viewer &viewer)
         break;
     }
 
+    // fade deleted faces
+    for(int i=0; i<weave->fs->nFaces(); i++)
+    {
+        if(weave->fs->isFaceDeleted(i))
+        {
+            faceColors(i,0) = 0.5 + 0.5 * faceColors(i,0);
+            faceColors(i,1) *= 0.5;
+            faceColors(i,2) *= 0.5;
+        }
+    }
     viewer.data().set_colors(faceColors);
 }
 
@@ -422,11 +447,16 @@ void WeaveHook::drawCuts(igl::opengl::glfw::Viewer &viewer)
 {
     if (gui_mode == GUIMode_Enum::WEAVE)
     {
-        Eigen::RowVector3d blue(0.9, .1, .9);
-        Eigen::MatrixXd C(cutPos1Weave.rows(), 3);
+        Eigen::RowVector3d blue(.1, .1, 0.9);
+        Eigen::RowVector3d purple(0.9, .1, .9);
+        Eigen::MatrixXd C1(cutPos1Weave.rows(), 3);
         for (int i = 0; i < 3; i++)
-            C.col(i).setConstant(blue[i]);
-        viewer.data().add_edges(cutPos1Weave, cutPos2Weave, C);
+            C1.col(i).setConstant(blue[i]);
+        viewer.data().add_edges(cutPos1Weave, cutPos2Weave, C1);
+        Eigen::MatrixXd C2(nonIdentity1Weave.rows(), 3);
+        for(int i=0; i<3; i++)
+            C2.col(i).setConstant(purple[i]);
+        viewer.data().add_edges(nonIdentity1Weave, nonIdentity2Weave, C2);
     }
     else if (gui_mode == GUIMode_Enum::COVER)
     {
@@ -468,30 +498,9 @@ void WeaveHook::computeTrace()
 
 void WeaveHook::updateSingularVerts(igl::opengl::glfw::Viewer &viewer)
 {
-
-/*    nonIdentityEdges = Eigen::MatrixXd::Zero(weave->E.size(), 3);
-    for (int i = 0; i < weave->Ps.size(); i++)
-    {
-        bool id = true;
-        for (int j = 0; j < 3; j++)
-        {
-            if (weave->Ps[i](j,j) != 1)
-            {
-                id = false;
-            }
-        }
-        if (!id)
-        {
-            nonIdentityEdges.row(i) = ( weave->V.row(weave->edgeVerts(i, 0)) + 
-                                        weave->V.row(weave->edgeVerts(i, 1)) ) * .5;
-            
-        }
-    }   */
-
     Eigen::RowVector3d green(.1, .9, .1);
     Eigen::RowVector3d blue(.1, .1, .9);
     viewer.data().add_points( singularVerts_topo, green ); 
-    viewer.data().add_points( nonIdentityEdges, blue ); 
 }
 
 void WeaveHook::renderRenderGeometry(igl::opengl::glfw::Viewer &viewer)
@@ -595,7 +604,7 @@ void WeaveHook::reassignPermutations()
         singularVerts_topo.row(i) = weave->fs->data().V.row(topsingularities[i]);
     }
 
-    std::vector<Eigen::Vector3d> centers;
+    std::vector<int> nonIdentityEdges;
     for (int i = 0; i < weave->fs->Ps_.size(); i++)
     {
         bool id = true;
@@ -608,15 +617,25 @@ void WeaveHook::reassignPermutations()
         }
         if (!id)
         {
-            Eigen::Vector3d midpt = (weave->fs->data().V.row(weave->fs->data().edgeVerts(i, 0)) + weave->fs->data().V.row(weave->fs->data().edgeVerts(i, 1))) * .5;
-            centers.push_back(midpt);
-
+            nonIdentityEdges.push_back(i);
         }
     }
-    int ncenters = centers.size();
-    nonIdentityEdges.resize(ncenters, 3);
-    for(int i=0; i<ncenters; i++)
-        nonIdentityEdges.row(i) = centers[i];
+    int ncuts = nonIdentityEdges.size();
+    nonIdentity1Weave.resize(ncuts, 3);
+    nonIdentity2Weave.resize(ncuts, 3);
+    for(int i=0; i<ncuts; i++)
+    {
+        Eigen::Vector3d normal(0,0,0);
+        int f0 = weave->fs->data().E(nonIdentityEdges[i], 0);
+        if(f0 != -1)
+            normal += weave->fs->faceNormal(f0);
+        int f1 = weave->fs->data().E(nonIdentityEdges[i], 1);
+        if(f1 != -1)
+            normal += weave->fs->faceNormal(f1);
+        Eigen::Vector3d offset = 0.001*normal/ normal.norm();
+        nonIdentity1Weave.row(i) = weave->fs->data().V.row(weave->fs->data().edgeVerts(nonIdentityEdges[i], 0)) + offset.transpose();
+        nonIdentity2Weave.row(i) = weave->fs->data().V.row(weave->fs->data().edgeVerts(nonIdentityEdges[i], 1)) + offset.transpose();
+    }
 }
 
 void WeaveHook::normalizeFields()
@@ -638,6 +657,9 @@ void WeaveHook::augmentField()
         traces.purgeTraces(cover->fs);
         delete cover;
     }
+    weave->fs->undeleteAllFaces();
+    removeSingularities();
+    
     cover = weave->createCover();    
     updateRenderGeometry();
     gui_mode = GUIMode_Enum::COVER;
@@ -695,7 +717,11 @@ void WeaveHook::removeSingularities()
     for (int i = 0; i < geosingularities.size(); i++)
         todelete.push_back(geosingularities[i].first);
 
-    weave->removePointsFromMesh(todelete);
+    for(int i : todelete)
+    {
+        weave->fs->deleteVertex(i);
+    }
+    //weave->removePointsFromMesh(todelete);
     updateRenderGeometry();
 }
 
@@ -873,13 +899,55 @@ void WeaveHook::initializeS()
     updateRenderGeometry();
 }
 
-void WeaveHook::initializeSAlt()
-{
-    if(cover) cover->initializeSAlt(initSReg);
-    updateRenderGeometry();
-}
-
 void WeaveHook::saveRods()
 {
     traces.exportRodFile(rodFilename.c_str());
+}
+
+void WeaveHook::exportForRendering()
+{    
+    std::string meshName = exportPrefix + std::string("_mesh.obj");
+    igl::writeOBJ(meshName.c_str(), weave->fs->data().V, weave->fs->data().F);
+    std::string fieldName = exportPrefix + std::string("_field.csv");
+    std::ofstream vfs(fieldName.c_str());
+    int nfaces = weave->fs->nFaces();
+    int nfields = weave->fs->nFields();
+    int nverts = weave->fs->nVerts();
+    for(int i=0; i<nfaces; i++)
+    {
+        Eigen::Vector3d centroid(0,0,0);
+        for(int j=0; j<3; j++)
+            centroid += weave->fs->data().V.row( weave->fs->data().F(i,j) ).transpose();
+        centroid /= 3.0;
+        for(int j=0; j<nfields; j++)
+        {
+            Eigen::Vector3d vf = weave->fs->data().Bs[i] * weave->fs->v(i, j);
+            if (vf.norm() != 0.0)
+                vf *= weave->fs->data().averageEdgeLength / vf.norm() * sqrt(3.0) / 6.0 * 0.75;
+            vfs << centroid[0] << ", " << centroid[1] << ", " << centroid[2] << ", " << centroid[0] + vf[0] << ", " << centroid[1] + vf[1] << ", " << centroid[2] + vf[2] << std::endl;                        
+        }
+    }
+    for(int i=0; i<2*nfields; i++)
+    {
+        std::stringstream ss;
+        ss << exportPrefix << "_s_" << i << ".csv";
+        std::ofstream sfs(ss.str().c_str());
+        for(int j=0; j<nfaces; j++)
+            sfs << cover->s[i*nfaces + j] << std::endl;
+            
+        std::stringstream ss2;
+        ss2 << exportPrefix << "_theta_" << i << ".csv";
+        std::ofstream thetafs(ss2.str().c_str());
+        for(int j=0; j<nverts; j++)
+        {
+            thetafs << cover->theta[cover->visMeshToCoverMesh(i*nverts+j)] << std::endl;
+        }
+    }
+    std::string cutsname = exportPrefix + std::string("_cuts.csv");
+    std::ofstream cfs(cutsname.c_str());
+    int nsegs = nonIdentity1Weave.rows();
+    for(int i=0; i<nsegs; i++)
+    {
+        cfs << nonIdentity1Weave(i,0) << ", " << nonIdentity1Weave(i,1) << ", " << nonIdentity1Weave(i,2) << ", " << nonIdentity2Weave(i, 0) << ", " << nonIdentity2Weave(i,1) << ", " << nonIdentity2Weave(i,2) << std::endl;
+    }
 }
