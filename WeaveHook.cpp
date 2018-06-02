@@ -924,7 +924,7 @@ void WeaveHook::exportForRendering()
             Eigen::Vector3d vf = weave->fs->data().Bs[i] * weave->fs->v(i, j);
             if (vf.norm() != 0.0)
                 vf *= weave->fs->data().averageEdgeLength / vf.norm() * sqrt(3.0) / 6.0 * 0.75;
-            vfs << centroid[0] << ", " << centroid[1] << ", " << centroid[2] << ", " << centroid[0] + vf[0] << ", " << centroid[1] + vf[1] << ", " << centroid[2] + vf[2] << std::endl;                        
+            vfs << centroid[0]-vf[0] << ", " << centroid[1]-vf[1] << ", " << centroid[2]-vf[2] << ", " << centroid[0] + vf[0] << ", " << centroid[1] + vf[1] << ", " << centroid[2] + vf[2] << std::endl;                        
         }
     }
     for(int i=0; i<2*nfields; i++)
