@@ -372,8 +372,18 @@ void oneStep(Weave &weave, SolverParams params)
     std::vector<Eigen::Triplet<double> > coeffs;
     int nfaces = weave.fs->nFaces();
     int m = weave.fs->nFields();
-    for (int i = 2 * nfaces*m; i < 5 * nfaces*m; i++)
-        coeffs.push_back(Eigen::Triplet<double>(i, i, params.lambdareg));
+    for(int i=0; i<nfaces; i++)
+    {
+        for(int j=0; j<m; j++)
+        {
+            for(int k=0; k<3; k++)
+            {
+                int idx = 2*nfaces*m + 3*m*i + 3*j + k;            
+                double facearea = weave.fs->faceArea(i);
+                coeffs.push_back(Eigen::Triplet<double>(idx, idx, params.lambdareg*facearea));
+            }
+        }
+    }
     optMat.setFromTriplets(coeffs.begin(), coeffs.end());
     optMat += J.transpose() * M * J;
     std::cout << "Done, " << optMat.nonZeros() << " nonzeros" << std::endl;

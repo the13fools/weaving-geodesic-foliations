@@ -318,6 +318,7 @@ void WeaveHook::setFaceColorsCover(igl::opengl::glfw::Viewer &viewer)
     }
 
     Eigen::MatrixXd faceColors(cover->fs->nFaces(), 3);
+    Eigen::MatrixXd vertColors(nsplitverts, 3);
 
     switch (cover_shading_state) 
     {   
@@ -326,7 +327,7 @@ void WeaveHook::setFaceColorsCover(igl::opengl::glfw::Viewer &viewer)
         break;
 
     case FUN_VAL:
-        igl::colormap(viz_color, FVAL, true, faceColors);        
+        igl::colormap(viz_color, FVAL, true, vertColors);        
         break;
     default:
         igl::colormap(viz_color,Z, true, faceColors);
@@ -349,7 +350,7 @@ void WeaveHook::setFaceColorsCover(igl::opengl::glfw::Viewer &viewer)
     
     if(cover_shading_state == FUN_VAL)
     {
-        viewer.data().set_colors(FVAL);
+        viewer.data().set_colors(vertColors);
         viewer.data().set_face_based(false);
     }
     else
@@ -933,14 +934,14 @@ void WeaveHook::exportForRendering()
         ss << exportPrefix << "_s_" << i << ".csv";
         std::ofstream sfs(ss.str().c_str());
         for(int j=0; j<nfaces; j++)
-            sfs << cover->s[i*nfaces + j] << std::endl;
+            sfs << cover->s[i*nfaces + j] << ",\t 0,\t0" << std::endl;
             
         std::stringstream ss2;
         ss2 << exportPrefix << "_theta_" << i << ".csv";
         std::ofstream thetafs(ss2.str().c_str());
         for(int j=0; j<nverts; j++)
         {
-            thetafs << cover->theta[cover->visMeshToCoverMesh(i*nverts+j)] << std::endl;
+            thetafs << cover->theta[cover->visMeshToCoverMesh(i*nverts+j)] << ",\t 0,\t0" << std::endl;
         }
     }
     std::string cutsname = exportPrefix + std::string("_cuts.csv");
@@ -949,5 +950,12 @@ void WeaveHook::exportForRendering()
     for(int i=0; i<nsegs; i++)
     {
         cfs << nonIdentity1Weave(i,0) << ", " << nonIdentity1Weave(i,1) << ", " << nonIdentity1Weave(i,2) << ", " << nonIdentity2Weave(i, 0) << ", " << nonIdentity2Weave(i,1) << ", " << nonIdentity2Weave(i,2) << std::endl;
+    }
+    std::string singname = exportPrefix + std::string("_sing.csv");
+    std::ofstream singfs(singname.c_str());
+    int nsing = singularVerts_topo.rows();
+    for(int i=0; i<nsing; i++)
+    {
+        singfs << singularVerts_topo(i,0) << ", " << singularVerts_topo(i,1) << ", " << singularVerts_topo(i,2) << std::endl;
     }
 }

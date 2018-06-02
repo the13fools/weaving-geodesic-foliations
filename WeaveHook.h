@@ -77,8 +77,8 @@ public:
 
         showTraces = true;
         showRatTraces = true;
-        extendTrace = 0.0;
-        segLen = 0.1;
+        extendTrace = 0.1;
+        segLen = 0.02;
         maxCurvature = 0.5;
         minRodLen = 1.0;
     }
