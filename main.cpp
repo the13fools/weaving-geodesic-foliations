@@ -1,4 +1,4 @@
-#include <igl/viewer/Viewer.h>
+#include <igl/opengl/glfw/Viewer.h>
 #include <thread>
 #include "WeaveHook.h"
 
@@ -23,7 +23,23 @@ void resetSimulation()
     hook->reset();
 }
 
-bool drawCallback(igl::viewer::Viewer &viewer)
+bool mouseDownCallback(igl::opengl::glfw::Viewer &viewer, int button, int modifier)
+{
+    if (!hook)
+        return false;
+
+    return hook->mouseClicked(viewer, button);
+}
+
+bool mouseUpCallback(igl::opengl::glfw::Viewer &viewer, int button, int modifier)
+{
+    if (!hook)
+        return false;
+
+    return hook->mouseReleased(viewer, button);
+}
+
+bool drawCallback(igl::opengl::glfw::Viewer &viewer)
 {
     if (!hook)
         return false;
@@ -32,7 +48,7 @@ bool drawCallback(igl::viewer::Viewer &viewer)
     return false;
 }
 
-bool keyCallback(igl::viewer::Viewer& viewer, unsigned int key, int modifiers)
+bool keyCallback(igl::opengl::glfw::Viewer &viewer, unsigned int key, int modifiers)
 {
     if (key == ' ')
     {
@@ -42,46 +58,41 @@ bool keyCallback(igl::viewer::Viewer& viewer, unsigned int key, int modifiers)
     return false;
 }
 
-void drawTrace()
-{
-    hook->isDrawTrace = true;
-}
 
-void deleteLastTrace()
+bool drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
 {
-    hook->isDeleteLastTrace = true;
-}
-
-void saveTraces()
-{
-    hook->isSaveTrace = true;
-}
-
-bool initGUI(igl::viewer::Viewer &viewer)
-{
-    viewer.ngui->window()->setVisible(false);
-    viewer.ngui->addWindow(Eigen::Vector2i(10, 10), "Weaving");
-    viewer.ngui->addButton("Run/Pause Sim", toggleSimulation);
-    viewer.ngui->addButton("Reset Sim", resetSimulation);
-    hook->initGUI(viewer);
-    viewer.ngui->addButton("Draw Trace", drawTrace);
-    viewer.ngui->addButton("Delete Last Trace", deleteLastTrace);
-    viewer.ngui->addButton("Save Traces to Rod", saveTraces);
-    viewer.screen->performLayout();
+    if (ImGui::CollapsingHeader("Weaving", ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        if (ImGui::Button("Run/Pause Sim", ImVec2(-1, 0)))
+        {
+            toggleSimulation();
+        }
+        if (ImGui::Button("Reset Sim", ImVec2(-1, 0)))
+        {
+            resetSimulation();
+        }
+    }
+    hook->drawGUI(menu);
     return false;
 }
 
 int main(int argc, char *argv[])
 {
-  igl::viewer::Viewer viewer;
+  igl::opengl::glfw::Viewer viewer;
 
   hook = new WeaveHook();
   hook->reset();
 
-  viewer.data.set_face_based(true);
+  viewer.data().set_face_based(true);
   viewer.core.is_animating = true;
   viewer.callback_key_pressed = keyCallback;
   viewer.callback_pre_draw = drawCallback;
-  viewer.callback_init = initGUI;
+  viewer.callback_mouse_down = mouseDownCallback;
+  viewer.callback_mouse_up = mouseUpCallback;
+
+  igl::opengl::glfw::imgui::ImGuiMenu menu;
+  viewer.plugins.push_back(&menu);
+
+  menu.callback_draw_viewer_menu = [&]() {drawGUI(menu); };
   viewer.launch();
 }

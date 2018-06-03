@@ -4,6 +4,7 @@
 #include <Eigen/Core>
 #include <Eigen/Geometry>
 #include <iostream>
+#include "Surface.h"
 
 double angle(const Eigen::Vector3d &v1, const Eigen::Vector3d &v2, const Eigen::Vector3d axis)
 {
@@ -12,7 +13,7 @@ double angle(const Eigen::Vector3d &v1, const Eigen::Vector3d &v2, const Eigen::
 
 void reassignOneCutPermutation(Weave &weave, int cut, Eigen::MatrixXi &P)
 {
-    int m = weave.nFields();
+    int m = weave.fs->nFields();
     double best = std::numeric_limits<double>::infinity();
     int bestsigns = -1;
     std::vector<int> bestperm;
@@ -37,18 +38,18 @@ void reassignOneCutPermutation(Weave &weave, int cut, Eigen::MatrixXi &P)
                 std::vector<Eigen::Vector3d> fvecs;
                 std::vector<Eigen::Vector3d> gvecs;
                 int orient = weave.cuts[cut].path[i].second;
-                int f = weave.E(weave.cuts[cut].path[i].first, orient);
-                int g = weave.E(weave.cuts[cut].path[i].first, 1 - orient);
+                int f = weave.fs->data().E(weave.cuts[cut].path[i].first, orient);
+                int g = weave.fs->data().E(weave.cuts[cut].path[i].first, 1 - orient);
                 if (f == -1 || g == -1)
                     continue;
 
-                Eigen::Matrix2d T = weave.Ts.block<2, 2>(2 * weave.cuts[cut].path[i].first, 2 - 2 * orient);
-                Eigen::Vector3d n = weave.faceNormal(f);
+                Eigen::Matrix2d T = weave.fs->data().Ts.block<2, 2>(2 * weave.cuts[cut].path[i].first, 2 - 2 * orient);
+                Eigen::Vector3d n = weave.fs->faceNormal(f);
 
                 for (int j = 0; j < m; j++)
                 {
-                    fvecs.push_back(weave.Bs[f] * weave.v(f, j));
-                    gvecs.push_back(weave.Bs[f] * T * weave.v(g, j));
+                    fvecs.push_back(weave.fs->data().Bs[f] * weave.fs->v(f, j));
+                    gvecs.push_back(weave.fs->data().Bs[f] * T * weave.fs->v(g, j));
                 }
 
                 for (int j = 0; j < m; j++)
@@ -78,22 +79,22 @@ void reassignOneCutPermutation(Weave &weave, int cut, Eigen::MatrixXi &P)
 
 void reassignOnePermutation(Weave &weave, int edge, Eigen::MatrixXi &P)
 {
-    int f = weave.E(edge, 0);
-    int g = weave.E(edge, 1);
-    Eigen::Vector3d n = weave.faceNormal(f);
-    int m = weave.nFields();
+    int f = weave.fs->data().E(edge, 0);
+    int g = weave.fs->data().E(edge, 1);
+    Eigen::Vector3d n = weave.fs->faceNormal(f);
+    int m = weave.fs->nFields();
     P.resize(m, m);
     P.setZero();
     //gather the vectors
     std::vector<Eigen::Vector3d> fvecs;
     std::vector<Eigen::Vector3d> gvecs;
 
-    Eigen::Matrix2d T = weave.Ts.block<2, 2>(2 * edge, 2);
+    Eigen::Matrix2d T = weave.fs->data().Ts.block<2, 2>(2 * edge, 2);
 
     for (int i = 0; i < m; i++)
     {
-        fvecs.push_back(weave.Bs[f] * weave.v(f, i));
-        gvecs.push_back(weave.Bs[f] * T * weave.v(g, i));
+        fvecs.push_back(weave.fs->data().Bs[f] * weave.fs->v(f, i));
+        gvecs.push_back(weave.fs->data().Bs[f] * T * weave.fs->v(g, i));
     }
 
     double best = std::numeric_limits<double>::infinity();
@@ -136,30 +137,30 @@ void reassignOnePermutation(Weave &weave, int edge, Eigen::MatrixXi &P)
 
 int reassignPermutations(Weave &weave)
 {
-    int nedges = weave.nEdges();
+    int nedges = weave.fs->nEdges();
     int count = 0;
     for (int i = 0; i < nedges; i++)
     {
         Eigen::MatrixXi P;
         reassignOnePermutation(weave, i, P);
-        if (P != weave.Ps[i])
+        if (P != weave.fs->Ps(i))
             count++;
-        weave.Ps[i] = P;
+        weave.fs->Ps_[i] = P;
     }
     return count;
 }
 
 void findSingularVertices(const Weave &weave, std::vector<int> &topologicalSingularVerts, std::vector<std::pair<int, int> > &geometricSingularVerts)
 {
-    int nverts = weave.nVerts();
+    int nverts = weave.fs->nVerts();
     topologicalSingularVerts.clear();
     geometricSingularVerts.clear();
 
     // in principle this can be done in O(|V|) using circulators which we do not currently compute
     // O(|V||F|) for now
 
-    int nfaces = weave.nFaces();
-    int m = weave.nFields();
+    int nfaces = weave.fs->nFaces();
+    int m = weave.fs->nFields();
 
     for (int i = 0; i < nverts; i++)
     {
@@ -170,7 +171,7 @@ void findSingularVertices(const Weave &weave, std::vector<int> &topologicalSingu
         {
             for (int k = 0; k < 3; k++)
             {
-                if (weave.F(j, k) == i)
+                if (weave.fs->data().F(j, k) == i)
                 {
                     startface = j;
                     startspoke = (k + 1) % 3;
@@ -185,9 +186,8 @@ void findSingularVertices(const Weave &weave, std::vector<int> &topologicalSingu
 
         Eigen::MatrixXi totperm(m, m);
         totperm.setIdentity();
-        std::vector<double> angles;
-        for (int j = 0; j < m; j++)
-            angles.push_back(0);
+        Eigen::VectorXd angles(m);
+        angles.setZero();
 
         int curface = startface;
         int curspoke = startspoke;
@@ -198,43 +198,66 @@ void findSingularVertices(const Weave &weave, std::vector<int> &topologicalSingu
 
         while (true)
         {
-            int edge = weave.faceEdges(curface, curspoke);
-            int side = (weave.E(edge, 0) == curface) ? 0 : 1;
-            int nextface = weave.E(edge, 1 - side);
+            int edge = weave.fs->data().faceEdges(curface, curspoke);
+            int side = (weave.fs->data().E(edge, 0) == curface) ? 0 : 1;
+            int nextface = weave.fs->data().E(edge, 1 - side);
             if (nextface == -1 || curface == -1)
             {
                 isboundary = true;
                 break;
             }
+            
+            Eigen::MatrixXi nextperm;
             if (side == 0)
             {
-                totperm *= weave.Ps[edge].transpose();
+                nextperm = weave.fs->Ps(edge).transpose();
             }
             else
             {
-                totperm *= weave.Ps[edge];
+                nextperm = weave.fs->Ps(edge);
             }
-
-            Eigen::Vector3d normal = weave.faceNormal(curface);
+            
+            Eigen::Vector3d normal = weave.fs->faceNormal(curface);
 
             for (int j = 0; j < m; j++)
             {
-                Eigen::Vector3d curv = weave.Bs[curface] * weave.v(curface, j);
-                Eigen::Vector2d nextvbary = weave.v(nextface, j);
-                Eigen::Vector3d nextv = weave.Bs[curface] * weave.Ts.block<2, 2>(2 * edge, 2 - 2 * side) * nextvbary;
+                Eigen::Vector3d curv = weave.fs->data().Bs[curface] * weave.fs->v(curface, j);
+                Eigen::Vector2d nextvbary(0,0);
+                for(int k=0; k<m; k++)
+                {
+                    nextvbary += nextperm(k,j) * weave.fs->v(nextface, k);
+                }
+                Eigen::Vector3d nextv = weave.fs->data().Bs[curface] * weave.fs->data().Ts.block<2, 2>(2 * edge, 2 - 2 * side) * nextvbary;
                 angles[j] += angle(curv, nextv, normal);
             }
+            
+            Eigen::VectorXd nextangles(m);
+            nextangles.setZero();
+            for(int j=0; j<m; j++)
+            {
+                for(int k=0; k<m; k++)
+                {
+                    if(nextperm(j,k) != 0)
+                    {
+                        nextangles[j] = angles[k];
+                    }
+                }
+            }
+            
+            angles = nextangles;
+            
+            totperm *= nextperm;
 
             int spokep1 = (curspoke + 1) % 3;
             int apex = (curspoke + 2) % 3;
-            Eigen::Vector3d v1 = weave.V.row(weave.F(curface,curspoke)) - weave.V.row(weave.F(curface,apex));
-            Eigen::Vector3d v2 = weave.V.row(weave.F(curface,spokep1)) - weave.V.row(weave.F(curface,apex));
+            Eigen::Vector3d v1 = weave.fs->data().V.row(weave.fs->data().F(curface,curspoke)) - weave.fs->data().V.row(weave.fs->data().F(curface,apex));
+            Eigen::Vector3d v2 = weave.fs->data().V.row(weave.fs->data().F(curface,spokep1)) - weave.fs->data().V.row(weave.fs->data().F(curface,apex));
             totangle += angle(v1, v2, normal);
 
             curface = nextface;
             for (int k = 0; k < 3; k++)
             {
-                if (weave.F(nextface, k) == i)
+                if (weave.fs->data().F(nextface, k) == i)
                 {
                     curspoke = (k + 1) % 3;
                     break;
@@ -255,13 +278,17 @@ void findSingularVertices(const Weave &weave, std::vector<int> &topologicalSingu
             }
             if (!isidentity)
                 topologicalSingularVerts.push_back(i);
-
-            for (int j = 0; j < m; j++)
+            else
             {
-                const double PI = 3.1415926535898;
-                double index = angles[j] + 2 * PI - totangle;
-                if (fabs(index) > PI)
-                    geometricSingularVerts.push_back(std::pair<int, int>(i, j));
+                for (int j = 0; j < m; j++)
+                {
+                    const double PI = 3.1415926535898;
+                    double index = angles[j] + 2 * PI - totangle;
+                    if (fabs(index) > PI)
+                    {
+                        geometricSingularVerts.push_back(std::pair<int, int>(i, j));
+                    }
+                }
             }
         }
     }
@@ -280,9 +307,9 @@ int reassignCutPermutations(Weave &weave)
             Eigen::MatrixXi Pedge = P;
             if (weave.cuts[i].path[j].second == 1)
                 Pedge.transposeInPlace();
-            if (weave.Ps[weave.cuts[i].path[j].first] != Pedge)
+            if (weave.fs->Ps(weave.cuts[i].path[j].first) != Pedge)
             {
-                weave.Ps[weave.cuts[i].path[j].first] = Pedge;
+                weave.fs->Ps_[weave.cuts[i].path[j].first] = Pedge;
                 tot++;
             }
         }

@@ -12,7 +12,7 @@ for pId = 1 : numP
                 continue;
             end
             d = Torus.vertexPoss(:, pId) - Torus.vertexPoss(:, j);
-            if d'*d < 1e-10
+            if d'*d < 1e-5
                 IDX(j) = cId;
             end
         end

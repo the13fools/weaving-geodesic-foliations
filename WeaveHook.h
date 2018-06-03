@@ -4,30 +4,48 @@
 #include "PhysicsHook.h"
 #include "Weave.h"
 #include "GaussNewton.h"
-#include "Trace.h"
+#include "Traces.h"
 #include <string>
-
+#include "Surface.h"
 #include <igl/unproject_onto_mesh.h>
 
-enum Shading_Enum {
-    NONE = 0,
+class CoverMesh;
+
+enum WeaveShading_Enum {
+    WS_NONE = 0,
     F1_ENERGY,
     F2_ENERGY,
     F3_ENERGY,
     TOT_ENERGY,
-    FUN_VAL
+    WS_CONNECTION_ENERGY
+};
+
+enum CoverShading_Enum {
+    CS_NONE = 0,
+    CS_S_VAL,
+    FUN_VAL,
+    CS_CONNECTION_ENERGY
+};
+
+enum GUIMode_Enum {
+    WEAVE = 0,
+    COVER
 };
 
 class WeaveHook : public PhysicsHook
 {
 public:
-    WeaveHook() : PhysicsHook(), weave(NULL), vectorScale(1.0), normalizeVectors(true)
+    WeaveHook() : PhysicsHook(), weave(NULL), cover(NULL), vectorScale(1.0), normalizeVectors(true)
     {
+        gui_mode = GUIMode_Enum::WEAVE;
+        weave_shading_state = WeaveShading_Enum::WS_NONE;
+        cover_shading_state = CoverShading_Enum::CS_NONE;
         // meshName = "meshes/bunny_coarser.obj";
         meshName = "meshes/tet.obj";
         // vectorFieldName = "bunny_coarser_nosing";
-        vectorFieldName = "tet.relax";
-        traceFile = "example.tr";
+        vectorFieldName = "tet.rlx";
+        rodFilename = "example.rod";
+        exportPrefix = "export/example";
         params.lambdacompat = 100;
         params.lambdareg = 1e-3;
 
@@ -35,11 +53,12 @@ public:
         traceSign = 1;
         traceSteps = 100;
         traceFaceId = 0;
-        isDrawTrace = false;
-
+        
         hideVectors = false;
-        showBending = false;
         showSingularities = false;
+        wireframe = false;
+
+        targetResolution = 5000;
     
         handleLocation = 0;
         handleParams = Eigen::VectorXd::Zero(6);
@@ -50,203 +69,68 @@ public:
         handleParams(4) = 1;
         handleParams(5) = -1;
 
-        drawLine = false;
-        trace = new Trace();
+        showCoverCuts = true;
+        numISOLines = 0;
+        
+        initSReg = 1e-4;
+        globalSScale = 1.0;
+
+        showTraces = true;
+        showRatTraces = true;
+        extendTrace = 0.1;
+        segLen = 0.02;
+        maxCurvature = 0.5;
+        minRodLen = 1.0;
     }
 
-    virtual void initGUI(igl::viewer::Viewer &viewer)
-    {
-        viewer.ngui->addVariable("Mesh", meshName);
-        viewer.ngui->addGroup("Visualization");
-        viewer.ngui->addVariable("Vector Scale", vectorScale);
-        viewer.ngui->addVariable("Normalize Vectors", normalizeVectors);
-        viewer.ngui->addVariable("Hide Vectors", hideVectors);
-        viewer.ngui->addVariable("Shading", shading_state, true)
-            ->setItems({ "None", "F1 Energy", "F2 Energy", "F3 Energy", "Total Energy", "FUN_VAL" });
-
-//        viewer.ngui->addVariable("Fun Val Cover", funvalcover);
-        viewer.ngui->addButton("Normalize Fields", std::bind(&WeaveHook::normalizeFields, this));
-        viewer.ngui->addVariable("Fix Fields", weave->fixFields);
-
-        viewer.ngui->addGroup("Solver Parameters");
-        viewer.ngui->addVariable("Compatilibity Lambda", params.lambdacompat);
-        viewer.ngui->addVariable("Tikhonov Reg", params.lambdareg);
-        viewer.ngui->addVariable("V curl reg", params.curlreg);
-        viewer.ngui->addButton("Reassign Permutations", std::bind(&WeaveHook::reassignPermutations, this));
-        viewer.ngui->addButton("Remove Singularities", std::bind(&WeaveHook::removeSingularities, this));
-        viewer.ngui->addButton("Augment Field", std::bind(&WeaveHook::augmentField, this));
-        viewer.ngui->addVariable("The initial value of Scales", scalesInit);
-        viewer.ngui->addButton("Compute Function Value", std::bind(&WeaveHook::computeFunc, this));
-        viewer.ngui->addVariable("Number of ISO Lines", numISOLines);
-        viewer.ngui->addButton("Draw ISO Lines", std::bind(&WeaveHook::drawISOLines, this));
-
-        viewer.ngui->addGroup("Save/Load Field");
-        viewer.ngui->addVariable("Filename", vectorFieldName);
-        viewer.ngui->addButton("Save Field", std::bind(&WeaveHook::serializeVectorField, this));
-        viewer.ngui->addButton("Load Field", std::bind(&WeaveHook::deserializeVectorField, this));
-        viewer.ngui->addButton("Export Field", std::bind(&WeaveHook::exportVectorField, this));
-
-        viewer.ngui->addGroup("Add Cut");
-        viewer.ngui->addButton("Reset Cut Select", std::bind(&WeaveHook::resetCutSelection, this));
-        viewer.ngui->addButton("Add Cut", std::bind(&WeaveHook::addCut, this));
-        viewer.ngui->addButton("Remove Prev Cut", std::bind(&WeaveHook::removePrevCut, this));
-
-        viewer.ngui->addWindow(Eigen::Vector2i(300, 600), "Handles");
-        viewer.ngui->addVariable("Face location", handleLocation);
-        viewer.ngui->addVariable("P0", handleParams[0]);
-        viewer.ngui->addVariable("P1", handleParams[1]);
-        viewer.ngui->addVariable("P2", handleParams[2]);
-        viewer.ngui->addVariable("P3", handleParams[3]);
-        viewer.ngui->addVariable("P4", handleParams[4]);
-        viewer.ngui->addVariable("P5", handleParams[5]);
-
-
-
-        viewer.ngui->addWindow(Eigen::Vector2i(300, 10), "Manipulate");
-        viewer.ngui->addGroup("Tracing Controls");
-        viewer.ngui->addVariable("Trace Face", traceFaceId);
-        viewer.ngui->addVariable("Trace Steps", traceSteps);
-        viewer.ngui->addVariable("Trace Field", traceIdx);
-        viewer.ngui->addVariable("Trace Sign", traceSign);
-        viewer.ngui->addVariable("Trace Mode", trace_state, true)
-            ->setItems({ "Geodesic", "Field" });
-        viewer.ngui->addVariable("Show Bending", showBending);
-        viewer.ngui->addVariable("Trace File", traceFile);
-        viewer.ngui->addButton("Save Traces", std::bind(&WeaveHook::saveTraces, this));
-        viewer.ngui->addButton("Load Traces", std::bind(&WeaveHook::loadTraces, this));
-        viewer.ngui->addButton("Load Sampled Traces", std::bind(&WeaveHook::loadSampledTraces, this));
-        //     viewer.ngui->addVariable("Show Singularities", showSingularities);
-
-        viewer.callback_mouse_down =
-            [this](igl::viewer::Viewer& viewer, int, int)->bool
-        {
-            int fid;
-            Eigen::Vector3f bc;
-            // Cast a ray in the view direction starting from the mouse position
-            double x = viewer.current_mouse_x;
-            double y = viewer.core.viewport(3) - viewer.current_mouse_y;
-            if (igl::unproject_onto_mesh(Eigen::Vector2f(x, y), viewer.core.view * viewer.core.model,
-                viewer.core.proj, viewer.core.viewport, this->weave->V, this->weave->F, fid, bc))
-            {
-                std::cout << fid << " - clicked on vertex #\n"; 
-                bool found = false;
-                for (int i = 0; i < (int)selectedVertices.size(); i++)
-                {
-                    if(selectedVertices[i].first == fid)
-                    { 
-                        found = true;
-                        if (selectedVertices[i].second < 2)
-                            selectedVertices[i].second++;
-                        else
-                            selectedVertices.erase(selectedVertices.begin() + i);
-                    }
-                }
-                if(!found && selectedVertices.size() < 2)
-                {
-                    std::pair<int, int> newsel(fid, 0);
-                    selectedVertices.push_back(newsel);
-                }
-                renderSelectedVertices.clear();
-                for (int i = 0; i < (int)selectedVertices.size(); i++)
-                {
-                    renderSelectedVertices.push_back(weave->V.row(weave->F(selectedVertices[i].first, selectedVertices[i].second)));
-                }
-                return true;
-            }
-            return false;
-        };
-        std::cout << R"(Usage:
-	  [click]  Pick face on shape
-
-	)";
-
-    }
+    virtual void drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu);
+    virtual bool mouseClicked(igl::opengl::glfw::Viewer &viewer, int button);
 
     void reassignPermutations();
     void normalizeFields();
     void serializeVectorField();
-    void deserializeVectorField();
-    void exportVectorField();
+    void deserializeVectorField();    
+    void deserializeVectorFieldOld();
     void augmentField();
+    void initializeS();
+    void initializeSAlt();
     void computeFunc();
     void drawISOLines();
     void resetCutSelection();
     void addCut();
+    void resample();
     void removeSingularities();
     void removePrevCut(); 
-    void saveTraces();
-    void loadTraces();
-    void loadSampledTraces();
+    void clearTraces();
+    void deleteLastTrace();
+    void computeTrace();   
+    void rationalizeTraces();
+    void saveRods();
+    void exportForRendering();
     
-    
-    virtual void initSimulation()
-    {
-        if (weave)
-            delete weave;
-        weave = new Weave(meshName, 3);
-        Handle h;
-        h.face = 0;
-        h.dir << 1, 0;
-        h.field = 2;
-        weave->addHandle(h);
-        h.face = 0;
-        h.dir << 0, 1;
-        h.field = 1;
-        weave->addHandle(h);
-        h.face = 0;
-        h.dir << 1, -1;
-        h.field = 0;
-        weave->addHandle(h);
-        curFaceEnergies = Eigen::MatrixXd::Zero(3, 3);
-        selectedVertices.clear();
-        renderSelectedVertices.clear();
-        params.edgeWeights = Eigen::VectorXd::Constant(weave->nEdges(), 1);    
+    virtual void initSimulation();
 
-        weave->fixFields = false;    
-    }
-
-    virtual void updateRenderGeometry()
-    {
-        renderQ = weave->V;
-        renderF = weave->F;        
-        weave->createVisualizationEdges(edgePts, edgeVecs, edgeSegs, edgeColors);
-        weave->createVisualizationCuts(cutPos1, cutPos2);
-        faceColors.resize(weave->nFaces(), 3);
-        faceColors.setConstant(0.3);
-        baseLength = weave->averageEdgeLength;
-        curFaceEnergies = tempFaceEnergies;
-
-
-    weave->handles[0].face = handleLocation; 
-    weave->handles[0].dir(0) = handleParams(0); 
-    weave->handles[0].dir(1) = handleParams(1); 
-    weave->handles[1].face = handleLocation; 
-    weave->handles[1].dir(0) = handleParams(2); 
-    weave->handles[1].dir(1) = handleParams(3); 
-    weave->handles[2].face = handleLocation; 
-    weave->handles[2].dir(0) = handleParams(4); 
-    weave->handles[2].dir(1) = handleParams(5); 
-
-    }
+    virtual void updateRenderGeometry();
 
     virtual bool simulateOneStep();    
 
-    virtual void renderRenderGeometry(igl::viewer::Viewer &viewer);    
+    virtual void renderRenderGeometry(igl::opengl::glfw::Viewer &viewer);    
 
-    void setFaceColors(igl::viewer::Viewer &viewer);
+    void setFaceColorsWeave(igl::opengl::glfw::Viewer &viewer);
+    void setFaceColorsCover(igl::opengl::glfw::Viewer &viewer);
  
-    void drawTraceCenterlines(igl::viewer::Viewer &viewer);
-    void drawCuts(igl::viewer::Viewer &viewer);
+    void drawCuts(igl::opengl::glfw::Viewer &viewer);
 
-    void showCutVertexSelection(igl::viewer::Viewer &viewer);
-    void updateSingularVerts(igl::viewer::Viewer &viewer);
+    void showCutVertexSelection(igl::opengl::glfw::Viewer &viewer);
+    void updateSingularVerts(igl::opengl::glfw::Viewer &viewer);
 private:
+    void clear();
     std::string meshName;
     Weave *weave;
+    CoverMesh *cover;
     SolverParams params;
 
-    std::string traceFile;
-    Trace *trace;
+    TraceSet traces;
 
     std::vector<std::pair<int, int > > selectedVertices; // (face, vert) pairs
     
@@ -256,41 +140,75 @@ private:
     Eigen::VectorXd handleParams;
     int handleLocation;
 
-    Eigen::MatrixXd faceColors;
     Eigen::MatrixXd curFaceEnergies;
     Eigen::MatrixXd tempFaceEnergies;
-    Eigen::MatrixXd renderQ;
-    Eigen::MatrixXi renderF;
-    Eigen::MatrixXd edgePts;
-    Eigen::MatrixXd edgeVecs;
-    Eigen::MatrixXi edgeSegs;
-    Eigen::MatrixXd edgeColors;    
+    Eigen::MatrixXd renderQWeave;
+    Eigen::MatrixXi renderFWeave;
+    Eigen::MatrixXd edgePtsWeave;
+    Eigen::MatrixXd edgeVecsWeave;
+    Eigen::MatrixXi edgeSegsWeave;
+    Eigen::MatrixXd edgeColorsWeave;    
+    Eigen::MatrixXd edgePtsCover;
+    Eigen::MatrixXd edgeVecsCover;
+    Eigen::MatrixXi edgeSegsCover;
+    Eigen::MatrixXd edgeColorsCover;    
     std::vector<Eigen::Vector3d> renderSelectedVertices; // teal selected vertex spheres
     bool normalizeVectors;
     bool hideVectors;
+    bool showCoverCuts;
+    bool wireframe;
 
-    Shading_Enum shading_state = Shading_Enum::NONE;
+    Eigen::MatrixXd renderQCover;
+    Eigen::MatrixXi renderFCover;
+    
+
+    GUIMode_Enum gui_mode;
+    WeaveShading_Enum weave_shading_state;
+    CoverShading_Enum cover_shading_state;
     Trace_Mode trace_state = Trace_Mode::GEODESIC;
     
     int traceIdx;
     int traceSign;
     int traceFaceId;
     int traceSteps;
+    int targetResolution;
     
-    bool showBending;
     bool showSingularities;
     Eigen::MatrixXd singularVerts_topo;
     Eigen::MatrixXd singularVerts_geo;
-    Eigen::MatrixXd nonIdentityEdges;
-    Eigen::MatrixXd cutPos1; // endpoints of cut edges
-    Eigen::MatrixXd cutPos2;
+    Eigen::MatrixXd nonIdentity1Weave;
+    Eigen::MatrixXd nonIdentity2Weave;
+    Eigen::MatrixXd cutPos1Weave; // endpoints of cut edges
+    Eigen::MatrixXd cutPos2Weave;
+    Eigen::MatrixXd cutPos1Cover;
+    Eigen::MatrixXd cutPos2Cover;
+    Eigen::MatrixXd cutColorsCover;
 
     std::string vectorFieldName;
+    std::string exportPrefix;
 
-    bool drawLine;
-    std::vector<Eigen::MatrixXd> paths;
+    bool showTraces;
+    bool showRatTraces;
+    double extendTrace;
+    double segLen;
+    double maxCurvature;
+    double minRodLen;
+    // isolines on the split mesh
+    Eigen::MatrixXd pathstarts;
+    Eigen::MatrixXd pathends;
+    // traces on the single mesh
+    Eigen::MatrixXd tracestarts;
+    Eigen::MatrixXd traceends;
+    Eigen::MatrixXd tracecolors;
+    
+    std::string rodFilename;
+
+    Eigen::MatrixXd rattracestarts;
+    Eigen::MatrixXd rattraceends;
+    Eigen::MatrixXd ratcollisions;
     int numISOLines;
-    double scalesInit;
+    double initSReg;
+    double globalSScale;
 };
 
 #endif

@@ -2,92 +2,434 @@
 #include "GaussNewton.h"
 #include <iostream>
 #include "Permutations.h"
+#include <igl/opengl/glfw/imgui/ImGuiHelpers.h>
+#include "ImGuiDouble.h"
+#include "Surface.h"
+#include "CoverMesh.h"
+
+#include <igl/decimate.h>
+#include <igl/upsample.h>
 
 using namespace std;
 
+void WeaveHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
+{
+    ImGui::InputText("Mesh", meshName);
+    ImGui::Combo("GUI Mode", (int *)&gui_mode, cover ? "Weave\0Cover\0\0" : "Weave\0\0");
 
-void WeaveHook::setFaceColors(igl::viewer::Viewer &viewer)
-{ 
-    int faces = weave->F.rows();
+    if (gui_mode == GUIMode_Enum::WEAVE)
+    {
+        if (ImGui::CollapsingHeader("Visualization (Weave)", ImGuiTreeNodeFlags_DefaultOpen))
+        {
+            ImGui::InputDoubleScientific("Vector Scale", &vectorScale);
+            ImGui::Checkbox("Normalize Vectors", &normalizeVectors);
+            ImGui::Checkbox("Hide Vectors", &hideVectors);
+            ImGui::Checkbox("Wireframe", &wireframe);
+            ImGui::Combo("Shading", (int *)&weave_shading_state, "None\0F1 Energy\0F2 Energy\0F3 Energy\0Total Energy\0Connection\0\0");
+            if (ImGui::Button("Normalize Fields", ImVec2(-1, 0)))
+                normalizeFields();
+            ImGui::Checkbox("Fix Fields", &weave->fixFields);
+        }
+        if (ImGui::CollapsingHeader("Solver Parameters", ImGuiTreeNodeFlags_DefaultOpen))
+        {
+            ImGui::InputDoubleScientific("Compatilibity Lambda", &params.lambdacompat);
+            ImGui::InputDoubleScientific("Tikhonov Reg", &params.lambdareg);
+            ImGui::InputDoubleScientific("V curl reg", &params.curlreg);
+
+            if (ImGui::Button("Create Cover", ImVec2(-1, 0)))
+                augmentField();            
+        }
+        if (ImGui::CollapsingHeader("Save/Load Field", ImGuiTreeNodeFlags_DefaultOpen))
+        {
+            ImGui::InputText("Filename", vectorFieldName);
+            if (ImGui::Button("Save Field", ImVec2(-1, 0)))
+                serializeVectorField();
+            if (ImGui::Button("Load Field", ImVec2(-1, 0)))
+                deserializeVectorField();
+            if (ImGui::Button("Load Field (Old Format)", ImVec2(-1, 0)))
+                deserializeVectorFieldOld();
+        }
+        if (ImGui::CollapsingHeader("Cuts", ImGuiTreeNodeFlags_DefaultOpen))
+        {
+            if (ImGui::Button("Reset Cut Select", ImVec2(-1, 0)))
+                resetCutSelection();
+            if (ImGui::Button("Add Cut", ImVec2(-1, 0)))
+                addCut();
+            if (ImGui::Button("Remove Prev Cut", ImVec2(-1, 0)))
+                removePrevCut();
+            if (ImGui::Button("Reassign Permutations", ImVec2(-1, 0)))
+                reassignPermutations();
+        }
+        if (ImGui::CollapsingHeader("Misc", ImGuiTreeNodeFlags_DefaultOpen))
+        {
+            ImGui::InputInt("Target # faces", &targetResolution, 0, 0);
+            if (ImGui::Button("Resample Mesh", ImVec2(-1, 0)))
+                resample();
+            ImGui::InputInt("Num Isolines", &numISOLines);
+            if (ImGui::Button("Draw Isolines", ImVec2(-1, 0)))
+                drawISOLines();
+        }
+
+        menu.callback_draw_custom_window = [&]()
+        {
+            // Define next window position + size
+            ImGui::SetNextWindowPos(ImVec2(180.f * menu.menu_scaling(), 10), ImGuiSetCond_FirstUseEver);
+            ImGui::SetNextWindowSize(ImVec2(200, 200), ImGuiSetCond_FirstUseEver);
+            ImGui::Begin(
+                "Handles", nullptr,
+                ImGuiWindowFlags_NoSavedSettings
+            );
+
+            ImGui::InputInt("Face Location", &handleLocation, 0, 0);
+            ImGui::InputDoubleScientific("P0", &handleParams[0]);
+            ImGui::InputDoubleScientific("P1", &handleParams[1]);
+            ImGui::InputDoubleScientific("P2", &handleParams[2]);
+            ImGui::InputDoubleScientific("P3", &handleParams[3]);
+            ImGui::InputDoubleScientific("P4", &handleParams[4]);
+            ImGui::InputDoubleScientific("P5", &handleParams[5]);
+
+            ImGui::End();
+
+            ImGui::SetNextWindowPos(ImVec2(180.f * menu.menu_scaling(), 210), ImGuiSetCond_FirstUseEver);
+            ImGui::SetNextWindowSize(ImVec2(200, 500), ImGuiSetCond_FirstUseEver);
+
+            ImGui::Begin(
+                "Manipulate", nullptr,
+                ImGuiWindowFlags_NoSavedSettings
+            );
+
+            if (ImGui::CollapsingHeader("Tracing Controls", ImGuiTreeNodeFlags_DefaultOpen))
+            {
+                ImGui::InputInt("Trace Face", &traceFaceId, 0, 0);
+                ImGui::InputInt("Trace Steps", &traceSteps, 0, 0);
+                ImGui::InputInt("Trace Field", &traceIdx, 0, 0);
+                ImGui::InputInt("Trace Sign", &traceSign, 0, 0);
+                ImGui::Combo("Trace Mode", (int *)&trace_state, "Geodesic\0Field\0\0");                
+            }
+            if (ImGui::CollapsingHeader("Traces", ImGuiTreeNodeFlags_DefaultOpen))
+            {
+                ImGui::Checkbox("Show Traces", &showTraces);
+
+                if (ImGui::Button("Draw Trace", ImVec2(-1, 0)))
+                {
+                    computeTrace();
+                }
+                if (ImGui::Button("Delete Last Trace", ImVec2(-1, 0)))
+                {
+                    deleteLastTrace();
+                }
+                if (ImGui::Button("Clear All Traces", ImVec2(-1, 0)))
+                {
+                    clearTraces();
+                }                
+            }
+            if (ImGui::CollapsingHeader("Rods", ImGuiTreeNodeFlags_DefaultOpen))
+            {
+                ImGui::Checkbox("Show Rod Segments", &showRatTraces);
+                ImGui::InputDoubleScientific("Extend Traces By", &extendTrace);
+                ImGui::InputDoubleScientific("Segment Lenght", &segLen);
+                ImGui::InputDoubleScientific("Max Curvature", &maxCurvature);
+                ImGui::InputDoubleScientific("Min Rod Length", &minRodLen);
+                if (ImGui::Button("Generate From Traces", ImVec2(-1, 0)))
+                {
+                    rationalizeTraces();
+                }
+                ImGui::InputText("Rod Filename", rodFilename);
+                if (ImGui::Button("Save To Rod File", ImVec2(-1, 0)))
+                {
+                    saveRods();
+                }
+            }
+            ImGui::End();
+        };
+    }
+    else if (gui_mode == GUIMode_Enum::COVER)
+    {
+        if (ImGui::CollapsingHeader("Visualization (Cover)", ImGuiTreeNodeFlags_DefaultOpen))
+        {
+            ImGui::InputDoubleScientific("Vector Scale", &vectorScale);
+            ImGui::Checkbox("Hide Vectors", &hideVectors);
+            ImGui::Combo("Shading", (int *)&cover_shading_state, "None\0S Value\0Theta Value\0Connection\0\0");
+            ImGui::Checkbox("Show Cuts", &showCoverCuts);
+        }
+
+        if (ImGui::CollapsingHeader("Cover Controls", ImGuiTreeNodeFlags_DefaultOpen))
+        {
+            ImGui::InputDoubleScientific("Regularization", &initSReg);
+            if (ImGui::Button("Initialize S", ImVec2(-1,0)))
+                initializeS();
+            ImGui::InputDoubleScientific("Global Rescaling", &globalSScale);
+            if (ImGui::Button("Compute Function Value", ImVec2(-1, 0)))
+                computeFunc();
+            ImGui::InputInt("Num Isolines", &numISOLines);
+            if (ImGui::Button("Draw Isolines", ImVec2(-1, 0)))
+                drawISOLines();
+            ImGui::InputText("Export Prefix", exportPrefix);
+            if (ImGui::Button("Export for Rendering", ImVec2(-1,0)))
+                exportForRendering();
+        }
+
+        menu.callback_draw_custom_window = NULL;
+    }
+}
+
+bool WeaveHook::mouseClicked(igl::opengl::glfw::Viewer &viewer, int button)
+{
+    if (gui_mode != GUIMode_Enum::WEAVE)
+        return false;
+    int fid;
+    Eigen::Vector3f bc;
+    // Cast a ray in the view direction starting from the mouse position
+    double x = viewer.current_mouse_x;
+    double y = viewer.core.viewport(3) - viewer.current_mouse_y;
+    if (igl::unproject_onto_mesh(Eigen::Vector2f(x, y), viewer.core.view * viewer.core.model,
+        viewer.core.proj, viewer.core.viewport, this->weave->fs->data().V, this->weave->fs->data().F, fid, bc))
+    {
+        std::cout << fid << " - clicked on vertex #\n"; 
+        bool found = false;
+        for (int i = 0; i < (int)selectedVertices.size(); i++)
+        {
+            if(selectedVertices[i].first == fid)
+            { 
+                found = true;
+                if (selectedVertices[i].second < 2)
+                    selectedVertices[i].second++;
+                else
+                    selectedVertices.erase(selectedVertices.begin() + i);
+            }
+        }
+        if(!found && selectedVertices.size() < 2)
+        {
+            std::pair<int, int> newsel(fid, 0);
+            selectedVertices.push_back(newsel);
+        }
+        renderSelectedVertices.clear();
+        for (int i = 0; i < (int)selectedVertices.size(); i++)
+        {
+            renderSelectedVertices.push_back(weave->fs->data().V.row(weave->fs->data().F(selectedVertices[i].first, selectedVertices[i].second)));
+        }
+        return true;
+    }
+    return false;
+}
+
+void WeaveHook::clear()
+{
+    if (cover)
+        delete cover;
+    cover = NULL;
+    gui_mode = GUIMode_Enum::WEAVE;
+    Handle h;
+    h.face = 0;
+    h.dir << 1, 0;
+    h.field = 2;
+    weave->addHandle(h);
+    h.face = 0;
+    h.dir << 0, 1;
+    h.field = 1;
+    weave->addHandle(h);
+    h.face = 0;
+    h.dir << 1, -1;
+    h.field = 0;
+    weave->addHandle(h);
+    curFaceEnergies = Eigen::MatrixXd::Zero(3, 3);
+    selectedVertices.clear();
+    renderSelectedVertices.clear();
+    params.edgeWeights = Eigen::VectorXd::Constant(weave->fs->nEdges(), 1);    
+    
+    singularVerts_topo.resize(0,3);
+    singularVerts_geo.resize(0,3);
+    nonIdentity1Weave.resize(0,3);
+    nonIdentity2Weave.resize(0,3);
+    cutPos1Weave.resize(0,3);
+    cutPos2Weave.resize(0,3);
+
+    weave->fixFields = false;    
+    pathstarts.resize(0,3);
+    pathends.resize(0,3);
+
+    traces.clear();
+}
+
+void WeaveHook::initSimulation()
+{
+    if (weave)
+        delete weave;
+    weave = new Weave(meshName, 3);    
+    clear();    
+}
+
+void WeaveHook::resample()
+{
+    Eigen::MatrixXd Vcurr = weave->fs->data().V;
+    Eigen::MatrixXi Fcurr  = weave->fs->data().F;
+    while ( Fcurr.rows() < targetResolution * 2)
+    {
+        Eigen::MatrixXd Vtmp = Vcurr;
+        Eigen::MatrixXi Ftmp = Fcurr;
+        igl::upsample(Vtmp, Ftmp, Vcurr, Fcurr);
+    }
+    Eigen::MatrixXd V;
+    Eigen::MatrixXi F;
+    Eigen::VectorXi J;
+    
+    igl::decimate(Vcurr, Fcurr, targetResolution, V, F, J);
+    igl::writeOBJ("resampled.obj",V,F);
+    
+    delete weave;
+    
+    weave = new Weave(V, F, 3);    
+    clear();  
+
+    // Hacky... 
+    updateRenderGeometry();
+}
+
+void WeaveHook::setFaceColorsCover(igl::opengl::glfw::Viewer &viewer)
+{
+    int faces = cover->fs->data().F.rows();
     // if ( curFaceEnergies.rows() != faces && shading_state != NONE) { return ; }
     // cout << "fuck" << endl;
 
     igl::ColorMapType viz_color = igl::COLOR_MAP_TYPE_MAGMA;
-    
+
     Eigen::VectorXd Z(faces);
-    Eigen::VectorXd FVAL(weave->nVerts());
-    
-    for (int i = 0; i < faces; i++) 
+    Z.setConstant(0.7);
+
+    int nsplitverts = cover->splitMesh().nVerts();
+    Eigen::VectorXd FVAL(nsplitverts);
+
+    if (cover_shading_state == FUN_VAL)
     {
-        switch(shading_state)
-        {
-            case NONE:
-                Z(i) = .7;
-                break;
-            case F1_ENERGY:
-                Z(i) = log(curFaceEnergies(i,0));
-                break;  
-            case F2_ENERGY:
-                Z(i) = log(curFaceEnergies(i,1));
-                break;  
-            case F3_ENERGY:
-                Z(i) = log(curFaceEnergies(i,2));
-                break;  
-            case TOT_ENERGY:
-                Z(i) = log(curFaceEnergies.row(i).norm());
-                break;  
-        }       
+        for (int i = 0; i < nsplitverts; i++)
+        {            
+            FVAL(i) = cover->theta[cover->visMeshToCoverMesh(i)];            
+        }        
     }
-    if (shading_state == FUN_VAL)
+
+    if (cover_shading_state == CS_CONNECTION_ENERGY)
     {
-        for (int i = 0; i < weave->nVerts(); i ++)
+        cover->fs->connectionEnergy(Z);
+    }
+    
+    if (cover_shading_state == CS_S_VAL)
+    {
+        Z = cover->s;
+    }
+
+    Eigen::MatrixXd faceColors(cover->fs->nFaces(), 3);
+    Eigen::MatrixXd vertColors(nsplitverts, 3);
+
+    switch (cover_shading_state) 
+    {   
+    case CS_NONE:
+        faceColors.setConstant(0.7);
+        break;
+
+    case FUN_VAL:
+        igl::colormap(viz_color, FVAL, true, vertColors);        
+        break;
+    default:
+        igl::colormap(viz_color,Z, true, faceColors);
+        break;
+    }
+    
+    // fade deleted faces
+    for(int i=0; i<cover->fs->nFaces(); i++)
+    {
+        if(cover->fs->isFaceDeleted(i))
         {
-            FVAL(i) = weave->theta[i];
-            viewer.data.set_face_based(false);
+            faceColors(i,0) = 0.5 + 0.5 * faceColors(i,0);
+            faceColors(i,1) *= 0.5;
+            faceColors(i,2) *= 0.5;
         }
+    }
+    
+    const Eigen::RowVector3d green(.1,.9,.1);
+    viewer.data().add_edges( pathstarts, pathends, green);
+    
+    if(cover_shading_state == FUN_VAL)
+    {
+        viewer.data().set_colors(vertColors);
+        viewer.data().set_face_based(false);
     }
     else
     {
-        viewer.data.set_face_based(true);
+        viewer.data().set_colors(faceColors);
+        viewer.data().set_face_based(true);
     }
+}
 
+void WeaveHook::setFaceColorsWeave(igl::opengl::glfw::Viewer &viewer)
+{
+    int faces = weave->fs->data().F.rows();
+    // if ( curFaceEnergies.rows() != faces && shading_state != NONE) { return ; }
+    // cout << "fuck" << endl;
 
-    switch (shading_state) 
+    igl::ColorMapType viz_color = igl::COLOR_MAP_TYPE_MAGMA;
+
+    Eigen::VectorXd Z(faces);    
+
+    for (int i = 0; i < faces; i++)
     {
-        case NONE: 
-            faceColors.setConstant(0.7);
-            for (int i = 0; i < (int)selectedVertices.size(); i++)
-                faceColors.row(selectedVertices[i].first) << 1, 0, 0;
-            showCutVertexSelection(viewer);     
+        switch (weave_shading_state)
+        {
+        case F1_ENERGY:
+            Z(i) = log(curFaceEnergies(i, 0));
             break;
-        case FUN_VAL:
-            faceColors.resize(weave->nVerts(), 3);
-            igl::colormap(viz_color,FVAL, true, faceColors);
-            cout << "drawLine " << drawLine << endl;
-            if (drawLine)
-            {
-                cout << paths.size() << endl;;
-                cout << weave->isoLines.size() << endl;;
-                for (int i = 0; i < paths.size(); i ++)
-                {
-                    const Eigen::RowVector3d red(0.9,.1,.1), blue(0.1,.1,.9);
-                    Eigen::MatrixXd line_starts = paths[i].block(0, 0, paths[i].rows() - 1, 3);
-                    Eigen::MatrixXd line_ends  = paths[i].block(1, 0, paths[i].rows() - 1, 3);
-                    viewer.data.add_edges( line_starts, line_ends, red);
-                }
-            }
+        case F2_ENERGY:
+            Z(i) = log(curFaceEnergies(i, 1));
             break;
+        case F3_ENERGY:
+            Z(i) = log(curFaceEnergies(i, 2));
+            break;
+        case TOT_ENERGY:
+            Z(i) = log(curFaceEnergies.row(i).norm());
+            break;
+        case WS_NONE:
         default:
-            faceColors.resize(weave->nFaces(), 3);
-            igl::colormap(viz_color,Z, true, faceColors);
+            Z(i) = .7;
             break;
+        }
     }
-    
-    viewer.data.set_colors(faceColors);
+
+    if (weave_shading_state == WS_CONNECTION_ENERGY)
+    {
+        weave->fs->connectionEnergy(Z);
+    }
+
+    viewer.data().set_face_based(true);
+   
+    Eigen::MatrixXd faceColors(weave->fs->nFaces(), 3);
+
+    switch (weave_shading_state)
+    {
+    case WS_NONE:
+        faceColors.setConstant(0.7);
+        for (int i = 0; i < (int)selectedVertices.size(); i++)
+            faceColors.row(selectedVertices[i].first) << 0.5, 0.5, 0;
+        showCutVertexSelection(viewer);
+        break;
+    default:
+        igl::colormap(viz_color, Z, true, faceColors);
+        break;
+    }
+
+    // fade deleted faces
+    for(int i=0; i<weave->fs->nFaces(); i++)
+    {
+        if(weave->fs->isFaceDeleted(i))
+        {
+            faceColors(i,0) = 0.5 + 0.5 * faceColors(i,0);
+            faceColors(i,1) *= 0.5;
+            faceColors(i,2) *= 0.5;
+        }
+    }
+    viewer.data().set_colors(faceColors);
 }
 
 
-void WeaveHook::showCutVertexSelection(igl::viewer::Viewer &viewer)
+void WeaveHook::showCutVertexSelection(igl::opengl::glfw::Viewer &viewer)
 {
     Eigen::RowVector3d teal(.1, .9, .9);
     int nsel = renderSelectedVertices.size();
@@ -98,131 +440,136 @@ void WeaveHook::showCutVertexSelection(igl::viewer::Viewer &viewer)
         P.row(i) = renderSelectedVertices[i];
         C.row(i) = teal;
     }
-    viewer.data.add_points(P, C);
+    viewer.data().add_points(P, C);
     
 }
 
-void WeaveHook::drawCuts(igl::viewer::Viewer &viewer)
+void WeaveHook::drawCuts(igl::opengl::glfw::Viewer &viewer)
 {
-    Eigen::RowVector3d blue(0.9, .1, .9);
-    Eigen::MatrixXd C(cutPos1.rows(), 3);
-    for(int i=0; i<3; i++)
-        C.col(i).setConstant(blue[i]);
-    viewer.data.add_edges(cutPos1, cutPos2, C);
-    
-}
-
-void WeaveHook::drawTraceCenterlines(igl::viewer::Viewer &viewer)
-{
-    if (isDeleteLastTrace)
+    if (gui_mode == GUIMode_Enum::WEAVE)
     {
-        trace->popLastCurve();
-        isDeleteLastTrace = false;
-    }
-    if (isDrawTrace)
-    {
+        Eigen::RowVector3d blue(.1, .1, 0.9);
+        Eigen::RowVector3d purple(0.9, .1, .9);
+        Eigen::MatrixXd C1(cutPos1Weave.rows(), 3);
         for (int i = 0; i < 3; i++)
-        {
-            trace->traceCurve(*weave, trace_state, i, 1, traceFaceId, traceSteps);
-            trace->traceCurve(*weave, trace_state, i, -1, traceFaceId, traceSteps);
-        }
-
-     //   trace->traceCurve(*weave, trace_state, traceIdx, traceSign, traceFaceId, traceSteps);
-        isDrawTrace = false;
+            C1.col(i).setConstant(blue[i]);
+        viewer.data().add_edges(cutPos1Weave, cutPos2Weave, C1);
+        Eigen::MatrixXd C2(nonIdentity1Weave.rows(), 3);
+        for(int i=0; i<3; i++)
+            C2.col(i).setConstant(purple[i]);
+        viewer.data().add_edges(nonIdentity1Weave, nonIdentity2Weave, C2);
     }
-    if (isSaveTrace)
+    else if (gui_mode == GUIMode_Enum::COVER)
     {
-        trace->logRibbonsToFile( "rods", "example", *weave );
-        isSaveTrace = false;    
-    }
-
-    Eigen::RowVector3d red(0.9, .1, .1), green(.1, .9, .1);
-    for (int i = 0; i < trace->curves.size(); i++)
-    {
-        int rows = trace->curves[i].rows();
-        Eigen::MatrixXd s1 = trace->curves[i].block(0, 0, rows - 1, 3);
-        Eigen::MatrixXd s2 = trace->curves[i].block(1, 0, rows - 1, 3);
-        Eigen::MatrixXd norms = trace->normals[i].block(0, 0, rows - 1, 3);
-         
-        switch (trace->modes[i])
-        {
-            case GEODESIC:
-                viewer.data.add_edges(s1, s2, red);
-                break;
-            case FIELD:
-                viewer.data.add_edges(s1, s2, green);
-             ///   cout << s1.rows() << " " << trace->normals[i].rows() << "\n";
-//z                viewer.data.add_edges(s1, s1 + norms, red);
-                if( showBending )
-                {
-                    Eigen::MatrixXd bend_colors = Eigen::MatrixXd::Zero(s2.rows(),3);
-                    igl::ColorMapType viz_color = igl::COLOR_MAP_TYPE_JET;
-                    igl::colormap(viz_color,trace->bending[i].tail(s2.rows()), true, bend_colors);
-                    viewer.data.add_points( s2, bend_colors );
-                }
-                break;
-        }
+        Eigen::RowVector3d blue(0.9, .1, .9);
+        Eigen::MatrixXd C(cutPos1Cover.rows(), 3);
+        for (int i = 0; i < 3; i++)
+            C.col(i).setConstant(blue[i]);
+        viewer.data().add_edges(cutPos1Cover, cutPos2Cover, cutColorsCover);
     }
 }
 
-void WeaveHook::updateSingularVerts(igl::viewer::Viewer &viewer)
+void WeaveHook::deleteLastTrace()
 {
+    traces.popLastCurve();
+    updateRenderGeometry();
+}
 
-/*    nonIdentityEdges = Eigen::MatrixXd::Zero(weave->E.size(), 3);
-    for (int i = 0; i < weave->Ps.size(); i++)
+void WeaveHook::clearTraces()
+{
+    traces.clear();
+    updateRenderGeometry();
+}
+
+void WeaveHook::rationalizeTraces()
+{
+    traces.rationalizeTraces(maxCurvature, extendTrace, segLen, minRodLen);
+    updateRenderGeometry();
+}
+
+void WeaveHook::computeTrace()
+{
+    for (int i = 0; i < 3; i++)
     {
-        bool id = true;
-        for (int j = 0; j < 3; j++)
-        {
-            if (weave->Ps[i](j,j) != 1)
-            {
-                id = false;
-            }
-        }
-        if (!id)
-        {
-            nonIdentityEdges.row(i) = ( weave->V.row(weave->edgeVerts(i, 0)) + 
-                                        weave->V.row(weave->edgeVerts(i, 1)) ) * .5;
-            
-        }
-    }   */
+        traces.traceCurve(*weave->fs, trace_state, i, 1, traceFaceId, traceSteps);
+        traces.traceCurve(*weave->fs, trace_state, i, -1, traceFaceId, traceSteps);
+    }
+    updateRenderGeometry();
+}
 
+void WeaveHook::updateSingularVerts(igl::opengl::glfw::Viewer &viewer)
+{
     Eigen::RowVector3d green(.1, .9, .1);
     Eigen::RowVector3d blue(.1, .1, .9);
-    viewer.data.add_points( singularVerts_topo, green ); 
-    viewer.data.add_points( nonIdentityEdges, blue ); 
+    viewer.data().add_points( singularVerts_topo, green ); 
 }
 
-void WeaveHook::renderRenderGeometry(igl::viewer::Viewer &viewer)
+void WeaveHook::renderRenderGeometry(igl::opengl::glfw::Viewer &viewer)
 {
-    viewer.data.clear();
-    viewer.data.set_mesh(renderQ, renderF);
-    int edges = edgeSegs.rows();
-    Eigen::MatrixXd renderPts(2 * edges, 3);
-    for (int i = 0; i < edges; i++)
+    viewer.data().clear();
+
+    if (gui_mode == GUIMode_Enum::WEAVE)
     {
-        Eigen::Vector3d vec = edgeVecs.row(i);
-        if (normalizeVectors)
+        viewer.data().set_mesh(renderQWeave, renderFWeave);
+        int edges = edgeSegsWeave.rows();
+        Eigen::MatrixXd renderPts(2 * edges, 3);
+        for (int i = 0; i < edges; i++)
         {
-            if (vec.norm() != 0.0)
-                vec *= baseLength / vec.norm() * sqrt(3.0) / 6.0 * 0.75;
+            Eigen::Vector3d vec = edgeVecsWeave.row(i);
+            if (normalizeVectors)
+            {
+                if (vec.norm() != 0.0)
+                    vec *= baseLength / vec.norm() * sqrt(3.0) / 6.0 * 0.75;
+            }
+            renderPts.row(2 * i) = edgePtsWeave.row(i) - vectorScale*vec.transpose();
+            renderPts.row(2 * i + 1) = edgePtsWeave.row(i) + vectorScale*vec.transpose();
         }
-        renderPts.row(2 * i) = edgePts.row(i) - vectorScale*vec.transpose();
-        renderPts.row(2 * i + 1) = edgePts.row(i) + vectorScale*vec.transpose();
+        if (!hideVectors)
+        {
+            viewer.data().set_edges(renderPts, edgeSegsWeave, edgeColorsWeave);
+        }
+        setFaceColorsWeave(viewer);
+        if(showTraces)
+            viewer.data().add_edges( tracestarts, traceends, tracecolors );
+        Eigen::RowVector3d orange(0.9, 0.9, 0.1);
+        Eigen::RowVector3d red(0.9, 0.1, 0.1);
+        if (showRatTraces)
+        {
+            viewer.data().add_edges(rattracestarts, rattraceends, orange);
+            viewer.data().add_points(ratcollisions, red);
+        }
+
+        updateSingularVerts(viewer);
+        drawCuts(viewer);
     }
-    if (!hideVectors)
+    else if (gui_mode == GUIMode_Enum::COVER)
     {
-        viewer.data.set_edges(renderPts, edgeSegs, edgeColors);
+        viewer.data().set_mesh(renderQCover, renderFCover);        
+        int edges = edgeSegsCover.rows();
+        Eigen::MatrixXd renderPts(2 * edges, 3);
+        for (int i = 0; i < edges; i++)
+        {
+            Eigen::Vector3d vec = edgeVecsCover.row(i);
+            if (vec.norm() != 0.0)
+                vec *= cover->renderScale() * baseLength / vec.norm() * sqrt(3.0) / 6.0 * 0.75;
+            renderPts.row(2 * i) = edgePtsCover.row(i) - vectorScale*vec.transpose();
+            renderPts.row(2 * i + 1) = edgePtsCover.row(i) + vectorScale*vec.transpose();
+        }
+        if (!hideVectors)
+        {
+            viewer.data().set_edges(renderPts, edgeSegsCover, edgeColorsCover);
+        }
+        setFaceColorsCover(viewer);
+        if(showCoverCuts)
+            drawCuts(viewer);
     }
-    setFaceColors(viewer);
-    drawTraceCenterlines(viewer);
-    updateSingularVerts(viewer);
-    drawCuts(viewer);
+
+    viewer.data().show_faces = !wireframe;
 }
 
 bool WeaveHook::simulateOneStep()
 {
-    params.edgeWeights.resize(weave->nEdges());
+    params.edgeWeights.resize(weave->fs->nEdges());
     params.edgeWeights.setConstant(1.0);
     for (int i = 0; i < (int)weave->cuts.size(); i++)
     {
@@ -255,83 +602,103 @@ void WeaveHook::reassignPermutations()
     singularVerts_topo = Eigen::MatrixXd::Zero(topsingularities.size(), 3);
     for (int i = 0; i < topsingularities.size(); i++)
     {
-        singularVerts_topo.row(i) = weave->V.row(topsingularities[i]);
+        singularVerts_topo.row(i) = weave->fs->data().V.row(topsingularities[i]);
     }
 
-    nonIdentityEdges = Eigen::MatrixXd::Zero(weave->E.size(), 3);
-    for (int i = 0; i < weave->Ps.size(); i++)
+    std::vector<int> nonIdentityEdges;
+    for (int i = 0; i < weave->fs->Ps_.size(); i++)
     {
         bool id = true;
         for (int j = 0; j < 3; j++)
         {
-            if (weave->Ps[i](j, j) != 1)
+            if (weave->fs->Ps(i)(j, j) != 1)
             {
                 id = false;
             }
         }
         if (!id)
         {
-            nonIdentityEdges.row(i) = (weave->V.row(weave->edgeVerts(i, 0)) +
-                weave->V.row(weave->edgeVerts(i, 1))) * .5;
-
+            nonIdentityEdges.push_back(i);
         }
+    }
+    int ncuts = nonIdentityEdges.size();
+    nonIdentity1Weave.resize(ncuts, 3);
+    nonIdentity2Weave.resize(ncuts, 3);
+    for(int i=0; i<ncuts; i++)
+    {
+        Eigen::Vector3d normal(0,0,0);
+        int f0 = weave->fs->data().E(nonIdentityEdges[i], 0);
+        if(f0 != -1)
+            normal += weave->fs->faceNormal(f0);
+        int f1 = weave->fs->data().E(nonIdentityEdges[i], 1);
+        if(f1 != -1)
+            normal += weave->fs->faceNormal(f1);
+        Eigen::Vector3d offset = 0.001*normal/ normal.norm();
+        nonIdentity1Weave.row(i) = weave->fs->data().V.row(weave->fs->data().edgeVerts(nonIdentityEdges[i], 0)) + offset.transpose();
+        nonIdentity2Weave.row(i) = weave->fs->data().V.row(weave->fs->data().edgeVerts(nonIdentityEdges[i], 1)) + offset.transpose();
     }
 }
 
 void WeaveHook::normalizeFields()
 {
-    weave->normalizeFields();
+    weave->fs->normalizeFields();
     updateRenderGeometry();
 }
 
 void WeaveHook::serializeVectorField()
 {
-    weave->serialize(vectorFieldName);
-}
-
-void WeaveHook::exportVectorField()
-{
-    weave->serialize_forexport(vectorFieldName);
+    std::ofstream ofs(vectorFieldName, ios::binary);
+    weave->serialize(ofs);
 }
 
 void WeaveHook::augmentField()
 {
-    weave->augmentField();
+    if (cover)
+    {
+        traces.purgeTraces(cover->fs);
+        delete cover;
+    }
+    weave->fs->undeleteAllFaces();
+    removeSingularities();
+    
+    cover = weave->createCover();    
     updateRenderGeometry();
+    gui_mode = GUIMode_Enum::COVER;
 }
 
 void WeaveHook::computeFunc()
 {
-    weave->computeFunc(scalesInit);
+    if(cover)
+        cover->computeFunc(globalSScale);
+    updateRenderGeometry();
 }
 
 void WeaveHook::drawISOLines()
 {
-    paths.clear();
-    drawLine = true;
-    weave->drawISOLines(numISOLines);
-    for (int p_cnt = 0; p_cnt < weave->isoLines.size(); p_cnt ++)
+    if(cover)
     {
-        std::vector<Eigen::Vector3d> curPath = weave->isoLines[p_cnt];
-        Eigen::MatrixXd path(curPath.size(), 3);
-        if (curPath.size() < 10){
-            // cout << "skip the " << p_cnt << " iso line" << endl;
-            continue;
-        }
-        for (int i = 0; i < curPath.size(); i ++)
-            path.row(i) = curPath[i];
-        paths.push_back(path);
-        // cout << "Generating the " << p_cnt << " iso line" << endl;
-        // Eigen::MatrixXd line_starts = path.block(0, 0, curPath.size() - 1, 3);
-        // Eigen::MatrixXd line_ends  = path.block(1, 0, curPath.size() - 1, 3);
-        // viewer.data.add_edges( line_starts, line_ends, red);
+        traces.purgeTraces(cover->fs);
+        std::vector<Trace> newtraces;
+        cover->recomputeIsolines(numISOLines, newtraces);
+        for (auto it : newtraces)
+            traces.addTrace(it);
     }
-    trace->loadGeneratedCurves(weave->isoLines, weave->isoNormal);
+
+    updateRenderGeometry();
 }
 
 void WeaveHook::deserializeVectorField()
 {
-    weave->deserialize(vectorFieldName);
+    clear();
+    std::ifstream ifs(vectorFieldName, ios::binary);
+    weave->deserialize(ifs);
+    updateRenderGeometry();
+}
+
+void WeaveHook::deserializeVectorFieldOld()
+{
+    std::ifstream ifs(vectorFieldName);
+    weave->deserializeOldRelaxFile(ifs);
     updateRenderGeometry();
 }
 
@@ -348,37 +715,40 @@ void WeaveHook::removeSingularities()
     findSingularVertices(*weave, topsingularities, geosingularities);
 
     std::vector<int> todelete = topsingularities;
-//    for (int i = 0; i < geosingularities.size(); i++)
-//        todelete.push_back(geosingularities[i].first);
+    for (int i = 0; i < geosingularities.size(); i++)
+        todelete.push_back(geosingularities[i].first);
 
-    weave->removePointsFromMesh(todelete);
+    for(int i : todelete)
+    {
+        weave->fs->deleteVertex(i);
+    }
+    //weave->removePointsFromMesh(todelete);
     updateRenderGeometry();
 }
 
 void WeaveHook::addCut()
 {
-    //    cuts.push_back();
-    //    shortestPath
     int idx1 = -1;
     int idx2 = -1;
+
+    std::cout << selectedVertices.size() << std::endl;
 
     if (selectedVertices.size() < 2)
         return;
 
-    idx1 = weave->F(selectedVertices[0].first, selectedVertices[0].second);
-    idx2 = weave->F(selectedVertices[1].first, selectedVertices[1].second);
+    idx1 = weave->fs->data().F(selectedVertices[0].first, selectedVertices[0].second);
+    idx2 = weave->fs->data().F(selectedVertices[1].first, selectedVertices[1].second);
 
     if (idx1 == idx2)
         return;
 
     Cut c;    
-    weave->shortestPath(idx1, idx2, c.path);
+    weave->fs->shortestPath(idx1, idx2, c.path);
     weave->cuts.push_back(c);    
-  //  std::cout << "\n" << weave->edgeVerts(c.path[0].first, 1 - c.path[0].second ) << "\n";
-    for (int i = 0; i < c.path.size(); i++ )
+    /*for (int i = 0; i < c.path.size(); i++ )
     {
-        std::cout << weave->edgeVerts(c.path[i].first, c.path[i].second) << "\n"; // " " <<  weave->edgeVerts.row(c.path[i].first);
-    }
+        std::cout << weave->fs->data().edgeVerts(c.path[i].first, c.path[i].second) << "\n"; // " " <<  weave->edgeVerts.row(c.path[i].first);
+    }*/
 
     updateRenderGeometry();
 }
@@ -390,17 +760,202 @@ void WeaveHook::removePrevCut()
     updateRenderGeometry();
 } 
 
-void WeaveHook::saveTraces()
+void WeaveHook::updateRenderGeometry()
 {
-    trace->save(traceFile);
+    renderQWeave = weave->fs->data().V;
+    renderFWeave = weave->fs->data().F;
+    weave->createVisualizationEdges(edgePtsWeave, edgeVecsWeave, edgeSegsWeave, edgeColorsWeave);
+    weave->createVisualizationCuts(cutPos1Weave, cutPos2Weave);
+    baseLength = weave->fs->data().averageEdgeLength;
+    curFaceEnergies = tempFaceEnergies;
+
+    if (weave->handles.size() < 3)
+        weave->handles.resize(3);
+    weave->handles[0].face = handleLocation;
+    weave->handles[0].dir(0) = handleParams(0);
+    weave->handles[0].dir(1) = handleParams(1);
+    weave->handles[1].face = handleLocation;
+    weave->handles[1].dir(0) = handleParams(2);
+    weave->handles[1].dir(1) = handleParams(3);
+    weave->handles[2].face = handleLocation;
+    weave->handles[2].dir(0) = handleParams(4);
+    weave->handles[2].dir(1) = handleParams(5);
+
+    int tracesegs = 0;
+    for (int i = 0; i < traces.nTraces(); i++)
+    {
+        tracesegs += traces.trace(i).segs.size();
+    }
+    tracestarts.resize(tracesegs, 3);
+    traceends.resize(tracesegs, 3);
+    tracecolors.resize(tracesegs, 3);
+    Eigen::RowVector3d red(0.9, .1, .1), green(.1, .9, .1);
+
+    int tridx = 0;
+    for (int i = 0; i < traces.nTraces(); i++)
+    {
+        int nsegs = traces.trace(i).segs.size();
+        std::vector<Eigen::Vector3d> verts;
+        std::vector<Eigen::Vector3d> normals;
+        traces.renderTrace(i, verts, normals);
+        for (int j = 0; j < nsegs; j++)
+        {
+            tracestarts.row(tridx) = verts[j].transpose() + 0.0001*normals[j].transpose();
+            traceends.row(tridx) = verts[j + 1].transpose() + 0.0001*normals[j].transpose();
+
+            switch (traces.trace(i).type_)
+            {
+            case GEODESIC:
+                tracecolors.row(tridx) = red;
+                break;
+            case FIELD:
+                tracecolors.row(tridx) = green;
+                break;
+            }
+
+            tridx++;
+        }
+    }
+
+    int rattracesegs = 0;
+    for (int i = 0; i < traces.nRationalizedTraces(); i++)
+    {
+        rattracesegs += traces.rationalizedTrace(i).pts.rows() - 1;
+    }
+    rattracestarts.resize(rattracesegs, 3);
+    rattraceends.resize(rattracesegs, 3);
+
+    tridx = 0;
+    for (int i = 0; i < traces.nRationalizedTraces(); i++)
+    {
+        int nsegs = traces.rationalizedTrace(i).pts.rows() - 1;
+        for (int j = 0; j < nsegs; j++)
+        {
+            Eigen::Vector3d normal = traces.rationalizedTrace(i).normals.row(j);
+            rattracestarts.row(tridx) = traces.rationalizedTrace(i).pts.row(j) + 0.001*normal.transpose();
+            rattraceends.row(tridx) = traces.rationalizedTrace(i).pts.row(j+1) + 0.001*normal.transpose();
+            tridx++;
+        }
+    }
+
+    ratcollisions.resize(2*traces.nCollisions(), 3);
+    for (int i = 0; i < traces.nCollisions(); i++)
+    {
+        Eigen::Vector3d pt0, pt1;
+        traces.collisionPoint(i, pt0, pt1);
+        ratcollisions.row(2 * i) = pt0.transpose();
+        ratcollisions.row(2 * i + 1) = pt1.transpose();
+    }
+
+    if (cover)
+    {
+        cover->createVisualization(renderQCover, renderFCover, edgePtsCover, edgeVecsCover, edgeSegsCover, edgeColorsCover,
+            cutPos1Cover, cutPos2Cover, cutColorsCover);
+
+        int totsegs = 0;
+        int ntraces = traces.nTraces();
+        for (int i = 0; i < ntraces; i++)
+        {
+            if (traces.trace(i).parent_ == cover->fs)
+                totsegs += traces.trace(i).segs.size();
+        }
+        pathstarts.resize(totsegs, 3);
+        pathends.resize(totsegs, 3);
+        int idx = 0;
+        for (int j = 0; j < ntraces; j++)
+        {
+            if (traces.trace(j).parent_ != cover->fs)
+                continue;
+
+            Eigen::MatrixXd pathstart, pathend;
+            cover->drawTraceOnSplitMesh(traces.trace(j), pathstart, pathend);
+            int nsegs = traces.trace(j).segs.size();
+            for (int i = 0; i < nsegs; i++)
+            {
+                pathstarts.row(idx) = pathstart.row(i);
+                pathends.row(idx) = pathend.row(i);
+                idx++;
+            }
+        }
+    }
+    else
+    {
+        renderQCover.resize(0, 3);
+        renderFCover.resize(0, 3);
+        edgePtsCover.resize(0, 3);
+        edgeVecsCover.resize(0, 3);
+        edgeSegsCover.resize(0, 2);
+        edgeColorsCover.resize(0, 3);
+        cutPos1Cover.resize(0, 3);
+        cutPos2Cover.resize(0, 3);
+        cutColorsCover.resize(0, 3);
+        pathstarts.resize(0, 3);
+        pathends.resize(0, 3);
+    }
 }
 
-void WeaveHook::loadTraces()
+void WeaveHook::initializeS()
 {
-    trace->load(traceFile);
+    if(cover) cover->initializeS(initSReg);
+    updateRenderGeometry();
 }
 
-void WeaveHook::loadSampledTraces()
+void WeaveHook::saveRods()
 {
-    trace->loadSampledCurves(traceFile);
+    traces.exportRodFile(rodFilename.c_str());
+}
+
+void WeaveHook::exportForRendering()
+{    
+    std::string meshName = exportPrefix + std::string("_mesh.obj");
+    igl::writeOBJ(meshName.c_str(), weave->fs->data().V, weave->fs->data().F);
+    std::string fieldName = exportPrefix + std::string("_field.csv");
+    std::ofstream vfs(fieldName.c_str());
+    int nfaces = weave->fs->nFaces();
+    int nfields = weave->fs->nFields();
+    int nverts = weave->fs->nVerts();
+    for(int i=0; i<nfaces; i++)
+    {
+        Eigen::Vector3d centroid(0,0,0);
+        for(int j=0; j<3; j++)
+            centroid += weave->fs->data().V.row( weave->fs->data().F(i,j) ).transpose();
+        centroid /= 3.0;
+        for(int j=0; j<nfields; j++)
+        {
+            Eigen::Vector3d vf = weave->fs->data().Bs[i] * weave->fs->v(i, j);
+            if (vf.norm() != 0.0)
+                vf *= weave->fs->data().averageEdgeLength / vf.norm() * sqrt(3.0) / 6.0 * 0.75;
+            vfs << centroid[0]-vf[0] << ", " << centroid[1]-vf[1] << ", " << centroid[2]-vf[2] << ", " << centroid[0] + vf[0] << ", " << centroid[1] + vf[1] << ", " << centroid[2] + vf[2] << std::endl;                        
+        }
+    }
+    for(int i=0; i<2*nfields; i++)
+    {
+        std::stringstream ss;
+        ss << exportPrefix << "_s_" << i << ".csv";
+        std::ofstream sfs(ss.str().c_str());
+        for(int j=0; j<nfaces; j++)
+            sfs << cover->s[i*nfaces + j] << ",\t 0,\t0" << std::endl;
+            
+        std::stringstream ss2;
+        ss2 << exportPrefix << "_theta_" << i << ".csv";
+        std::ofstream thetafs(ss2.str().c_str());
+        for(int j=0; j<nverts; j++)
+        {
+            thetafs << cover->theta[cover->visMeshToCoverMesh(i*nverts+j)] << ",\t 0,\t0" << std::endl;
+        }
+    }
+    std::string cutsname = exportPrefix + std::string("_cuts.csv");
+    std::ofstream cfs(cutsname.c_str());
+    int nsegs = nonIdentity1Weave.rows();
+    for(int i=0; i<nsegs; i++)
+    {
+        cfs << nonIdentity1Weave(i,0) << ", " << nonIdentity1Weave(i,1) << ", " << nonIdentity1Weave(i,2) << ", " << nonIdentity2Weave(i, 0) << ", " << nonIdentity2Weave(i,1) << ", " << nonIdentity2Weave(i,2) << std::endl;
+    }
+    std::string singname = exportPrefix + std::string("_sing.csv");
+    std::ofstream singfs(singname.c_str());
+    int nsing = singularVerts_topo.rows();
+    for(int i=0; i<nsing; i++)
+    {
+        singfs << singularVerts_topo(i,0) << ", " << singularVerts_topo(i,1) << ", " << singularVerts_topo(i,2) << std::endl;
+    }
 }
