@@ -304,8 +304,8 @@ void TraceSet::findCurvedVerts(const Trace &tr, double maxcurvature, std::set<in
         Eigen::Vector3d n = tr.parent_->faceNormal(tr.segs[i].face);
         n += tr.parent_->faceNormal(tr.segs[i + 1].face);
         n.normalize();
-        double theta = fabs(angle(v1 - v0, v2 - v1, n));
-        if (theta > maxcurvature)
+        double curvature = geodesicCurvature(v0, v1, v2, n);
+        if (curvature > maxcurvature)
             badverts.insert(i+1);
     }
 }
@@ -550,6 +550,13 @@ void TraceSet::sampleTrace(const Trace &tr, double start, double end, int nsegs,
         rattrace.normals.row(i) = newnormal.transpose();
     }
 
+}
+
+double TraceSet::geodesicCurvature(const Eigen::Vector3d &p0, const Eigen::Vector3d &p1, const Eigen::Vector3d &p2, const Eigen::Vector3d &n) const
+{
+    Eigen::Vector3d norm = n/n.norm();
+    double theta = fabs(angle(p1 - p0, p2 - p1, norm));
+    return 2.0*theta / ((p1-p0).norm() + (p2-p1).norm());
 }
 
 void TraceSet::rationalizeTraces(double maxcurvature, double extenddist, double seglen, double minlen)
@@ -835,4 +842,36 @@ void TraceSet::collisionPoint(int collision, Eigen::Vector3d &pt0, Eigen::Vector
     const Collision &col = collisions_[collision];
     pt0 = (1.0 - col.bary1) * rattraces_[col.rod1].pts.row(col.seg1).transpose() + col.bary1 * rattraces_[col.rod1].pts.row(col.seg1 + 1).transpose();
     pt1 = (1.0 - col.bary2) * rattraces_[col.rod2].pts.row(col.seg2).transpose() + col.bary2 * rattraces_[col.rod2].pts.row(col.seg2 + 1).transpose();
+}
+
+void TraceSet::exportForRendering(const char *filename)
+{
+    std::ofstream ofs(filename);
+    for(auto &it : rattraces_)
+    {
+        int verts = it.pts.rows();
+        for(int i=0; i<verts-1; i++)
+        {
+            ofs << it.pts(i,0) << ", " << it.pts(i,1) << ", " << it.pts(i,2) << ", " << it.pts(i+1, 0) << ", " << it.pts(i+1, 1) << ", " << it.pts(i+1, 2);
+            if(i==0)
+            {
+                ofs << ", 0";
+            }
+            else
+            {
+                double curvature = geodesicCurvature(it.pts.row(i-1).transpose(), it.pts.row(i).transpose(), it.pts.row(i+1).transpose(), it.normals.row(i).transpose());
+                ofs << ", " << curvature;
+            }
+            if(i==verts-2)
+            {
+                ofs << ", 0";
+            }
+            else
+            {
+                double curvature = geodesicCurvature(it.pts.row(i).transpose(), it.pts.row(i+1).transpose(), it.pts.row(i+2).transpose(), it.normals.row(i).transpose());
+                ofs << ", " << curvature;
+            }
+            ofs << std::endl;
+        }
+    }
 }

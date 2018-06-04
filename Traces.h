@@ -83,6 +83,7 @@ public:
     void collisionPoint(int collision, Eigen::Vector3d &pt0, Eigen::Vector3d &pt1) const;
 
     void exportRodFile(const char*filename);
+    void exportForRendering(const char *filename);
 
 private:
     void findTraceStart(const FieldSurface &parent,
@@ -112,6 +113,7 @@ private:
         std::vector<TraceCollision> &collisions) const;
 
     Eigen::Vector3d pointFromBary(const FieldSurface &parent, int faceId, int faceEdge, double bary) const;
+    double geodesicCurvature(const Eigen::Vector3d &p0, const Eigen::Vector3d &p1, const Eigen::Vector3d &p2, const Eigen::Vector3d &n) const;
 
     std::vector<Trace> traces_;    
 

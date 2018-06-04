@@ -262,7 +262,8 @@ void CoverMesh::computeFunc(double globalScale)
     {
         scales[it.second] = globalScale * s[it.first];
     }
-    int totalIter = 6;
+
+    int totalIter = 1;
     for (int iter = 0; iter < totalIter; iter++)
     {
         vector<double> difVec;
@@ -306,7 +307,7 @@ void CoverMesh::computeFunc(double globalScale)
         Eigen::VectorXd eigenVec(Lmat.rows());
         eigenVec.setRandom();
         eigenVec /= eigenVec.norm();
-        for (int i = 0; i < 10; i++)
+        for (int i = 0; i < 100; i++)
         {
             eigenVec = solverL.solve(eigenVec);
             eigenVec /= eigenVec.norm();
@@ -693,16 +694,29 @@ void CoverMesh::initializeS(double reg)
         for (int i = 0; i < nfaces; i++)
             componentS[i] = x[3*nfaces + i];
 
-        double maxS = 0;
+        double maxdelta = 0;
         for(int i=0; i<nfaces; i++)
         {
-            if ( fabs(componentS[i]) > maxS ) 
+            Eigen::Vector3d scaledvec = componentS[i] * surf.data().Bs[i] * surf.data().Js.block<2, 2>(2 * i, 0) * fs->v(compFacesToGlobal[i], 0);
+            for(int j=0; j<3; j++)
             {
-                maxS = fabs(componentS[i]);
+                int e = surf.data().faceEdges(i,j);
+                int vert0 = surf.data().edgeVerts(e, 0);
+                int vert1 = surf.data().edgeVerts(e, 1);
+                Eigen::Vector3d v0 = surf.data().V.row(vert0).transpose();
+                Eigen::Vector3d v1 = surf.data().V.row(vert1).transpose();
+                Eigen::Vector3d edgeVec = v1-v0;    
+                
+                double delta = edgeVec.dot(scaledvec);
+                                        
+                if ( fabs(delta) > maxdelta)
+                {
+                    maxdelta = fabs(delta);
+                }
             }
         }
 
-        double s_scale = 3.1415 / fs->data().averageEdgeLength / maxS;
+        double s_scale = 3.1415 / maxdelta;
 
         
         // map component s to the global s vector
