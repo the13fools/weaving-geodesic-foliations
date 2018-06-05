@@ -219,19 +219,36 @@ void WeaveHook::clear()
         delete cover;
     cover = NULL;
     gui_mode = GUIMode_Enum::WEAVE;
+    weave->handles.clear();
     Handle h;
-    h.face = 0;
+    h.face = std::min(26289, weave->fs->nFaces()-1);
     h.dir << 1, 0;
     h.field = 2;
     weave->addHandle(h);
-    h.face = 0;
+    h.face = std::min(26289, weave->fs->nFaces()-1);
     h.dir << 0, 1;
     h.field = 1;
     weave->addHandle(h);
-    h.face = 0;
+    h.face = std::min(26289, weave->fs->nFaces()-1);
     h.dir << 1, -1;
     h.field = 0;
     weave->addHandle(h);
+    
+    h.face = std::min(11176, weave->fs->nFaces()-1);
+    h.dir << 0, 1;
+    h.field = 2;
+    weave->addHandle(h);
+    
+/*    h.face = std::min(11176, weave->fs->nFaces()-1);
+    h.dir << -0.5, 1;
+    h.field = 1;
+    weave->addHandle(h);
+
+    h.face = std::min(11176, weave->fs->nFaces()-1);
+    h.dir << 1.0, -0.5;
+    h.field = 0;
+    weave->addHandle(h);*/
+
     curFaceEnergies = Eigen::MatrixXd::Zero(3, 3);
     selectedVertices.clear();
     renderSelectedVertices.clear();
@@ -692,7 +709,9 @@ void WeaveHook::deserializeVectorField()
     clear();
     std::ifstream ifs(vectorFieldName, ios::binary);
     weave->deserialize(ifs);
-    updateRenderGeometry();
+    clear();
+        updateRenderGeometry();
+
 }
 
 void WeaveHook::deserializeVectorFieldOld()
@@ -771,7 +790,7 @@ void WeaveHook::updateRenderGeometry()
 
     if (weave->handles.size() < 3)
         weave->handles.resize(3);
-    weave->handles[0].face = handleLocation;
+/*    weave->handles[0].face = handleLocation;
     weave->handles[0].dir(0) = handleParams(0);
     weave->handles[0].dir(1) = handleParams(1);
     weave->handles[1].face = handleLocation;
@@ -779,7 +798,7 @@ void WeaveHook::updateRenderGeometry()
     weave->handles[1].dir(1) = handleParams(3);
     weave->handles[2].face = handleLocation;
     weave->handles[2].dir(0) = handleParams(4);
-    weave->handles[2].dir(1) = handleParams(5);
+    weave->handles[2].dir(1) = handleParams(5);*/
 
     int tracesegs = 0;
     for (int i = 0; i < traces.nTraces(); i++)
@@ -961,4 +980,23 @@ void WeaveHook::exportForRendering()
     
     std::string tracename = exportPrefix + std::string("_traces.csv");
     traces.exportForRendering(tracename.c_str());
+    
+    // handles
+    std::string handlesname = exportPrefix + std::string("_handles.csv");
+    std::ofstream handfs(handlesname.c_str());
+    
+    int nhandles = weave->nHandles();
+    for(int i=0; i<nhandles; i++)
+    {
+        int face = weave->handles[i].face;
+        Eigen::Vector3d centroid(0,0,0);
+        for(int j=0; j<3; j++)
+            centroid += weave->fs->data().V.row( weave->fs->data().F(face,j) ).transpose();
+        centroid /= 3.0;
+        
+        Eigen::Vector3d vf = weave->fs->data().Bs[face] * weave->handles[i].dir;
+        if (vf.norm() != 0.0)
+            vf *= weave->fs->data().averageEdgeLength / vf.norm() * sqrt(3.0);
+        handfs << centroid[0]-vf[0] << ", " << centroid[1]-vf[1] << ", " << centroid[2]-vf[2] << ", " << centroid[0] + vf[0] << ", " << centroid[1] + vf[1] << ", " << centroid[2] + vf[2] << std::endl;                        
+    }
 }
