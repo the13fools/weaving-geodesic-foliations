@@ -305,7 +305,7 @@ void TraceSet::findCurvedVerts(const Trace &tr, double maxcurvature, std::set<in
         n += tr.parent_->faceNormal(tr.segs[i + 1].face);
         n.normalize();
         double curvature = geodesicCurvature(v0, v1, v2, n);
-        if (curvature > maxcurvature)
+        if (curvature*((v1-v0).norm() + (v2-v1).norm())/2.0 > maxcurvature)
             badverts.insert(i+1);
     }
 }

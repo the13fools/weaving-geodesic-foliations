@@ -262,7 +262,7 @@ void CoverMesh::computeFunc(double globalScale)
     {
         scales[it.second] = globalScale * s[it.first];
     }
-
+    
     int totalIter = 6;
     for (int iter = 0; iter < totalIter; iter++)
     {
