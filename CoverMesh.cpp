@@ -353,11 +353,56 @@ void CoverMesh::computeFunc(double globalScale)
         }
         // Construct A
         // TODO mu and lambda
+        
+        // build edge metric matrix and inverse (cotan weights)
+        Eigen::MatrixXd C;
+        igl::cotmatrix_entries(delfs->data().V, delfs->data().F, C);
+        int nedges = delfs->nEdges();
+        Eigen::VectorXd edgeMetric(nedges);
+        edgeMetric.setZero();
+        for(int i=0; i<nfaces; i++)
+        {
+            for (int j = 0; j < 3; j++)
+            {
+                int eidx = delfs->data().faceEdges(i, j);
+                edgeMetric[eidx] += C(i,j);
+            }                
+        } 
+
+        // face Laplacian        
+        std::vector<Eigen::Triplet<double> > DfaceCoeffs;
+        for (int i = 0; i < nedges; i++)
+        {
+            int f0 = delfs->data().E(i,0);
+            int f1 = delfs->data().E(i,1);
+            if (f0 != -1 && f1 != -1)
+            {
+                DfaceCoeffs.push_back(Eigen::Triplet<double>(i, f0, -1.0));
+                DfaceCoeffs.push_back(Eigen::Triplet<double>(i, f1, 1.0));
+            }
+        }
+        Eigen::SparseMatrix<double> Dface(nedges, nfaces);
+        Dface.setFromTriplets(DfaceCoeffs.begin(), DfaceCoeffs.end());
+        
+        std::vector<Eigen::Triplet<double> > inverseEdgeMetricCoeffs;
+        for (int i = 0; i < nedges; i++)
+        {
+            inverseEdgeMetricCoeffs.push_back(Eigen::Triplet<double>(i, i, 1.0 / edgeMetric[i]));
+        }
+        Eigen::SparseMatrix<double> inverseEdgeMetric(nedges, nedges);
+        inverseEdgeMetric.setFromTriplets(inverseEdgeMetricCoeffs.begin(), inverseEdgeMetricCoeffs.end());
+
+        Eigen::SparseMatrix<double> Lface = Dface.transpose() * inverseEdgeMetric * Dface;
+
+        
         std::vector<triplet> AScalesContent;
         for (int i = 0; i < nfaces; i++)
             AScalesContent.push_back(triplet(i, i, diagAScales[i]));
         Eigen::SparseMatrix<double> AScalesMat(nfaces, nfaces);
         AScalesMat.setFromTriplets(AScalesContent.begin(), AScalesContent.end());
+        
+        AScalesMat += 1e-3 * Lface;
+        
         // Solve for scale
         Eigen::SimplicialLDLT<Eigen::SparseMatrix<double> > solverScales(AScalesMat);
         Eigen::VectorXd curScales = solverScales.solve(bScales);
