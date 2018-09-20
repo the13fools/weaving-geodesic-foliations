@@ -85,6 +85,7 @@ int main(int argc, char *argv[])
 
   viewer.data().set_face_based(true);
   viewer.core.is_animating = true;
+  viewer.core.background_color = Eigen::Vector4f(.7, .7, .8, 1);
   viewer.callback_key_pressed = keyCallback;
   viewer.callback_pre_draw = drawCallback;
   viewer.callback_mouse_down = mouseDownCallback;
