@@ -41,7 +41,7 @@ public:
         weave_shading_state = WeaveShading_Enum::WS_NONE;
         cover_shading_state = CoverShading_Enum::CS_NONE;
         // meshName = "meshes/bunny_coarser.obj";
-        meshName = "meshes/tet.obj";
+        meshName = "meshes/sphere_small.obj";
         // vectorFieldName = "bunny_coarser_nosing";
         vectorFieldName = "tet.rlx";
         rodFilename = "example.rod";
@@ -64,10 +64,10 @@ public:
         handleParams = Eigen::VectorXd::Zero(6);
         handleParams(0) = 0;
         handleParams(1) = 1;
-        handleParams(2) = 1;
-        handleParams(3) = 0;
-        handleParams(4) = 1;
-        handleParams(5) = -1;
+        handleParams(2) = 0;
+        handleParams(3) = 1;
+        handleParams(4) = 0;
+        handleParams(5) = 1;
 
         showCoverCuts = true;
         numISOLines = 0;
