@@ -6,6 +6,8 @@
 #include "Surface.h"
 #include <igl/cotmatrix.h>
 
+#include <cmath>
+
 using namespace Eigen;
 
 void faceEnergies(const Weave &weave, SolverParams params, Eigen::MatrixXd &E)
@@ -340,14 +342,21 @@ void GNGradient(const Weave &weave, SolverParams params, Eigen::SparseMatrix<dou
         }
     } 
 
-
+    for (auto t : Jcoeffs)
+    {
+        if (std::isnan(t.value()) || std::isinf(t.value()))
+        {
+            std::cout << "oh no!";
+            exit(-1);
+        }
+    }
     J.setFromTriplets(Jcoeffs.begin(), Jcoeffs.end());
 }
 
 void GNtestFiniteDifferences(Weave &weave, SolverParams params)
 {
     Weave test = weave;
-    test.fs->vectorFields.setRandom();
+ //   test.fs->vectorFields.setRandom();
 
     params.lambdacompat = 0; // weight of compatibility term
     params.lambdareg = 0;    // Tilhonov regularization
@@ -406,7 +415,7 @@ void oneStep(Weave &weave, SolverParams params)
 
     for(int i=0; i<weave.fs->vectorFields.size(); i++)
     {
-        coeffs.push_back(Eigen::Triplet<double>(idx, idx, params.lambdareg));
+        coeffs.push_back(Eigen::Triplet<double>(i, i, params.lambdareg));
     }
 
 
@@ -421,12 +430,29 @@ void oneStep(Weave &weave, SolverParams params)
     std::cout << "Solving" << std::endl;
     solver.factorize(optMat);
     Eigen::VectorXd update = solver.solve(rhs);
-    lineSearch(weave, params, update);
+    double t = lineSearch(weave, params, update);
     
     GNEnergy(weave, params, r);
     std::cout << "Done, new energy: " << 0.5 * r.transpose()*M*r << std::endl;
- //   GNtestFiniteDifferences(weave, params);
- //   exit(-1);
+
+    std::cout << weave.fs->vectorFields.size() << std::endl;
+    for (int f = 0; f < weave.fs->nFaces() * weave.fs->nFields(); f++)
+    {
+        Eigen::Vector2d v;
+        v(0) = weave.fs->vectorFields(2*f);
+        v(1) = weave.fs->vectorFields(2*f + 1);
+     //   std::cout << v.norm() << std::endl;
+        v.normalize();
+        weave.fs->vectorFields(2*f) = v(0);
+        weave.fs->vectorFields(2*f + 1) = v(1);
+    }
+
+    counter++;
+    // if (t <  0.0000625)
+    // {
+    //    GNtestFiniteDifferences(weave, params);
+    //    exit(-1);
+    // }
 }
 
 double lineSearch(Weave &weave, SolverParams params, const Eigen::VectorXd &update)

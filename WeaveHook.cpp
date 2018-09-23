@@ -516,6 +516,7 @@ void WeaveHook::renderRenderGeometry(igl::opengl::glfw::Viewer &viewer)
         for (int i = 0; i < edges; i++)
         {
             Eigen::Vector3d vec = edgeVecsWeave.row(i);
+    //          vec *= 1 / ( vec.norm() * vec.norm() );
             if (normalizeVectors)
             {
                 if (vec.norm() != 0.0)
