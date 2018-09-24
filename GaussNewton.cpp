@@ -442,6 +442,12 @@ void oneStep(Weave &weave, SolverParams params)
     
     GNEnergy(weave, params, r);
     std::cout << "Done, new energy: " << 0.5 * r.transpose()*M*r << std::endl;
+    
+    Eigen::SparseMatrix<double> newS;
+    newS.resize(m*nfaces, weave.fs->vectorFields.size());
+    newS.setZero();
+
+    std::vector<Eigen::Triplet<double> > newScoeffs;
 
     for (int e = 0; e < weave.fs->nEdges(); e++)
     {
@@ -469,43 +475,36 @@ void oneStep(Weave &weave, SolverParams params)
                 Eigen::Matrix<double, 3, 2> B_g = weave.fs->data().Bs[g];
                 double n_vperm = (B_g * (vperm)).norm();
 
-                weave.fs->vectorFields(weave.fs->sidx(f, i)) = weave.fs->sval(g, adj_field) * (B_g * vperm).dot(edge) * n_v / 
-                                                                                            ( (B_f * vif).dot(edge) * n_vperm );
-                double ave = (weave.fs->sval(f, i) + weave.fs->sval(g, adj_field)) / 2;
-                weave.fs->vectorFields(weave.fs->sidx(f, i)) = (weave.fs->vectorFields(weave.fs->sidx(f, i)) + ave) / 2;
-                weave.fs->vectorFields(weave.fs->sidx(g, adj_field)) = (weave.fs->vectorFields(weave.fs->sidx(g, adj_field)) + ave) / 2;
-                
-                newS.resize(nterms, weave.fs->vectorFields.size());
-                newS.setZero();
-
-                std::vector<Eigen::Triplet<double> > newScoeffs;
                 double smoothness_lambda = .5;
-                newScoeffs.push_back(Triplet<double>(m*f + i, m*g + adj_field, - smoothness_lambda * (B_g * vperm).dot(edge) / nv_perm ));
+                newScoeffs.push_back(Triplet<double>(m*f + i, m*g + adj_field, - smoothness_lambda * (B_g * vperm).dot(edge) / n_vperm ));
                 newScoeffs.push_back(Triplet<double>(m*f + i, m*f + i, smoothness_lambda * (B_f * vif).dot(edge) / n_v ));
                 newScoeffs.push_back(Triplet<double>(m*g + adj_field, m*f + i, - smoothness_lambda * (B_f * vif).dot(edge) / n_v ));
-                newScoeffs.push_back(Triplet<double>(m*g + adj_field, m*g + adj_field, smoothness_lambda * (B_g * vperm).dot(edge) / nv_perm ));
+                newScoeffs.push_back(Triplet<double>(m*g + adj_field, m*g + adj_field, smoothness_lambda * (B_g * vperm).dot(edge) / n_vperm ));
 
                 newScoeffs.push_back(Triplet<double>(m*f + i, m*g + adj_field, -(1 - smoothness_lambda) ));
                 newScoeffs.push_back(Triplet<double>(m*f + i, m*f + i, (1 - smoothness_lambda) ));
-                newScoeffs.push_back(Triplet<double>(m*g + adj_field, m*f + i, - (1 - smoothness_lambda) ));
+                newScoeffs.push_back(Triplet<double>(m*g + adj_field, m*f + i, -(1 - smoothness_lambda) ));
                 newScoeffs.push_back(Triplet<double>(m*g + adj_field, m*g + adj_field, (1 - smoothness_lambda) ));
+        
 
-
-                // if ( weave.fs->vectorFields(weave.fs->sidx(f, i)) < .1)
-                //     weave.fs->vectorFields(weave.fs->sidx(f, i)) = .1;
-                // if (weave.fs->vectorFields(weave.fs->sidx(f, i)) > 10)
-                //     weave.fs->vectorFields(weave.fs->sidx(f, i)) = 10;
-
-                // if ( weave.fs->vectorFields(weave.fs->sidx(g, adj_field)) < .1)
-                //     weave.fs->vectorFields(weave.fs->sidx(g, adj_field)) = .1;
-                // if (weave.fs->vectorFields(weave.fs->sidx(g, adj_field)) > 10)
-                //     weave.fs->vectorFields(weave.fs->sidx(g, adj_field)) = 10;
-                
+        }
     }
-}
+
+    newS.setFromTriplets(newScoeffs.begin(), newScoeffs.end());
+    Eigen::MatrixXd STS = Eigen::MatrixXd(newS).transpose() * Eigen::MatrixXd(newS);
+    Eigen::MatrixXd STS_inv = STS.inverse();
+    Eigen::VectorXd s_iterate = Eigen::VectorXd::Random(nfaces*m) + Eigen::VectorXd::Constant(nfaces*m, 1.);
+    s_iterate *= nfaces*m / s_iterate.sum();
+    for (int i = 0; i < 10; i++)
+    {
+        s_iterate = STS_inv * s_iterate;
+        s_iterate *= nfaces*m / s_iterate.sum();
+    }
+
+
 
     // normalize s to be unit
-    weave.fs->vectorFields.segment(5*nfaces*m, nfaces*m) *= nfaces*m / weave.fs->vectorFields.segment(5*nfaces*m, nfaces*m).sum();
+    weave.fs->vectorFields.segment(5*nfaces*m, nfaces*m) = s_iterate;
     weave.fs->normalizeFields();
 
     // std::cout << weave.fs->vectorFields.size() << std::endl;
