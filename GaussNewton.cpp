@@ -444,7 +444,7 @@ void oneStep(Weave &weave, SolverParams params)
     std::cout << "Done, new energy: " << 0.5 * r.transpose()*M*r << std::endl;
     
     Eigen::SparseMatrix<double> newS;
-    newS.resize(m*nfaces, weave.fs->vectorFields.size());
+    newS.resize(weave.fs->nEdges(), weave.fs->vectorFields.size());
     newS.setZero();
 
     std::vector<Eigen::Triplet<double> > newScoeffs;
@@ -477,35 +477,36 @@ void oneStep(Weave &weave, SolverParams params)
                 Eigen::Matrix<double, 3, 2> B_g = weave.fs->data().Bs[g];
                 double n_vperm = (B_g * (vperm)).norm();
 
-                double smoothness_lambda = .5;
-                newScoeffs.push_back(Triplet<double>(m*f + i, m*g + adj_field, - smoothness_lambda * (B_g * vperm).dot(edge) / n_vperm ));
-                newScoeffs.push_back(Triplet<double>(m*f + i, m*f + i, smoothness_lambda * (B_f * vif).dot(edge) / n_v ));
-                newScoeffs.push_back(Triplet<double>(m*g + adj_field, m*f + i, - smoothness_lambda * (B_f * vif).dot(edge) / n_v ));
-                newScoeffs.push_back(Triplet<double>(m*g + adj_field, m*g + adj_field, smoothness_lambda * (B_g * vperm).dot(edge) / n_vperm ));
-
-                newScoeffs.push_back(Triplet<double>(m*f + i, m*g + adj_field, -(1 - smoothness_lambda) ));
-                newScoeffs.push_back(Triplet<double>(m*f + i, m*f + i, (1 - smoothness_lambda) ));
-                newScoeffs.push_back(Triplet<double>(m*g + adj_field, m*f + i, -(1 - smoothness_lambda) ));
-                newScoeffs.push_back(Triplet<double>(m*g + adj_field, m*g + adj_field, (1 - smoothness_lambda) ));
+                double smoothness_lambda = .1;
+                newScoeffs.push_back(Triplet<double>(e, m*f + i, smoothness_lambda * (B_f * vif).dot(edge) / n_v ));
+                newScoeffs.push_back(Triplet<double>(e, m*g + adj_field, - smoothness_lambda * (B_g * vperm).dot(edge) / n_vperm ));
+ 
+                newScoeffs.push_back(Triplet<double>(e, m*f + i, (1 - smoothness_lambda) ));
+                newScoeffs.push_back(Triplet<double>(e, m*g + adj_field, -(1 - smoothness_lambda) ));
         
 
         }
     }
 
     newS.setFromTriplets(newScoeffs.begin(), newScoeffs.end());
+    Eigen::SparseMatrix<double> iden;
+    iden.resize(m*nfaces, m*nfaces);
+    iden.setIdentity();
+    double scale = .1;
+
     std::cout << "make matrix"  << std::endl;
-    Eigen::MatrixXd STS = Eigen::MatrixXd(newS).transpose() * Eigen::MatrixXd(newS);
+    Eigen::MatrixXd STS = Eigen::MatrixXd(newS).transpose() * Eigen::MatrixXd(newS) - scale * Eigen::MatrixXd(iden);
     Eigen::MatrixXd STS_inv = STS.inverse();
     Eigen::VectorXd s_iterate = Eigen::VectorXd::Random(nfaces*m) + Eigen::VectorXd::Constant(nfaces*m, 1.);
     s_iterate *= nfaces*m / s_iterate.sum();
     std::cout << "start iterate" << std::endl;
-    std::cout << newS * s_iterate;
-    for (int i = 0; i < 10; i++)
+    for (int i = 0; i < 100; i++)
     {
         std::cout << i << std::endl;
         s_iterate = STS_inv * s_iterate;
         s_iterate *= nfaces*m / s_iterate.sum();
     }
+    std::cout << s_iterate;
 
 
 
