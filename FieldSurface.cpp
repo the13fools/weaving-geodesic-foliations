@@ -9,9 +9,10 @@ FieldSurface::FieldSurface(const Eigen::MatrixXd &V, const Eigen::MatrixXi &F, i
 {
     int nfaces = data().F.rows();
     // initialize vector fields
-    vectorFields.resize(5*nfaces*numFields);
+    vectorFields.resize(6*nfaces*numFields);
     vectorFields.setZero();
     vectorFields.segment(0, 2 * nfaces*numFields).setRandom();
+    vectorFields.segment(5*nfaces*numFields, nfaces*numFields) = Eigen::VectorXd::Constant(nfaces * numFields, 1.);
     normalizeFields();
 
     // initialize permutation matrices
@@ -53,9 +54,19 @@ int FieldSurface::alphaidx(int face, int field) const
     return 4 * nFields()*nFaces() + nFields()*face + field;
 }
 
+int FieldSurface::sidx(int face, int field) const
+{
+    return 5 * nFields()*nFaces() + nFields()*face + field;
+}
+
 double FieldSurface::alpha(int face, int field) const
 {
     return vectorFields[alphaidx(face,field)];
+}
+
+double FieldSurface::sval(int face, int field) const
+{
+    return vectorFields[sidx(face,field)];
 }
 
 
@@ -113,7 +124,7 @@ FieldSurface *FieldSurface::removeDeletedFacesFromMesh(std::map<int, int> &faceM
     
     int fieldIdx = 0;
     int newNFaces = nFaces() - faceIds.size();
-    Eigen::VectorXd vectorFields_clean = Eigen::VectorXd::Zero( 5*nFields()*newNFaces );
+    Eigen::VectorXd vectorFields_clean = Eigen::VectorXd::Zero( 6*nFields()*newNFaces );
     Eigen::MatrixXi F_temp = Eigen::MatrixXi::Zero(newNFaces, 3); 
 
     std::vector<bool> newdeleted(newNFaces);
@@ -122,7 +133,7 @@ FieldSurface *FieldSurface::removeDeletedFacesFromMesh(std::map<int, int> &faceM
     { 
         if (facesToDelete.count(i))
             continue;
-        
+         // TODO ADD THE S VARIABLE HERE
         // vec field
         vectorFields_clean.segment(2*fieldIdx*nFields(), 2*nFields()) = vectorFields.segment(2*i*nFields(), 2*nFields());
         // beta
@@ -207,7 +218,7 @@ void FieldSurface::serialize(std::ostream &os) const
             os.write((char *)&tmp, sizeof(int));
         }
     }
-    for (int i = 0; i < 5 * nfaces*nfields; i++)
+    for (int i = 0; i < 6 * nfaces*nfields; i++)
     {
         double tmp = vectorFields[i];
         os.write((char *)&tmp, sizeof(double));

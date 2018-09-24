@@ -111,7 +111,7 @@ void Weave::createVisualizationEdges(Eigen::MatrixXd &edgePts, Eigen::MatrixXd &
         for (int j = 0; j < m; j++)
         {
             edgePts.row(m*i + j) = centroid;
-            edgeVecs.row(m*i + j) = fs->data().Bs[i] * fs->v(i, j);
+            edgeVecs.row(m*i + j) = fs->sval(i,j) * fs->data().Bs[i] * fs->v(i, j);
             edgeSegs(m*i + j, 0) = 2 * (m*i + j);
             edgeSegs(m*i + j, 1) = 2 * (m*i + j) + 1;
             colors.row(m*i + j) = fcolors.row(j);

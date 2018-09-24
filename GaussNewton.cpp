@@ -48,7 +48,7 @@ void GNmetric(const Weave &weave, Eigen::SparseMatrix<double> &M)
     int nedges = weave.fs->nEdges();
     int m = weave.fs->nFields();
     int intedges = weave.fs->numInteriorEdges();
-    int numterms = 2*nhandles + 5 * intedges * m;
+    int numterms = 2*nhandles + 6 * intedges * m;
     M.resize(numterms, numterms);
     M.setZero();
 
@@ -134,7 +134,7 @@ void GNEnergy(const Weave &weave, SolverParams params, Eigen::VectorXd &E)
     int nedges = weave.fs->nEdges();
     int m = weave.fs->nFields();
     int intedges = weave.fs->numInteriorEdges();
-    int nterms = 2 * nhandles + 5 * intedges*m;
+    int nterms = 2 * nhandles + 6 * intedges*m;
     E.resize(nterms);
     E.setZero();
 
@@ -201,6 +201,13 @@ void GNEnergy(const Weave &weave, SolverParams params, Eigen::VectorXd &E)
             }
             double n_vif = (weave.fs->data().Bs[f] * vif).norm();
             double n_vpermut = (weave.fs->data().Bs[g] * vpermut).norm();
+            vif *= weave.fs->sval(f, i);
+            for (int field = 0; field < m; field++)
+            {
+                if (permut(i, field) != 0)
+                    vpermut *= weave.fs->sval(g, field);  
+            }
+
         //    E[term] = (weave.fs->data().Bs[f] * (vif)).dot(edge) - (weave.fs->data().Bs[g] * (vpermut)).dot(edge);
             E[term] = (weave.fs->data().Bs[f] * (vif)).dot(edge)/n_vif - (weave.fs->data().Bs[g] * (vpermut)).dot(edge)/n_vpermut;
             E[term] *= params.curlreg * params.edgeWeights(e);
@@ -216,7 +223,7 @@ void GNGradient(const Weave &weave, SolverParams params, Eigen::SparseMatrix<dou
     int nedges = weave.fs->nEdges();
     int m = weave.fs->nFields();
     int intedges = weave.fs->numInteriorEdges();
-    int nterms = 2 * nhandles + 5 * intedges*m;
+    int nterms = 2 * nhandles + 6 * intedges*m;
     J.resize(nterms, weave.fs->vectorFields.size());
     J.setZero();
 
@@ -305,7 +312,6 @@ void GNGradient(const Weave &weave, SolverParams params, Eigen::SparseMatrix<dou
                 Eigen::Vector2d vif = weave.fs->v(f, i);
                 Eigen::Vector2d b0(1, 0);
                 Eigen::Vector2d b1(0, 1);
-
                 double n_v = (weave.fs->data().Bs[f] * vif).norm();
                 Eigen::Matrix<double, 3, 2> B_f = weave.fs->data().Bs[f];
                 Eigen::Vector2d e_f = edge.transpose() * B_f;
@@ -313,6 +319,7 @@ void GNGradient(const Weave &weave, SolverParams params, Eigen::SparseMatrix<dou
            //     std::cout << n_v << " ";
                 Eigen::Vector2d dE = ( e_f ) / n_v;
                 dE -= vif.transpose() * B_f.transpose() * edge * vif.transpose() * B_f.transpose() * B_f / (n_v * n_v * n_v);
+                dE *= weave.fs->sval(f, i);
                 for (int k = 0; k < 2; k++)
                 {
                     Jcoeffs.push_back(Triplet<double>(term, weave.fs->vidx(f, i) + k, dE[k] * params.curlreg * params.edgeWeights(e)));
@@ -330,8 +337,9 @@ void GNGradient(const Weave &weave, SolverParams params, Eigen::SparseMatrix<dou
                 for (int field = 0; field < m; field++)
                 {
       //              Eigen::Vector2d dE = permut(i, field) * (e_g);
-                    Eigen::Vector2d dE = permut(i, field) * (e_g) / n_vperm;
-                    dE -= permut(i, field) * vperm.transpose() * B_g.transpose() * edge * vperm.transpose() * B_g.transpose() * B_g  / (n_vperm * n_vperm * n_vperm);
+                    Eigen::Vector2d dE = (e_g) / n_vperm; 
+                    dE -= vperm.transpose() * B_g.transpose() * edge * vperm.transpose() * B_g.transpose() * B_g  / (n_vperm * n_vperm * n_vperm);
+                    dE *= permut(i, field) * weave.fs->sval(g, field);  
                     for (int k = 0; k < 2; k++)
                     {
                         Jcoeffs.push_back(Triplet<double>(term, weave.fs->vidx(g, field) + k, -dE[k] * params.curlreg * params.edgeWeights(e)));
@@ -435,24 +443,89 @@ void oneStep(Weave &weave, SolverParams params)
     GNEnergy(weave, params, r);
     std::cout << "Done, new energy: " << 0.5 * r.transpose()*M*r << std::endl;
 
-    std::cout << weave.fs->vectorFields.size() << std::endl;
-    for (int f = 0; f < weave.fs->nFaces() * weave.fs->nFields(); f++)
+    for (int e = 0; e < weave.fs->nEdges(); e++)
     {
-        Eigen::Vector2d v;
-        v(0) = weave.fs->vectorFields(2*f);
-        v(1) = weave.fs->vectorFields(2*f + 1);
-     //   std::cout << v.norm() << std::endl;
-        v.normalize();
-        weave.fs->vectorFields(2*f) = v(0);
-        weave.fs->vectorFields(2*f + 1) = v(1);
-    }
+        if(weave.fs->data().E(e,0) == -1 || weave.fs->data().E(e,1) == -1)
+            continue;
+        for (int i = 0; i < m; i++)
+        {
+                int f = weave.fs->data().E(e, 0);
+                int g = weave.fs->data().E(e, 1);
+                Eigen::Vector3d edge = weave.fs->data().V.row(weave.fs->data().edgeVerts(e, 0)) - 
+                                            weave.fs->data().V.row(weave.fs->data().edgeVerts(e, 1));
+                Eigen::Vector2d vif = weave.fs->v(f, i);
+                double n_v = (weave.fs->data().Bs[f] * vif).norm();
+                 
+                Eigen::Vector2d vperm(0, 0);
+                Eigen::MatrixXi permut = weave.fs->Ps(e);
+                int adj_field = -1;
+                for (int field = 0; field < m; field++)
+                {
+                    vperm += permut(i, field) * weave.fs->v(g, field); 
+                    if(permut(i, field) != 0)
+                        adj_field = field;
+                }
+                Eigen::Matrix<double, 3, 2> B_f = weave.fs->data().Bs[f];
+                Eigen::Matrix<double, 3, 2> B_g = weave.fs->data().Bs[g];
+                double n_vperm = (B_g * (vperm)).norm();
 
-    counter++;
-    // if (t <  0.0000625)
+                weave.fs->vectorFields(weave.fs->sidx(f, i)) = weave.fs->sval(g, adj_field) * (B_g * vperm).dot(edge) * n_v / 
+                                                                                            ( (B_f * vif).dot(edge) * n_vperm );
+                double ave = (weave.fs->sval(f, i) + weave.fs->sval(g, adj_field)) / 2;
+                weave.fs->vectorFields(weave.fs->sidx(f, i)) = (weave.fs->vectorFields(weave.fs->sidx(f, i)) + ave) / 2;
+                weave.fs->vectorFields(weave.fs->sidx(g, adj_field)) = (weave.fs->vectorFields(weave.fs->sidx(g, adj_field)) + ave) / 2;
+                
+                newS.resize(nterms, weave.fs->vectorFields.size());
+                newS.setZero();
+
+                std::vector<Eigen::Triplet<double> > newScoeffs;
+                double smoothness_lambda = .5;
+                newScoeffs.push_back(Triplet<double>(m*f + i, m*g + adj_field, - smoothness_lambda * (B_g * vperm).dot(edge) / nv_perm ));
+                newScoeffs.push_back(Triplet<double>(m*f + i, m*f + i, smoothness_lambda * (B_f * vif).dot(edge) / n_v ));
+                newScoeffs.push_back(Triplet<double>(m*g + adj_field, m*f + i, - smoothness_lambda * (B_f * vif).dot(edge) / n_v ));
+                newScoeffs.push_back(Triplet<double>(m*g + adj_field, m*g + adj_field, smoothness_lambda * (B_g * vperm).dot(edge) / nv_perm ));
+
+                newScoeffs.push_back(Triplet<double>(m*f + i, m*g + adj_field, -(1 - smoothness_lambda) ));
+                newScoeffs.push_back(Triplet<double>(m*f + i, m*f + i, (1 - smoothness_lambda) ));
+                newScoeffs.push_back(Triplet<double>(m*g + adj_field, m*f + i, - (1 - smoothness_lambda) ));
+                newScoeffs.push_back(Triplet<double>(m*g + adj_field, m*g + adj_field, (1 - smoothness_lambda) ));
+
+
+                // if ( weave.fs->vectorFields(weave.fs->sidx(f, i)) < .1)
+                //     weave.fs->vectorFields(weave.fs->sidx(f, i)) = .1;
+                // if (weave.fs->vectorFields(weave.fs->sidx(f, i)) > 10)
+                //     weave.fs->vectorFields(weave.fs->sidx(f, i)) = 10;
+
+                // if ( weave.fs->vectorFields(weave.fs->sidx(g, adj_field)) < .1)
+                //     weave.fs->vectorFields(weave.fs->sidx(g, adj_field)) = .1;
+                // if (weave.fs->vectorFields(weave.fs->sidx(g, adj_field)) > 10)
+                //     weave.fs->vectorFields(weave.fs->sidx(g, adj_field)) = 10;
+                
+    }
+}
+
+    // normalize s to be unit
+    weave.fs->vectorFields.segment(5*nfaces*m, nfaces*m) *= nfaces*m / weave.fs->vectorFields.segment(5*nfaces*m, nfaces*m).sum();
+    weave.fs->normalizeFields();
+
+    // std::cout << weave.fs->vectorFields.size() << std::endl;
+    // for (int f = 0; f < weave.fs->nFaces() * weave.fs->nFields(); f++)
     // {
-    //    GNtestFiniteDifferences(weave, params);
-    //    exit(-1);
+    //     Eigen::Vector2d v;
+    //     v(0) = weave.fs->vectorFields(2*f);
+    //     v(1) = weave.fs->vectorFields(2*f + 1);
+    //  //   std::cout << v.norm() << std::endl;
+    //     v.normalize();
+    //     weave.fs->vectorFields(2*f) = v(0);
+    //     weave.fs->vectorFields(2*f + 1) = v(1);
     // }
+
+    // counter++;
+    if (t <  0.0000625)
+    {
+       GNtestFiniteDifferences(weave, params);
+       exit(-1);
+    }
 }
 
 double lineSearch(Weave &weave, SolverParams params, const Eigen::VectorXd &update)

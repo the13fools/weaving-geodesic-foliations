@@ -22,11 +22,13 @@ public:
     int vidx(int face, int field) const;                
     int betaidx(int face, int field) const;
     int alphaidx(int face, int field) const;
+    int sidx(int face, int field) const;
     
     // accessors into vectorFields
     Eigen::Vector2d v(int face, int field) const;
     Eigen::Vector2d beta(int face, int field) const;
     double alpha(int face, int field) const;
+    double sval(int face, int field) const;
 
     const Eigen::MatrixXi Ps(int edge) const;
 
@@ -58,6 +60,7 @@ public:
                                      // first 2m|F| entries: first vector on face 1, second vector on face 1, third vector on face 1, ..., last vector on face m
                                      // next 2m|F| entries: first beta vector on face 1, ...
                                      // next m|F| entries: first alpha on face 1, ...
+                                     // next m|F| entries: per face scale parameter ... 
     std::vector<Eigen::MatrixXi> Ps_; // for each edge i, maps indices from triangle E(i,1) to indices in triangle E(i,0), with sign. I.e. the vector on E(i,1) corresponding to vector j on E(i,0) is \sum_k Ps[i](j,k) v(E(i,1),k)
 
 private:
