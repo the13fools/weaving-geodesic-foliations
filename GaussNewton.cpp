@@ -499,7 +499,7 @@ void oneStep(Weave &weave, SolverParams params)
     Eigen::VectorXd s_iterate = Eigen::VectorXd::Random(nfaces*m) + Eigen::VectorXd::Constant(nfaces*m, 1.);
     s_iterate *= nfaces*m / s_iterate.sum();
     std::cout << "start iterate" << std::endl;
-    std::cout << STS * s_iterate;
+    std::cout << newS * s_iterate;
     for (int i = 0; i < 10; i++)
     {
         std::cout << i << std::endl;
