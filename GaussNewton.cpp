@@ -449,6 +449,8 @@ void oneStep(Weave &weave, SolverParams params)
 
     std::vector<Eigen::Triplet<double> > newScoeffs;
 
+    std::cout << "update S" << std::endl;
+
     for (int e = 0; e < weave.fs->nEdges(); e++)
     {
         if(weave.fs->data().E(e,0) == -1 || weave.fs->data().E(e,1) == -1)
@@ -491,12 +493,16 @@ void oneStep(Weave &weave, SolverParams params)
     }
 
     newS.setFromTriplets(newScoeffs.begin(), newScoeffs.end());
+    std::cout << "make matrix"  << std::endl;
     Eigen::MatrixXd STS = Eigen::MatrixXd(newS).transpose() * Eigen::MatrixXd(newS);
     Eigen::MatrixXd STS_inv = STS.inverse();
     Eigen::VectorXd s_iterate = Eigen::VectorXd::Random(nfaces*m) + Eigen::VectorXd::Constant(nfaces*m, 1.);
     s_iterate *= nfaces*m / s_iterate.sum();
+    std::cout << "start iterate" << std::endl;
+    std::cout << STS * s_iterate;
     for (int i = 0; i < 10; i++)
     {
+        std::cout << i << std::endl;
         s_iterate = STS_inv * s_iterate;
         s_iterate *= nfaces*m / s_iterate.sum();
     }
