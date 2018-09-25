@@ -6,6 +6,8 @@
 #include "Surface.h"
 #include <igl/cotmatrix.h>
 
+#include <Eigen/Eigenvalues>
+
 #include <cmath>
 
 using namespace Eigen;
@@ -444,7 +446,7 @@ void oneStep(Weave &weave, SolverParams params)
     std::cout << "Done, new energy: " << 0.5 * r.transpose()*M*r << std::endl;
     
     Eigen::SparseMatrix<double> newS;
-    newS.resize(weave.fs->nEdges(), weave.fs->vectorFields.size());
+    newS.resize(weave.fs->nEdges(), m*nfaces);
     newS.setZero();
 
     std::vector<Eigen::Triplet<double> > newScoeffs;
@@ -478,11 +480,12 @@ void oneStep(Weave &weave, SolverParams params)
                 double n_vperm = (B_g * (vperm)).norm();
 
                 double smoothness_lambda = .1;
-                newScoeffs.push_back(Triplet<double>(e, m*f + i, smoothness_lambda * (B_f * vif).dot(edge) / n_v ));
-                newScoeffs.push_back(Triplet<double>(e, m*g + adj_field, - smoothness_lambda * (B_g * vperm).dot(edge) / n_vperm ));
+                double curl_lambda = .0;
+                newScoeffs.push_back(Triplet<double>(e, m*f + i, curl_lambda * (B_f * vif).dot(edge) / n_v ));
+                newScoeffs.push_back(Triplet<double>(e, m*g + adj_field, -curl_lambda * (B_g * vperm).dot(edge) / n_vperm ));
  
-                newScoeffs.push_back(Triplet<double>(e, m*f + i, (1 - smoothness_lambda) ));
-                newScoeffs.push_back(Triplet<double>(e, m*g + adj_field, -(1 - smoothness_lambda) ));
+                newScoeffs.push_back(Triplet<double>(e, m*f + i, smoothness_lambda));
+                newScoeffs.push_back(Triplet<double>(e, m*g + adj_field, -smoothness_lambda));
         
 
         }
@@ -492,21 +495,32 @@ void oneStep(Weave &weave, SolverParams params)
     Eigen::SparseMatrix<double> iden;
     iden.resize(m*nfaces, m*nfaces);
     iden.setIdentity();
-    double scale = .1;
+    double scale = .01;
 
-    std::cout << "make matrix"  << std::endl;
+  //  std::cout << "make matrix"  << std::endl;
     Eigen::MatrixXd STS = Eigen::MatrixXd(newS).transpose() * Eigen::MatrixXd(newS) - scale * Eigen::MatrixXd(iden);
     Eigen::MatrixXd STS_inv = STS.inverse();
-    Eigen::VectorXd s_iterate = Eigen::VectorXd::Random(nfaces*m) + Eigen::VectorXd::Constant(nfaces*m, 1.);
-    s_iterate *= nfaces*m / s_iterate.sum();
+    Eigen::VectorXd s_iterate = Eigen::VectorXd::Random(nfaces*m) * 10. + Eigen::VectorXd::Constant(nfaces*m, 0.);
+    s_iterate.normalize();
+  //  s_iterate *= 1 / s_iterate.norm();
     std::cout << "start iterate" << std::endl;
+
+    Eigen::VectorXd firstEigVec = Eigen::VectorXd::Constant(nfaces*m, 1.);
+    std::cout << " Face count " << nfaces*m << " nfaces " << nfaces << std::endl;
+
+    EigenSolver<MatrixXd> eigensolver(STS_inv);
+    std::cout << "The eigenvalues of A are:\n" << eigensolver.eigenvectors() << std::endl;
     for (int i = 0; i < 100; i++)
     {
-        std::cout << i << std::endl;
+   //     std::cout << i << std::endl;
         s_iterate = STS_inv * s_iterate;
-        s_iterate *= nfaces*m / s_iterate.sum();
+        s_iterate = s_iterate - s_iterate.dot(firstEigVec)*firstEigVec;
+      //  std::cout << i << " " << s_iterate.dot(firstEigVec) << std::endl;
+     //   std::cout <<  " s_iterate norm" << s_iterate.norm() << "firstEigVec norm" << firstEigVec.norm() << std::endl;
+        s_iterate.normalize();
+  //      s_iterate *= 1 / s_iterate.norm();
     }
-    std::cout << s_iterate;
+  //  std::cout << s_iterate;
 
 
 
@@ -526,12 +540,12 @@ void oneStep(Weave &weave, SolverParams params)
     //     weave.fs->vectorFields(2*f + 1) = v(1);
     // }
 
-    // counter++;
-    if (t <  0.0000625)
-    {
-       GNtestFiniteDifferences(weave, params);
-       exit(-1);
-    }
+    // // counter++;
+    // if (t <  0.0000625)
+    // {
+    //    GNtestFiniteDifferences(weave, params);
+    //    exit(-1);
+    // }
 }
 
 double lineSearch(Weave &weave, SolverParams params, const Eigen::VectorXd &update)
