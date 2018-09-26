@@ -11,6 +11,7 @@ struct SolverParams
     double lambdacompat; // weight of compatibility term
     double lambdareg;    // Tilhonov regularization
     double curlreg; // Weight on the curl component of v
+    int eigenvector; // Choose the eigenvector of s to display (for debugging - delete me!)
     Eigen::VectorXd edgeWeights;
 };
 

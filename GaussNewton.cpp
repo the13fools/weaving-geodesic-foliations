@@ -7,6 +7,7 @@
 #include <igl/cotmatrix.h>
 
 #include <Eigen/Eigenvalues>
+#include <vector>       // std::vector
 
 #include <cmath>
 
@@ -506,26 +507,46 @@ void oneStep(Weave &weave, SolverParams params)
     std::cout << "start iterate" << std::endl;
 
     Eigen::VectorXd firstEigVec = Eigen::VectorXd::Constant(nfaces*m, 1.);
+    firstEigVec.normalize();
     std::cout << " Face count " << nfaces*m << " nfaces " << nfaces << std::endl;
 
+    std::cout << m << std::endl;
+
     EigenSolver<MatrixXd> eigensolver(STS_inv);
-    std::cout << "The eigenvalues of A are:\n" << eigensolver.eigenvectors() << std::endl;
-    for (int i = 0; i < 100; i++)
+    Eigen::VectorXd eigenVals = eigensolver.eigenvalues().real();
+    std::vector<double> sortedEigenVals;
+    for (int i = 0; i < eigenVals.rows(); i++)
+        sortedEigenVals.push_back(eigenVals(i));
+    std::sort(sortedEigenVals.begin(),sortedEigenVals.end());
+
+    int idx = 0;
+    for (int i = 0; i < eigenVals.rows(); i++)
     {
-   //     std::cout << i << std::endl;
-        s_iterate = STS_inv * s_iterate;
-        s_iterate = s_iterate - s_iterate.dot(firstEigVec)*firstEigVec;
-      //  std::cout << i << " " << s_iterate.dot(firstEigVec) << std::endl;
-     //   std::cout <<  " s_iterate norm" << s_iterate.norm() << "firstEigVec norm" << firstEigVec.norm() << std::endl;
-        s_iterate.normalize();
-  //      s_iterate *= 1 / s_iterate.norm();
+        if (sortedEigenVals.at(params.eigenvector) == eigenVals(i))
+        {
+            idx = i;
+            break;
+        }
     }
+
+ //   std::cout << "The eigenvalues of A are:\n" << eigensolver.eigenvalues() << std::endl;
+    weave.fs->vectorFields.segment(5*nfaces*m, nfaces*m) = eigensolver.eigenvectors().col(idx).real();
+/*for (int i = 0; i < 100; i++)
+{
+//     std::cout << i << std::endl;
+    s_iterate = STS_inv * s_iterate;
+    s_iterate = s_iterate - s_iterate.dot(firstEigVec)*firstEigVec;
+  //  std::cout << i << " " << s_iterate.dot(firstEigVec) << std::endl;
+ //   std::cout <<  " s_iterate norm" << s_iterate.norm() << "firstEigVec norm" << firstEigVec.norm() << std::endl;
+    s_iterate.normalize();
+//      s_iterate *= 1 / s_iterate.norm();
+}*/
   //  std::cout << s_iterate;
 
 
 
     // normalize s to be unit
-    weave.fs->vectorFields.segment(5*nfaces*m, nfaces*m) = s_iterate;
+ //   weave.fs->vectorFields.segment(5*nfaces*m, nfaces*m) = s_iterate;
     weave.fs->normalizeFields();
 
     // std::cout << weave.fs->vectorFields.size() << std::endl;

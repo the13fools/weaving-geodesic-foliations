@@ -173,6 +173,20 @@ void WeaveHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
     }
 }
 
+bool WeaveHook::keyDown(igl::opengl::glfw::Viewer &viewer, unsigned char key, int modifiers)
+{
+  if (key == 'o')
+  {
+    params.eigenvector += 1;
+  }
+  else if (key == 'p')
+  {
+    if (params.eigenvector > 0)
+        params.eigenvector -= 1;
+  }
+  return false;
+}
+
 bool WeaveHook::mouseClicked(igl::opengl::glfw::Viewer &viewer, int button)
 {
     if (gui_mode != GUIMode_Enum::WEAVE)
@@ -255,7 +269,7 @@ void WeaveHook::initSimulation()
 {
     if (weave)
         delete weave;
-    weave = new Weave(meshName, 3);    
+    weave = new Weave(meshName, 1);    
     clear();    
 }
 
@@ -278,7 +292,7 @@ void WeaveHook::resample()
     
     delete weave;
     
-    weave = new Weave(V, F, 3);    
+    weave = new Weave(V, F, 1);    
     clear();  
 
     // Hacky... 
@@ -363,19 +377,28 @@ void WeaveHook::setFaceColorsCover(igl::opengl::glfw::Viewer &viewer)
 void WeaveHook::setFaceColorsWeave(igl::opengl::glfw::Viewer &viewer)
 {
     int faces = weave->fs->data().F.rows();
+    int m = weave->fs->nFields();
     // if ( curFaceEnergies.rows() != faces && shading_state != NONE) { return ; }
     // cout << "fuck" << endl;
 
     igl::ColorMapType viz_color = igl::COLOR_MAP_TYPE_MAGMA;
 
-    Eigen::VectorXd Z(faces);    
+    Eigen::VectorXd Z(faces);  
+
+    double min = 10000;
+    double max = -10000;
 
     for (int i = 0; i < faces; i++)
     {
         switch (weave_shading_state)
         {
         case F1_ENERGY:
-            Z(i) = log(curFaceEnergies(i, 0));
+         //   Z(i) = log(curFaceEnergies(i, 0));
+            Z(i) = weave->fs->vectorFields(5*faces*m + i);
+            if (Z(i) < min)
+                min = Z(i);
+            if (Z(i) > max)
+                max = Z(i);
             break;
         case F2_ENERGY:
             Z(i) = log(curFaceEnergies(i, 1));
@@ -388,10 +411,17 @@ void WeaveHook::setFaceColorsWeave(igl::opengl::glfw::Viewer &viewer)
             break;
         case WS_NONE:
         default:
-            Z(i) = .7;
+            Z(i) = weave->fs->vectorFields(5*faces*m + i);
+            if (Z(i) < min)
+                min = Z(i);
+            if (Z(i) > max)
+                max = Z(i);
+       //     std::cout << weave->fs->vectorFields(5*faces*m + i);
             break;
         }
     }
+    Z -= Eigen::VectorXd::Constant(faces, min);
+    Z /= max;
 
     if (weave_shading_state == WS_CONNECTION_ENERGY)
     {

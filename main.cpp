@@ -23,6 +23,14 @@ void resetSimulation()
     hook->reset();
 }
 
+// bool keyDownCallback(Viewer& viewer, unsigned char key, int modifiers)
+// {
+//     if (!hook)
+//         return false;
+
+//     return hook->keyDown(viewer, key, modifiers);
+// }
+
 bool mouseDownCallback(igl::opengl::glfw::Viewer &viewer, int button, int modifier)
 {
     if (!hook)
@@ -55,7 +63,8 @@ bool keyCallback(igl::opengl::glfw::Viewer &viewer, unsigned int key, int modifi
         toggleSimulation();
         return true;
     }
-    return false;
+
+    return hook->keyDown(viewer, key, modifiers);
 }
 
 
@@ -90,6 +99,7 @@ int main(int argc, char *argv[])
   viewer.callback_pre_draw = drawCallback;
   viewer.callback_mouse_down = mouseDownCallback;
   viewer.callback_mouse_up = mouseUpCallback;
+ // viewer.callback_key_down = keyDownCallback;
 
   igl::opengl::glfw::imgui::ImGuiMenu menu;
   viewer.plugins.push_back(&menu);

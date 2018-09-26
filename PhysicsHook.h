@@ -57,6 +57,11 @@ public:
      */
     virtual void renderRenderGeometry(igl::opengl::glfw::Viewer &viewer) = 0;
 
+    /* 
+      Same as mouse click handeling but for key strokes
+    */
+    virtual bool keyDown(igl::opengl::glfw::Viewer &viewer, unsigned char key, int modifiers) { return false; }
+
     /*
     * Called when the user clicks on the simulation panel.
     * This method is called in the *rendering thread*. If you need to make changes to the simulation state, you

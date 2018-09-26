@@ -50,6 +50,7 @@ public:
         params.lambdacompat = 0;
         params.lambdareg = 1e-3;
         params.curlreg = 10;
+        params.eigenvector = 0;
 
         traceIdx = 0;
         traceSign = 1;
@@ -87,6 +88,7 @@ public:
 
     virtual void drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu);
     virtual bool mouseClicked(igl::opengl::glfw::Viewer &viewer, int button);
+    virtual bool keyDown(igl::opengl::glfw::Viewer &viewer, unsigned char key, int modifiers);
 
     void reassignPermutations();
     void normalizeFields();
