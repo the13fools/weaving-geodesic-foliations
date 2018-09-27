@@ -51,7 +51,7 @@ void GNmetric(const Weave &weave, Eigen::SparseMatrix<double> &M)
     int nedges = weave.fs->nEdges();
     int m = weave.fs->nFields();
     int intedges = weave.fs->numInteriorEdges();
-    int numterms = 2*nhandles + 6 * intedges * m;
+    int numterms = 2*nhandles + 5 * intedges * m;
     M.resize(numterms, numterms);
     M.setZero();
 
@@ -137,7 +137,7 @@ void GNEnergy(const Weave &weave, SolverParams params, Eigen::VectorXd &E)
     int nedges = weave.fs->nEdges();
     int m = weave.fs->nFields();
     int intedges = weave.fs->numInteriorEdges();
-    int nterms = 2 * nhandles + 6 * intedges*m;
+    int nterms = 2 * nhandles + 5 * intedges*m;
     E.resize(nterms);
     E.setZero();
 
@@ -226,7 +226,7 @@ void GNGradient(const Weave &weave, SolverParams params, Eigen::SparseMatrix<dou
     int nedges = weave.fs->nEdges();
     int m = weave.fs->nFields();
     int intedges = weave.fs->numInteriorEdges();
-    int nterms = 2 * nhandles + 6 * intedges*m;
+    int nterms = 2 * nhandles + 5 * intedges*m;
     J.resize(nterms, weave.fs->vectorFields.size());
     J.setZero();
 
@@ -411,6 +411,19 @@ void oneStep(Weave &weave, SolverParams params)
     std::vector<Eigen::Triplet<double> > coeffs;
     int nfaces = weave.fs->nFaces();
     int m = weave.fs->nFields();
+    // for(int i=0; i<nfaces; i++)
+    // {
+    //     for(int j=0; j<m; j++)
+    //     {
+    //         for(int k=0; k<3; k++)
+    //         {
+    //             int idx = 2*nfaces*m + 3*m*i + 3*j + k;            
+    //             double facearea = weave.fs->faceArea(i);
+    //           //  coeffs.push_back(Eigen::Triplet<double>(idx, idx, params.lambdareg*facearea));
+    //         }
+    //     }
+    // }
+
     for(int i=0; i<nfaces; i++)
     {
         for(int j=0; j<m; j++)
@@ -419,15 +432,34 @@ void oneStep(Weave &weave, SolverParams params)
             {
                 int idx = 2*nfaces*m + 3*m*i + 3*j + k;            
                 double facearea = weave.fs->faceArea(i);
-              //  coeffs.push_back(Eigen::Triplet<double>(idx, idx, params.lambdareg*facearea));
+                coeffs.push_back(Eigen::Triplet<double>(idx, idx, params.lambdareg*facearea));
+                int shift = 5*nfaces*m + i + j;
+                coeffs.push_back(Eigen::Triplet<double>(shift, shift, params.lambdareg*facearea));
             }
         }
     }
+    
 
+    // AAAAAAARHRHRRHGGGG
     for(int i=0; i<weave.fs->vectorFields.size(); i++)
     {
-        coeffs.push_back(Eigen::Triplet<double>(i, i, params.lambdareg));
+  //      int shift = 5*nfaces*m + j;
+  //      coeffs.push_back(Eigen::Triplet<double>(shift, shift, params.lambdareg*facearea));
+        coeffs.push_back(Eigen::Triplet<double>(i, i, params.lambdareg * .001));
     }
+
+    
+
+
+    // for(int i=0; i<nfaces; i++)
+    // {
+    //     for(int j=0; j<m; j++)
+    //     {
+    //         int shift = 5*nfaces*m + j;
+    //         double facearea = weave.fs->faceArea(i);
+    //         coeffs.push_back(Eigen::Triplet<double>(i+shift, i+shift, params.lambdareg));
+    //     }
+    // }
 
 
     optMat.setFromTriplets(coeffs.begin(), coeffs.end());
@@ -445,7 +477,9 @@ void oneStep(Weave &weave, SolverParams params)
     
     GNEnergy(weave, params, r);
     std::cout << "Done, new energy: " << 0.5 * r.transpose()*M*r << std::endl;
-
+    weave.fs->normalizeFields();
+    GNEnergy(weave, params, r);
+    std::cout << "Done, rescaled new energy: " << 0.5 * r.transpose()*M*r << std::endl;
     m = 1;
     
     Eigen::SparseMatrix<double> newS;
@@ -485,10 +519,10 @@ void oneStep(Weave &weave, SolverParams params)
 
                 double smoothness_lambda = .1;
                 double curl_lambda = .1;
-                newScoeffs.push_back(Triplet<double>(e, m*f + i, -curl_lambda * (B_f * vif).dot(edge) / n_v ));
+                newScoeffs.push_back(Triplet<double>(e, m*f + i, curl_lambda * (B_f * vif).dot(edge) / n_v ));
                 newScoeffs.push_back(Triplet<double>(e, m*g + adj_field, -curl_lambda * (B_g * vperm).dot(edge) / n_vperm ));
  
-                newScoeffs.push_back(Triplet<double>(e, m*f + i, -smoothness_lambda));
+                newScoeffs.push_back(Triplet<double>(e, m*f + i, smoothness_lambda));
                 newScoeffs.push_back(Triplet<double>(e, m*g + adj_field, -smoothness_lambda));
         
 
@@ -502,7 +536,7 @@ void oneStep(Weave &weave, SolverParams params)
     double scale = .01;
 
   //  std::cout << "make matrix"  << std::endl;
-    Eigen::MatrixXd STS = Eigen::MatrixXd(newS).transpose() * Eigen::MatrixXd(newS) - scale * Eigen::MatrixXd(iden);
+    Eigen::MatrixXd STS = Eigen::MatrixXd(newS).transpose() * Eigen::MatrixXd(newS) + scale * Eigen::MatrixXd(iden);
     Eigen::MatrixXd STS_inv = STS.inverse();
     Eigen::VectorXd s_iterate = Eigen::VectorXd::Random(nfaces*m) * 10. + Eigen::VectorXd::Constant(nfaces*m, 0.);
     s_iterate.normalize();
@@ -515,7 +549,7 @@ void oneStep(Weave &weave, SolverParams params)
 
     std::cout << m << std::endl;
 
-    EigenSolver<MatrixXd> eigensolver(STS);
+    SelfAdjointEigenSolver<MatrixXd> eigensolver(STS);
     Eigen::VectorXd eigenVals = eigensolver.eigenvalues().real();
     std::vector<double> sortedEigenVals;
     for (int i = 0; i < eigenVals.rows(); i++)
@@ -534,12 +568,22 @@ void oneStep(Weave &weave, SolverParams params)
         }
     }
 
+    idx = params.eigenvector;
+
      std::cout << params.eigenvector << " " << idx << std::endl;
 
      m = weave.fs->nFields();
 
- //   std::cout << "The eigenvalues of A are:\n" << eigensolver.eigenvalues() << std::endl;
-    weave.fs->vectorFields.segment(5*nfaces*m, nfaces*m) = eigensolver.eigenvectors().col(idx).real();
+   // std::cout << "The eigenvalues of A are:\n" << eigensolver.eigenvalues() << std::endl;
+    for (int i = 0; i < m; i++) // DOUBLE CHECK FOR M > 1
+    {
+        weave.fs->vectorFields.segment(5*nfaces*m + nfaces * i, nfaces) = eigensolver.eigenvectors().col(idx).real();
+    }
+
+   //     std::cout << "The eigenvectors of A are:\n" << eigensolver.eigenvectors().col(idx).real() << std::endl;
+
+    GNEnergy(weave, params, r);
+    std::cout << "Done, new energy: " << 0.5 * r.transpose()*M*r << std::endl;
 /*for (int i = 0; i < 100; i++)
 {
 //     std::cout << i << std::endl;
@@ -556,7 +600,7 @@ void oneStep(Weave &weave, SolverParams params)
 
     // normalize s to be unit
  //   weave.fs->vectorFields.segment(5*nfaces*m, nfaces*m) = s_iterate;
-    weave.fs->normalizeFields();
+
 
     // std::cout << weave.fs->vectorFields.size() << std::endl;
     // for (int f = 0; f < weave.fs->nFaces() * weave.fs->nFields(); f++)

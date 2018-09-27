@@ -42,7 +42,7 @@ public:
         cover_shading_state = CoverShading_Enum::CS_NONE;
         // meshName = "meshes/bunny_coarser.obj";
  //       meshName = "meshes/sphere_small.obj";
-        meshName = "meshes/tet.obj";
+        meshName = "meshes/circ.obj";
         // vectorFieldName = "bunny_coarser_nosing";
         vectorFieldName = "tet.rlx";
         rodFilename = "example.rod";
