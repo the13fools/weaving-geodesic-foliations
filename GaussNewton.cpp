@@ -445,6 +445,8 @@ void oneStep(Weave &weave, SolverParams params)
     
     GNEnergy(weave, params, r);
     std::cout << "Done, new energy: " << 0.5 * r.transpose()*M*r << std::endl;
+
+    m = 1;
     
     Eigen::SparseMatrix<double> newS;
     newS.resize(weave.fs->nEdges(), m*nfaces);
@@ -453,6 +455,7 @@ void oneStep(Weave &weave, SolverParams params)
     std::vector<Eigen::Triplet<double> > newScoeffs;
 
     std::cout << "update S" << std::endl;
+
 
     for (int e = 0; e < weave.fs->nEdges(); e++)
     {
@@ -481,11 +484,11 @@ void oneStep(Weave &weave, SolverParams params)
                 double n_vperm = (B_g * (vperm)).norm();
 
                 double smoothness_lambda = .1;
-                double curl_lambda = .0;
-                newScoeffs.push_back(Triplet<double>(e, m*f + i, curl_lambda * (B_f * vif).dot(edge) / n_v ));
+                double curl_lambda = .1;
+                newScoeffs.push_back(Triplet<double>(e, m*f + i, -curl_lambda * (B_f * vif).dot(edge) / n_v ));
                 newScoeffs.push_back(Triplet<double>(e, m*g + adj_field, -curl_lambda * (B_g * vperm).dot(edge) / n_vperm ));
  
-                newScoeffs.push_back(Triplet<double>(e, m*f + i, smoothness_lambda));
+                newScoeffs.push_back(Triplet<double>(e, m*f + i, -smoothness_lambda));
                 newScoeffs.push_back(Triplet<double>(e, m*g + adj_field, -smoothness_lambda));
         
 
@@ -512,22 +515,28 @@ void oneStep(Weave &weave, SolverParams params)
 
     std::cout << m << std::endl;
 
-    EigenSolver<MatrixXd> eigensolver(STS_inv);
+    EigenSolver<MatrixXd> eigensolver(STS);
     Eigen::VectorXd eigenVals = eigensolver.eigenvalues().real();
     std::vector<double> sortedEigenVals;
     for (int i = 0; i < eigenVals.rows(); i++)
-        sortedEigenVals.push_back(eigenVals(i));
+        sortedEigenVals.push_back(abs(eigenVals(i)));
     std::sort(sortedEigenVals.begin(),sortedEigenVals.end());
+    std::reverse(sortedEigenVals.begin(), sortedEigenVals.end());
 
     int idx = 0;
     for (int i = 0; i < eigenVals.rows(); i++)
     {
-        if (sortedEigenVals.at(params.eigenvector) == eigenVals(i))
+        if (sortedEigenVals.at(params.eigenvector) == abs(eigenVals(i)))
         {
             idx = i;
+            i = eigenVals.rows();
             break;
         }
     }
+
+     std::cout << params.eigenvector << " " << idx << std::endl;
+
+     m = weave.fs->nFields();
 
  //   std::cout << "The eigenvalues of A are:\n" << eigensolver.eigenvalues() << std::endl;
     weave.fs->vectorFields.segment(5*nfaces*m, nfaces*m) = eigensolver.eigenvectors().col(idx).real();

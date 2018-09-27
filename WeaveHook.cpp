@@ -269,7 +269,7 @@ void WeaveHook::initSimulation()
 {
     if (weave)
         delete weave;
-    weave = new Weave(meshName, 1);    
+    weave = new Weave(meshName, 3);    
     clear();    
 }
 
@@ -292,7 +292,7 @@ void WeaveHook::resample()
     
     delete weave;
     
-    weave = new Weave(V, F, 1);    
+    weave = new Weave(V, F, 3);    
     clear();  
 
     // Hacky... 
@@ -394,7 +394,7 @@ void WeaveHook::setFaceColorsWeave(igl::opengl::glfw::Viewer &viewer)
         {
         case F1_ENERGY:
          //   Z(i) = log(curFaceEnergies(i, 0));
-            Z(i) = weave->fs->vectorFields(5*faces*m + i);
+            Z(i) = abs(weave->fs->vectorFields(5*faces*m + i));
             if (Z(i) < min)
                 min = Z(i);
             if (Z(i) > max)
@@ -421,7 +421,7 @@ void WeaveHook::setFaceColorsWeave(igl::opengl::glfw::Viewer &viewer)
         }
     }
     Z -= Eigen::VectorXd::Constant(faces, min);
-    Z /= max;
+    Z /= max;  
 
     if (weave_shading_state == WS_CONNECTION_ENERGY)
     {
