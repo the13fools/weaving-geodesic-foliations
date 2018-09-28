@@ -5,6 +5,8 @@
 #include <igl/remove_unreferenced.h>
 #include <Eigen/Dense>
 
+#include <random>
+
 FieldSurface::FieldSurface(const Eigen::MatrixXd &V, const Eigen::MatrixXi &F, int numFields) : Surface(V,F), nFields_(numFields)
 {
     int nfaces = data().F.rows();
@@ -13,10 +15,18 @@ FieldSurface::FieldSurface(const Eigen::MatrixXd &V, const Eigen::MatrixXi &F, i
     vectorFields.setZero();
     vectorFields.segment(0, 2 * nfaces*numFields).setRandom();
 
+
+   std::uniform_real_distribution<double> unif(-.1,.1);
+   std::default_random_engine re;
+
     Eigen::Vector3d target;
     target << 1, 1, 1;
     for(int i = 0; i < nfaces; i++)
     {
+        Eigen::Vector3d noise;
+        noise << unif(re), unif(re), unif(re);
+
+
         Eigen::Matrix<double, 3, 2> B = this->data().Bs[i];
         // To see this, start with Bv = target vector (tv).
         //    B^TBv = B^T tv >==> v = (B^TB)^-1B tv
@@ -24,7 +34,7 @@ FieldSurface::FieldSurface(const Eigen::MatrixXd &V, const Eigen::MatrixXi &F, i
         std::cout << inverse_trans << std::endl;
         for(int m = 0; m < numFields; m++)
         {
-            vectorFields.segment<2>(2*numFields*i + m) = inverse_trans * target;
+            vectorFields.segment<2>(2*numFields*i + m) = inverse_trans + target;
         } 
 
 
