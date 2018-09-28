@@ -122,7 +122,8 @@ void GNmetric(const Weave &weave, Eigen::SparseMatrix<double> &M)
         {
             for (int i = 0; i < m; i++)
             {
-                    Mcoeffs.push_back(Triplet<double>(term, term, edgeMetric[e]));
+         //           Mcoeffs.push_back(Triplet<double>(term, term, edgeMetric[e]));
+                    Mcoeffs.push_back(Triplet<double>(term, term, 1));
                     term += 1;
             }
         }
@@ -146,8 +147,8 @@ void GNEnergy(const Weave &weave, SolverParams params, Eigen::VectorXd &E)
         int field = weave.handles[i].field;
         int face = weave.handles[i].face;
         Vector2d dir = weave.handles[i].dir;
-        for (int coeff = 0; coeff < 2; coeff++)
-            E[2 * i + coeff] = (weave.fs->v(face, field) - dir)[coeff];
+   //     for (int coeff = 0; coeff < 2; coeff++)
+    //        E[2 * i + coeff] = (weave.fs->v(face, field) - dir)[coeff];
     }
 
     int term = 2*nhandles;
@@ -236,10 +237,10 @@ void GNGradient(const Weave &weave, SolverParams params, Eigen::SparseMatrix<dou
     { 
         int field = weave.handles[i].field;
         int face = weave.handles[i].face;
-        for (int coeff = 0; coeff < 2; coeff++)
-        {
-            Jcoeffs.push_back(Triplet<double>(2 * i + coeff, weave.fs->vidx(face, field) + coeff, 1.0));
-        }
+    //    for (int coeff = 0; coeff < 2; coeff++)
+    //    {
+   //         Jcoeffs.push_back(Triplet<double>(2 * i + coeff, weave.fs->vidx(face, field) + coeff, 1.0));
+    //    }
     }
 
     int term = 2 * nhandles;
@@ -393,6 +394,19 @@ void GNtestFiniteDifferences(Weave &weave, SolverParams params)
     }
 }
 
+void projectGradient(Weave &weave, Eigen::VectorXd &gradient)
+{
+    int nfaces = weave.fs->nFaces();
+    int m = weave.fs->nFields();
+    for (int i = 0; i < nfaces * m; i++)
+    {
+        Eigen::Vector2d correction = gradient.segment<2>(i*2);
+        Eigen::Vector2d curVec = weave.fs->vectorFields.segment<2>(i*2);
+        correction = correction - correction.dot(curVec) * curVec;
+        gradient.segment<2>(i*2) = correction;
+    }
+}
+
 int counter = 0;
 
 void oneStep(Weave &weave, SolverParams params)
@@ -440,8 +454,8 @@ void oneStep(Weave &weave, SolverParams params)
     }
     
 
-    // AAAAAAARHRHRRHGGGG
-    for(int i=0; i<weave.fs->vectorFields.size(); i++)
+ //   AAAAAAARHRHRRHGGGG
+    for(int i=0; i<nfaces * m * 2; i++)
     {
   //      int shift = 5*nfaces*m + j;
   //      coeffs.push_back(Eigen::Triplet<double>(shift, shift, params.lambdareg*facearea));
@@ -473,11 +487,14 @@ void oneStep(Weave &weave, SolverParams params)
     std::cout << "Solving" << std::endl;
     solver.factorize(optMat);
     Eigen::VectorXd update = solver.solve(rhs);
+    projectGradient(weave, update);
+
     double t = lineSearch(weave, params, update);
     
     GNEnergy(weave, params, r);
     std::cout << "Done, new energy: " << 0.5 * r.transpose()*M*r << std::endl;
-    weave.fs->normalizeFields();
+ //   weave.fs->normalizeFields();
+
     GNEnergy(weave, params, r);
     std::cout << "Done, rescaled new energy: " << 0.5 * r.transpose()*M*r << std::endl;
     m = 1;
@@ -583,7 +600,9 @@ void oneStep(Weave &weave, SolverParams params)
    //     std::cout << "The eigenvectors of A are:\n" << eigensolver.eigenvectors().col(idx).real() << std::endl;
 
     GNEnergy(weave, params, r);
-    std::cout << "Done, new energy: " << 0.5 * r.transpose()*M*r << std::endl;
+    Eigen::VectorXd curSVals = weave.fs->vectorFields.segment(5*nfaces*m, nfaces);
+    double sEnergy = curSVals.transpose() * Eigen::MatrixXd(newS).transpose() * Eigen::MatrixXd(newS) * curSVals; 
+    std::cout << "Account for S smoothness ***: " << 0.5 * r.transpose()*M*r + sEnergy << std::endl;
 /*for (int i = 0; i < 100; i++)
 {
 //     std::cout << i << std::endl;
@@ -645,6 +664,7 @@ double lineSearch(Weave &weave, SolverParams params, const Eigen::VectorXd &upda
     
     double orig = 0.5 * r.transpose() * M * r;
     dE = J.transpose() * M * r;
+    projectGradient(weave, dE);
     double deriv = -dE.dot(update);
     assert(deriv < 0);
     
@@ -657,6 +677,7 @@ double lineSearch(Weave &weave, SolverParams params, const Eigen::VectorXd &upda
         double newenergy = 0.5 * r.transpose() * M * r;
         GNGradient(weave, params, J);
         newdE = J.transpose() * M * r;
+        projectGradient(weave, newdE);
 
         std::cout << "Trying t = " << t << ", energy now " << newenergy << std::endl;
         
