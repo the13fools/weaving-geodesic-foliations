@@ -35,7 +35,7 @@ enum GUIMode_Enum {
 class WeaveHook : public PhysicsHook
 {
 public:
-    WeaveHook() : PhysicsHook(), weave(NULL), cover(NULL), vectorScale(1.0), normalizeVectors(true)
+    WeaveHook() : PhysicsHook(), weave(NULL), cover(NULL), vectorScale(1), normalizeVectors(true)
     {
         gui_mode = GUIMode_Enum::WEAVE;
         weave_shading_state = WeaveShading_Enum::WS_NONE;
@@ -50,7 +50,10 @@ public:
         params.lambdacompat = 0;
         params.lambdareg = 1e-3;
         params.curlreg = 10;
+        params.smoothnessLambda = 1.;
+        params.curlLambda = 0.;
         params.eigenvector = 0;
+        params.initNoiseScale = 1.;
 
         traceIdx = 0;
         traceSign = 1;
@@ -61,7 +64,7 @@ public:
         showSingularities = false;
         wireframe = false;
 
-        targetResolution = 5000;
+        targetResolution = 500;
     
         handleLocation = 0;
         handleParams = Eigen::VectorXd::Zero(6);
@@ -92,6 +95,7 @@ public:
 
     void reassignPermutations();
     void normalizeFields();
+    void resetFields();
     void serializeVectorField();
     void deserializeVectorField();    
     void deserializeVectorFieldOld();

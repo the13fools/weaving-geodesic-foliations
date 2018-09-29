@@ -14,31 +14,7 @@ FieldSurface::FieldSurface(const Eigen::MatrixXd &V, const Eigen::MatrixXi &F, i
     vectorFields.resize(6*nfaces*numFields);
     vectorFields.setZero();
     vectorFields.segment(0, 2 * nfaces*numFields).setRandom();
-
-
-   std::uniform_real_distribution<double> unif(-.1,.1);
-   std::default_random_engine re;
-
-    Eigen::Vector3d target;
-    target << 1, 1, 1;
-    for(int i = 0; i < nfaces; i++)
-    {
-        Eigen::Vector3d noise;
-        noise << unif(re), unif(re), unif(re);
-
-
-        Eigen::Matrix<double, 3, 2> B = this->data().Bs[i];
-        // To see this, start with Bv = target vector (tv).
-        //    B^TBv = B^T tv >==> v = (B^TB)^-1B tv
-        Eigen::MatrixXd inverse_trans = (B.transpose() * B).inverse() * B.transpose();
-        std::cout << inverse_trans << std::endl;
-        for(int m = 0; m < numFields; m++)
-        {
-            vectorFields.segment<2>(2*numFields*i + m) = inverse_trans + target;
-        } 
-
-
-    }
+    resetFields(10);
 
     vectorFields.segment(5*nfaces*numFields, nfaces*numFields) = Eigen::VectorXd::Constant(nfaces * numFields, 1.);
     normalizeFields();
@@ -55,6 +31,39 @@ FieldSurface::FieldSurface(const Eigen::MatrixXd &V, const Eigen::MatrixXi &F, i
     faceDeleted_.resize(nfaces);
     for(int i=0; i<nfaces; i++)
         faceDeleted_[i] = false;
+}
+
+void FieldSurface::resetFields(double noiseScale)
+{
+    int nfaces = data().F.rows();
+    int numFields = nFields();
+
+    std::cout << "here" << noiseScale << std::endl;
+
+    Eigen::Vector3d target(1.,1.,1.);
+
+    std::uniform_real_distribution<double> unif(-.1,.1);
+    std::default_random_engine re;
+
+    for(int i = 0; i < nfaces; i++)
+    {
+        Eigen::Vector3d noise;
+        noise << unif(re), unif(re), unif(re);
+        Eigen::Vector3d curTarget = target + noise * noiseScale;
+
+
+        Eigen::Matrix<double, 3, 2> B = this->data().Bs[i];
+        // To see this, start with Bv = target vector (tv).
+        //    B^TBv = B^T tv >==> v = (B^TB)^-1B tv
+        Eigen::MatrixXd inverse_trans = (B.transpose() * B).inverse() * B.transpose();
+   //     std::cout << inverse_trans << std::endl;
+        for(int m = 0; m < numFields; m++)
+        {
+            vectorFields.segment<2>(2*numFields*i + 2 * m) = inverse_trans * curTarget;
+        } 
+    }
+
+    normalizeFields();
 }
 
 

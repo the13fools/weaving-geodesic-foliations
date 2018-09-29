@@ -35,6 +35,11 @@ void WeaveHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
             ImGui::InputDoubleScientific("Compatilibity Lambda", &params.lambdacompat);
             ImGui::InputDoubleScientific("Tikhonov Reg", &params.lambdareg);
             ImGui::InputDoubleScientific("V curl reg", &params.curlreg);
+            ImGui::InputDoubleScientific("Smoothness Lambda", &params.smoothnessLambda);
+            ImGui::InputDoubleScientific("Curl Lambda", &params.curlLambda);
+            ImGui::InputDoubleScientific("Noise Magnitude", &params.initNoiseScale);
+            if (ImGui::Button("Reset Field", ImVec2(-1, 0)))
+                resetFields();     
 
             if (ImGui::Button("Create Cover", ImVec2(-1, 0)))
                 augmentField();            
@@ -552,6 +557,10 @@ void WeaveHook::renderRenderGeometry(igl::opengl::glfw::Viewer &viewer)
                 if (vec.norm() != 0.0)
                     vec *= baseLength / vec.norm() * sqrt(3.0) / 6.0 * 0.75;
             }
+            else 
+            {
+                vec *= .01;
+            }
             renderPts.row(2 * i) = edgePtsWeave.row(i) - vectorScale*vec.transpose();
             renderPts.row(2 * i + 1) = edgePtsWeave.row(i) + vectorScale*vec.transpose();
         }
@@ -673,6 +682,12 @@ void WeaveHook::reassignPermutations()
 void WeaveHook::normalizeFields()
 {
     weave->fs->normalizeFields();
+    updateRenderGeometry();
+}
+
+void WeaveHook::resetFields()
+{
+    weave->fs->resetFields(11.);
     updateRenderGeometry();
 }
 

@@ -32,6 +32,7 @@ public:
 
     const Eigen::MatrixXi Ps(int edge) const;
 
+    void resetFields(double noiseScale);
     void normalizeFields(); // make all vectors unit-length
 
     // returns copy of the surface with all deleted faces completely removed, and all appropriate data structures reindexed

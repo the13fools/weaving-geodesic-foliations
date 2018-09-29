@@ -12,6 +12,9 @@ struct SolverParams
     double lambdareg;    // Tilhonov regularization
     double curlreg; // Weight on the curl component of v
     int eigenvector; // Choose the eigenvector of s to display (for debugging - delete me!)
+    double smoothnessLambda; // Mangitude of the smoothness term in the eigenvalue problem
+    double curlLambda;  // Magnitude of the curl correction term in the eigenvalue problem
+    double initNoiseScale;  // Magnitude of the noise vector 
     Eigen::VectorXd edgeWeights;
 };
 

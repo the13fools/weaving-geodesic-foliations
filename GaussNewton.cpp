@@ -409,7 +409,7 @@ void projectGradient(Weave &weave, Eigen::VectorXd &gradient)
 
 int counter = 0;
 
-void computeSMatrix(Weave &weave, Eigen::SparseMatrix<double> &newS)
+void computeSMatrix(Weave &weave, SolverParams params, Eigen::SparseMatrix<double> &newS)
 {
     int nfaces = weave.fs->nFaces();
     int m = weave.fs->nFields();
@@ -448,17 +448,17 @@ void computeSMatrix(Weave &weave, Eigen::SparseMatrix<double> &newS)
                 Eigen::Matrix<double, 3, 2> B_g = weave.fs->data().Bs[g];
                 double n_vperm = (B_g * (vperm)).norm();
 
-                double smoothness_lambda = 1.;
-                double curl_lambda = 10.;
-                newScoeffs.push_back(Triplet<double>(e, m*f + i, curl_lambda * (B_f * vif).dot(edge) / n_v ));
-                newScoeffs.push_back(Triplet<double>(e, m*g + adj_field, -curl_lambda * (B_g * vperm).dot(edge) / n_vperm ));
+                newScoeffs.push_back(Triplet<double>(e, m*f + i, params.curlLambda * (B_f * vif).dot(edge) / n_v ));
+                newScoeffs.push_back(Triplet<double>(e, m*g + adj_field, -params.curlLambda * (B_g * vperm).dot(edge) / n_vperm ));
  
-                newScoeffs.push_back(Triplet<double>(e, m*f + i, smoothness_lambda));
-                newScoeffs.push_back(Triplet<double>(e, m*g + adj_field, -smoothness_lambda));
+                newScoeffs.push_back(Triplet<double>(e, m*f + i, params.smoothnessLambda));
+                newScoeffs.push_back(Triplet<double>(e, m*g + adj_field, -params.smoothnessLambda));
         
 
         }
     }
+
+ //   std::cout << params.smoothnessLambda << " " << params.curlLambda <<  std::endl;
 
     newS.setFromTriplets(newScoeffs.begin(), newScoeffs.end());
 }
@@ -475,12 +475,12 @@ void oneStep(Weave &weave, SolverParams params)
     int m = weave.fs->nFields();
 
     Eigen::SparseMatrix<double> oldS;
-    computeSMatrix(weave, oldS);
+    computeSMatrix(weave, params, oldS);
     Eigen::VectorXd curSVals = weave.fs->vectorFields.segment(5*nfaces*m, nfaces);
     double sEnergy = curSVals.transpose() * Eigen::MatrixXd(oldS).transpose() * Eigen::MatrixXd(oldS) * curSVals; 
 
-    std::cout << "original energy: " << 0.5 * r.transpose() * M * r + sEnergy << std::endl;
-    std::cout << "Building matrix" << std::endl;
+ //   std::cout << "original energy: " << 0.5 * r.transpose() * M * r + sEnergy << std::endl;
+  //  std::cout << "Building matrix" << std::endl;
     Eigen::SparseMatrix<double> J;
     GNGradient(weave, params, J);
     Eigen::SparseMatrix<double> optMat(nvars, nvars);
@@ -561,7 +561,7 @@ void oneStep(Weave &weave, SolverParams params)
     m = 1;
     
     Eigen::SparseMatrix<double> newS;
-    computeSMatrix(weave, newS);
+    computeSMatrix(weave, params, newS);
 
 
     Eigen::SparseMatrix<double> iden;
