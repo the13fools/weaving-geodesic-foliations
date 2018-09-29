@@ -122,7 +122,7 @@ void GNmetric(const Weave &weave, Eigen::SparseMatrix<double> &M)
         {
             for (int i = 0; i < m; i++)
             {
-         //           Mcoeffs.push_back(Triplet<double>(term, term, edgeMetric[e]));
+                 //   Mcoeffs.push_back(Triplet<double>(term, term, edgeMetric[e]));
                     Mcoeffs.push_back(Triplet<double>(term, term, 1));
                     term += 1;
             }
@@ -433,8 +433,8 @@ void computeSMatrix(Weave &weave, SolverParams params, Eigen::SparseMatrix<doubl
                 Eigen::Vector3d edge = weave.fs->data().V.row(weave.fs->data().edgeVerts(e, 0)) - 
                                             weave.fs->data().V.row(weave.fs->data().edgeVerts(e, 1));
                 Eigen::Vector2d vif = weave.fs->v(f, i);
-                vif *= weave.fs->sval(f, i);
                 double n_v = (weave.fs->data().Bs[f] * vif).norm();
+                vif *= weave.fs->sval(f, i);
                  
                 Eigen::Vector2d vperm(0, 0);
                 Eigen::MatrixXi permut = weave.fs->Ps(e);
@@ -445,14 +445,15 @@ void computeSMatrix(Weave &weave, SolverParams params, Eigen::SparseMatrix<doubl
                     if(permut(i, field) != 0)
                         adj_field = field;
                 }
+                Eigen::Matrix<double, 3, 2> B_f = weave.fs->data().Bs[f];
+                Eigen::Matrix<double, 3, 2> B_g = weave.fs->data().Bs[g];
+                double n_vperm = (B_g * (vperm)).norm();
+
                 for (int field = 0; field < m; field++)
                 {
                     if (permut(i, field) != 0)
                         vperm *= weave.fs->sval(g, field);  
                 }
-                Eigen::Matrix<double, 3, 2> B_f = weave.fs->data().Bs[f];
-                Eigen::Matrix<double, 3, 2> B_g = weave.fs->data().Bs[g];
-                double n_vperm = (B_g * (vperm)).norm();
 
                 newScoeffs.push_back(Triplet<double>(e, m*f + i, params.curlLambda * (B_f * vif).dot(edge) / n_v ));
                 newScoeffs.push_back(Triplet<double>(e, m*g + adj_field, -params.curlLambda * (B_g * vperm).dot(edge) / n_vperm ));
