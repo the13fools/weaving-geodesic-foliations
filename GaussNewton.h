@@ -20,7 +20,7 @@ void GNEnergy(const Weave &weave, SolverParams params, Eigen::VectorXd &E);
 void GNGradient(const Weave &weave, SolverParams params, Eigen::SparseMatrix<double> &J);
 
 void GNtestFiniteDifferences(Weave &weave, SolverParams params);
-double lineSearch(Weave &weave, SolverParams params, const Eigen::VectorXd &update);
+double lineSearch(Weave &weave, SolverParams params, double shiftEnergy, const Eigen::VectorXd &update);
 void oneStep(Weave &weave, SolverParams params);
 
 /*
