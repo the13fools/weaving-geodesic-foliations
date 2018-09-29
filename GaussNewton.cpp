@@ -419,7 +419,7 @@ void computeSMatrix(Weave &weave, SolverParams params, Eigen::SparseMatrix<doubl
 
     std::vector<Eigen::Triplet<double> > newScoeffs;
 
-    std::cout << "update S" << std::endl;
+  //  std::cout << "update S" << std::endl;
 
 
     for (int e = 0; e < weave.fs->nEdges(); e++)
@@ -433,6 +433,7 @@ void computeSMatrix(Weave &weave, SolverParams params, Eigen::SparseMatrix<doubl
                 Eigen::Vector3d edge = weave.fs->data().V.row(weave.fs->data().edgeVerts(e, 0)) - 
                                             weave.fs->data().V.row(weave.fs->data().edgeVerts(e, 1));
                 Eigen::Vector2d vif = weave.fs->v(f, i);
+                vif *= weave.fs->sval(f, i);
                 double n_v = (weave.fs->data().Bs[f] * vif).norm();
                  
                 Eigen::Vector2d vperm(0, 0);
@@ -443,6 +444,11 @@ void computeSMatrix(Weave &weave, SolverParams params, Eigen::SparseMatrix<doubl
                     vperm += permut(i, field) * weave.fs->v(g, field); 
                     if(permut(i, field) != 0)
                         adj_field = field;
+                }
+                for (int field = 0; field < m; field++)
+                {
+                    if (permut(i, field) != 0)
+                        vperm *= weave.fs->sval(g, field);  
                 }
                 Eigen::Matrix<double, 3, 2> B_f = weave.fs->data().Bs[f];
                 Eigen::Matrix<double, 3, 2> B_g = weave.fs->data().Bs[g];
@@ -539,10 +545,10 @@ void oneStep(Weave &weave, SolverParams params)
 
     optMat.setFromTriplets(coeffs.begin(), coeffs.end());
     optMat += J.transpose() * M * J;
-    std::cout << "Done, " << optMat.nonZeros() << " nonzeros" << std::endl;
+ //   std::cout << "Done, " << optMat.nonZeros() << " nonzeros" << std::endl;
     optMat.makeCompressed();
     Eigen::CholmodSimplicialLDLT<Eigen::SparseMatrix<double> > solver;
-    std::cout << "Analyzing" << std::endl;
+ //   std::cout << "Analyzing" << std::endl;
     solver.analyzePattern(optMat);
     Eigen::VectorXd rhs = J.transpose() * M * r;
     std::cout << "Solving" << std::endl;
@@ -553,7 +559,7 @@ void oneStep(Weave &weave, SolverParams params)
     double t = lineSearch(weave, params, sEnergy, update);
     
     GNEnergy(weave, params, r);
-    std::cout << "Done, new energy: " << 0.5 * r.transpose()*M*r + sEnergy<< std::endl;
+//    std::cout << "Done, new energy: " << 0.5 * r.transpose()*M*r + sEnergy<< std::endl;
     weave.fs->normalizeFields();
 
     GNEnergy(weave, params, r);
@@ -689,7 +695,7 @@ double lineSearch(Weave &weave, SolverParams params, double shiftEnergy, const E
     double deriv = -dE.dot(update);
     assert(deriv < 0);
     
-    std::cout << "Starting line search, original energy " << orig << ", descent magnitude " << deriv << std::endl;
+  //  std::cout << "Starting line search, original energy " << orig << ", descent magnitude " << deriv << std::endl;
 
     while (true)
     {
@@ -700,7 +706,7 @@ double lineSearch(Weave &weave, SolverParams params, double shiftEnergy, const E
         newdE = J.transpose() * M * r;
         projectGradient(weave, newdE);
 
-        std::cout << "Trying t = " << t << ", energy now " << newenergy<< std::endl;
+   //     std::cout << "Trying t = " << t << ", energy now " << newenergy<< std::endl;
         
         if (std::isnan(newenergy) || newenergy > orig + t*deriv*c1)
         {
