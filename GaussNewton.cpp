@@ -455,8 +455,66 @@ void computeSMatrix(Weave &weave, SolverParams params, Eigen::SparseMatrix<doubl
                         vperm *= weave.fs->sval(g, field);  
                 }
 
-                newScoeffs.push_back(Triplet<double>(e, m*f + i, params.curlLambda * (B_f * vif).dot(edge) / n_v ));
-                newScoeffs.push_back(Triplet<double>(e, m*g + adj_field, -params.curlLambda * (B_g * vperm).dot(edge) / n_vperm ));
+                // newScoeffs.push_back(Triplet<double>(e, m*f + i, params.curlLambda * (B_f * vif).dot(edge) / n_v ));
+                // newScoeffs.push_back(Triplet<double>(e, m*g + adj_field, -params.curlLambda * (B_g * vperm).dot(edge) / n_vperm ));
+ 
+                newScoeffs.push_back(Triplet<double>(e, m*f + i, params.smoothnessLambda));
+                newScoeffs.push_back(Triplet<double>(e, m*g + adj_field, -params.smoothnessLambda));
+        
+
+        }
+    }
+
+ //   std::cout << params.smoothnessLambda << " " << params.curlLambda <<  std::endl;
+
+    newS.setFromTriplets(newScoeffs.begin(), newScoeffs.end());
+}
+
+void computeSCurlMatrix(Weave &weave, SolverParams params, Eigen::SparseMatrix<double> &newS)
+{
+    int nfaces = weave.fs->nFaces();
+    int m = weave.fs->nFields();
+
+    newS.resize(weave.fs->nEdges(), m*nfaces);
+    newS.setZero();
+
+    std::vector<Eigen::Triplet<double> > newScoeffs;
+
+  //  std::cout << "update S" << std::endl;
+
+
+    for (int e = 0; e < weave.fs->nEdges(); e++)
+    {
+        if(weave.fs->data().E(e,0) == -1 || weave.fs->data().E(e,1) == -1)
+            continue;
+        for (int i = 0; i < m; i++)
+        {
+                int f = weave.fs->data().E(e, 0);
+                int g = weave.fs->data().E(e, 1);
+                Eigen::Vector3d edge = weave.fs->data().V.row(weave.fs->data().edgeVerts(e, 0)) - 
+                                            weave.fs->data().V.row(weave.fs->data().edgeVerts(e, 1));
+                Eigen::Vector2d vif = weave.fs->v(f, i);
+                double n_v = (weave.fs->data().Bs[f] * vif).norm();
+                vif *= weave.fs->sval(f, i);
+                 
+                Eigen::Vector2d vperm(0, 0);
+                Eigen::MatrixXi permut = weave.fs->Ps(e);
+                int adj_field = -1;
+                for (int field = 0; field < m; field++)
+                {
+                    vperm += permut(i, field) * weave.fs->v(g, field); 
+                    if(permut(i, field) != 0)
+                        adj_field = field;
+                }
+                Eigen::Matrix<double, 3, 2> B_f = weave.fs->data().Bs[f];
+                Eigen::Matrix<double, 3, 2> B_g = weave.fs->data().Bs[g];
+                double n_vperm = (B_g * (vperm)).norm();
+
+                for (int field = 0; field < m; field++)
+                {
+                    if (permut(i, field) != 0)
+                        vperm *= weave.fs->sval(g, field);  
+                }
  
                 newScoeffs.push_back(Triplet<double>(e, m*f + i, params.smoothnessLambda));
                 newScoeffs.push_back(Triplet<double>(e, m*g + adj_field, -params.smoothnessLambda));
@@ -569,6 +627,8 @@ void oneStep(Weave &weave, SolverParams params)
     
     Eigen::SparseMatrix<double> newS;
     computeSMatrix(weave, params, newS);
+    Eigen::SparseMatrix<double> newSCurl;
+    computeSMatrix(weave, params, newSCurl);
 
 
     Eigen::SparseMatrix<double> iden;
@@ -577,7 +637,8 @@ void oneStep(Weave &weave, SolverParams params)
     double scale = .000001;
 
   //  std::cout << "make matrix"  << std::endl;
-    Eigen::MatrixXd STS = Eigen::MatrixXd(newS).transpose() * Eigen::MatrixXd(newS) + scale * Eigen::MatrixXd(iden);
+    Eigen::MatrixXd STS =     Eigen::MatrixXd(newS).transpose() * Eigen::MatrixXd(newS) 
+                           + Eigen::MatrixXd(newSCurl).transpose() * Eigen::MatrixXd(newSCurl) + scale * Eigen::MatrixXd(iden);
 //    Eigen::MatrixXd STS_inv = STS.inverse();
 /*    Eigen::VectorXd s_iterate = Eigen::VectorXd::Random(nfaces*m) * 10. + Eigen::VectorXd::Constant(nfaces*m, 0.);
     s_iterate.normalize();
