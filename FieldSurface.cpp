@@ -14,7 +14,7 @@ FieldSurface::FieldSurface(const Eigen::MatrixXd &V, const Eigen::MatrixXi &F, i
     vectorFields.resize(6*nfaces*numFields);
     vectorFields.setZero();
     vectorFields.segment(0, 2 * nfaces*numFields).setRandom();
-    resetFields(10);
+    resetFields(.5);
 
     vectorFields.segment(5*nfaces*numFields, nfaces*numFields) = Eigen::VectorXd::Constant(nfaces * numFields, 1.);
     normalizeFields();
@@ -42,7 +42,7 @@ void FieldSurface::resetFields(double noiseScale)
 
     Eigen::Vector3d target(1.,1.,1.);
 
-    std::uniform_real_distribution<double> unif(-.1,.1);
+    std::uniform_real_distribution<double> unif(-1.,1.);
     std::default_random_engine re;
 
     for(int i = 0; i < nfaces; i++)

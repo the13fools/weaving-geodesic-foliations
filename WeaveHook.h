@@ -53,7 +53,7 @@ public:
         params.smoothnessLambda = 1.;
         params.curlLambda = 0.;
         params.eigenvector = 0;
-        params.initNoiseScale = 1.;
+        params.initNoiseScale = .1;
 
         traceIdx = 0;
         traceSign = 1;

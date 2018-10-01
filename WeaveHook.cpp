@@ -687,7 +687,7 @@ void WeaveHook::normalizeFields()
 
 void WeaveHook::resetFields()
 {
-    weave->fs->resetFields(11.);
+    weave->fs->resetFields(params.initNoiseScale);
     updateRenderGeometry();
 }
 
