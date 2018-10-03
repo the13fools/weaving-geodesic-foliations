@@ -241,16 +241,16 @@ void WeaveHook::clear()
     Handle h;
     h.face = 0;
     h.dir << 1, 0;
-    h.field = 2;
-    weave->addHandle(h);
-    h.face = 0;
-    h.dir << 0, 1;
-    h.field = 1;
-    weave->addHandle(h);
-    h.face = 0;
-    h.dir << 1, -1;
     h.field = 0;
     weave->addHandle(h);
+    h.face = 100;
+    h.dir << 0, 1;
+    h.field = 0;
+    weave->addHandle(h);
+/*    h.face = 0;
+    h.dir << 1, -1;
+    h.field = 0;
+    weave->addHandle(h);*/
     curFaceEnergies = Eigen::MatrixXd::Zero(3, 3);
     selectedVertices.clear();
     renderSelectedVertices.clear();
@@ -308,7 +308,7 @@ void WeaveHook::setFaceColorsCover(igl::opengl::glfw::Viewer &viewer)
 {
     int faces = cover->fs->data().F.rows();
     // if ( curFaceEnergies.rows() != faces && shading_state != NONE) { return ; }
-    // cout << "fuck" << endl;
+    // cout << "whoops" << endl;
 
     igl::ColorMapType viz_color = igl::COLOR_MAP_TYPE_MAGMA;
 
@@ -537,6 +537,7 @@ void WeaveHook::updateSingularVerts(igl::opengl::glfw::Viewer &viewer)
     Eigen::RowVector3d green(.1, .9, .1);
     Eigen::RowVector3d blue(.1, .1, .9);
     viewer.data().add_points( singularVerts_topo, green ); 
+    viewer.data().add_points( singularVerts_geo, blue ); 
 }
 
 void WeaveHook::renderRenderGeometry(igl::opengl::glfw::Viewer &viewer)
@@ -637,7 +638,7 @@ void WeaveHook::reassignPermutations()
     singularVerts_geo = Eigen::MatrixXd::Zero(geosingularities.size(), 3);
     for (int i = 0; i < geosingularities.size(); i++)
     {
-//        singularVerts_geo.row(i) = weave->V.row(geosingularities[i]);
+        singularVerts_geo.row(i) = weave->fs->data().V.row(geosingularities[i].first);
     }
     singularVerts_topo = Eigen::MatrixXd::Zero(topsingularities.size(), 3);
     for (int i = 0; i < topsingularities.size(); i++)
@@ -687,7 +688,8 @@ void WeaveHook::normalizeFields()
 
 void WeaveHook::resetFields()
 {
-    weave->fs->resetFields(params.initNoiseScale);
+  //  weave->fs->resetFields(params.initNoiseScale);
+    firstStep(*weave, params);
     updateRenderGeometry();
 }
 
@@ -815,17 +817,17 @@ void WeaveHook::updateRenderGeometry()
     baseLength = weave->fs->data().averageEdgeLength;
     curFaceEnergies = tempFaceEnergies;
 
-    if (weave->handles.size() < 3)
-        weave->handles.resize(3);
-    weave->handles[0].face = handleLocation;
+    if (weave->handles.size() > 2)
+        weave->handles.resize(2);
+    weave->handles[0].face = 0;
     weave->handles[0].dir(0) = handleParams(0);
     weave->handles[0].dir(1) = handleParams(1);
     weave->handles[1].face = handleLocation;
     weave->handles[1].dir(0) = handleParams(2);
     weave->handles[1].dir(1) = handleParams(3);
-    weave->handles[2].face = handleLocation;
-    weave->handles[2].dir(0) = handleParams(4);
-    weave->handles[2].dir(1) = handleParams(5);
+    // weave->handles[2].face = handleLocation;
+    // weave->handles[2].dir(0) = handleParams(4);
+    // weave->handles[2].dir(1) = handleParams(5);
 
     int tracesegs = 0;
     for (int i = 0; i < traces.nTraces(); i++)

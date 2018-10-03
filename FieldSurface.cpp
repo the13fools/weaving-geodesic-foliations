@@ -41,6 +41,7 @@ void FieldSurface::resetFields(double noiseScale)
     std::cout << "here" << noiseScale << std::endl;
 
     Eigen::Vector3d target(1.,1.,1.);
+    Eigen::Vector3d target2(-1.,1.,-1.);
 
     std::uniform_real_distribution<double> unif(-1.,1.);
     std::default_random_engine re;
@@ -50,6 +51,10 @@ void FieldSurface::resetFields(double noiseScale)
         Eigen::Vector3d noise;
         noise << unif(re), unif(re), unif(re);
         Eigen::Vector3d curTarget = target + noise * noiseScale;
+        if (this->data().V(this->data().F(i), 1) < 0.)
+            curTarget = target2;
+        else 
+            curTarget = target;
 
 
         Eigen::Matrix<double, 3, 2> B = this->data().Bs[i];

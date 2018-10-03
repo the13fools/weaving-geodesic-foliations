@@ -15,6 +15,7 @@ struct SolverParams
     double smoothnessLambda; // Mangitude of the smoothness term in the eigenvalue problem
     double curlLambda;  // Magnitude of the curl correction term in the eigenvalue problem
     double initNoiseScale;  // Magnitude of the noise vector 
+    double handleWeight; // this is a hack-y placeholder to control handle setting
     Eigen::VectorXd edgeWeights;
 };
 
@@ -23,8 +24,9 @@ void GNEnergy(const Weave &weave, SolverParams params, Eigen::VectorXd &E);
 void GNGradient(const Weave &weave, SolverParams params, Eigen::SparseMatrix<double> &J);
 
 void GNtestFiniteDifferences(Weave &weave, SolverParams params);
-double lineSearch(Weave &weave, SolverParams params, double shiftEnergy, const Eigen::VectorXd &update);
+double lineSearch(Weave &weave, SolverParams params, double shiftEnergy, bool toProject, const Eigen::VectorXd &update);
 void oneStep(Weave &weave, SolverParams params);
+void firstStep(Weave &weave, SolverParams params);
 
 /*
  * Computes |F| x m matrix of face energies due to vector field derivative incompatibility, contributed by each vector field on each face.
