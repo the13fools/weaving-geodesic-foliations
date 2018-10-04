@@ -165,10 +165,9 @@ void GNEnergy(const Weave &weave, SolverParams params, Eigen::VectorXd &E)
             {
                 int f = (side == 0 ? weave.fs->data().E(e, 0) : weave.fs->data().E(e, 1));
                 int g = (side == 0 ? weave.fs->data().E(e, 1) : weave.fs->data().E(e, 0));
-                Eigen::Matrix2d Jf = weave.fs->data().Js.block<2, 2>(2 * f, 0);
+
                 Eigen::Vector2d vif = weave.fs->v(f, i);
-                Eigen::Matrix2d Dif = weave.fs->beta(f, i) * (Jf*vif).transpose() + weave.fs->alpha(f,i) * vif * vif.transpose();
-                Eigen::Vector2d cdiff = weave.fs->data().cDiffs.row(2 * e + side);
+
                 Eigen::Vector2d vpermut(0, 0);
                 Eigen::MatrixXi permut = weave.fs->Ps(e);
                 if (side == 1)
@@ -180,7 +179,7 @@ void GNEnergy(const Weave &weave, SolverParams params, Eigen::VectorXd &E)
                 Eigen::Matrix2d Tgf = weave.fs->data().Ts.block<2, 2>(2 * e, 2 - 2 * side);
                 for (int k = 0; k < 2; k++)
                 {
-                    E[term] = sqrt(params.edgeWeights(e) * params.lambdacompat) * (Dif*cdiff - (Tgf*vpermut - vif))[k];
+                    E[term] = sqrt(params.edgeWeights(e) * params.lambdacompat) * (Tgf*vpermut - vif)[k];
                     term++;
                 }
             }
@@ -214,7 +213,7 @@ void GNEnergy(const Weave &weave, SolverParams params, Eigen::VectorXd &E)
             }
 
         //    E[term] = (weave.fs->data().Bs[f] * (vif)).dot(edge) - (weave.fs->data().Bs[g] * (vpermut)).dot(edge);
-            E[term] = (weave.fs->data().Bs[f] * (vif)).dot(edge)/n_vif - (weave.fs->data().Bs[g] * (vpermut)).dot(edge)/n_vpermut;
+            E[term] = (weave.fs->data().Bs[f] * (vif)).dot(edge) - (weave.fs->data().Bs[g] * (vpermut)).dot(edge);
             E[term] *= params.curlreg * params.edgeWeights(e);
             term++;
         }
@@ -275,28 +274,21 @@ void GNGradient(const Weave &weave, SolverParams params, Eigen::SparseMatrix<dou
                 {
                     Eigen::Vector2d innervec(0, 0);
                     innervec[coeff] = sqrt(params.edgeWeights(e) * params.lambdacompat);
-                    Vector2d dE = Jf.transpose()*cdiff * weave.fs->beta(f, i).dot(innervec);
-                    dE += cdiff.dot(vif) * weave.fs->alpha(f, i) * innervec;
-                    dE += cdiff * weave.fs->alpha(f, i) * vif.dot(innervec);
-                    dE += innervec;
+                 //   Vector2d dE = Jf.transpose()*cdiff * weave.fs->beta(f, i).dot(innervec);
+                    Vector2d dE = -innervec;
                     for (int k = 0; k < 2; k++)
                     {
                         Jcoeffs.push_back(Triplet<double>(term, weave.fs->vidx(f, i) + k, dE[k]));
                     }
                     for (int field = 0; field < m; field++)
                     {
-                        dE = -permut(i, field) * Tgf.transpose() * innervec;
+                        dE = permut(i, field) * Tgf.transpose() * innervec;
                         for (int k = 0; k < 2; k++)
                         {
                             Jcoeffs.push_back(Triplet<double>(term, weave.fs->vidx(g, field) + k, dE[k]));
                         }
                     }
-                    Jcoeffs.push_back(Triplet<double>(term, weave.fs->alphaidx(f, i), innervec.dot(vif) * vif.dot(cdiff)));
-                    dE = (Jf * vif).dot(cdiff) * innervec;
-                    for (int k = 0; k < 2; k++)
-                    {
-                        Jcoeffs.push_back(Triplet<double>(term, weave.fs->betaidx(f, i) + k, dE[k]));
-                    }
+
                     term++;
                 }
             }
@@ -371,9 +363,9 @@ void GNtestFiniteDifferences(Weave &weave, SolverParams params)
     Weave test = weave;
  //   test.fs->vectorFields.setRandom();
 
-    params.lambdacompat = 0; // weight of compatibility term
-    params.lambdareg = 0;    // Tilhonov regularization
-    params.curlreg = 1; // Weight on the curl component of v
+    params.lambdacompat = 1; // weight of compatibility term
+    params.lambdareg = 0.000001;    // Tilhonov regularization
+    params.curlreg = 0; // Weight on the curl component of v
 
     Eigen::VectorXd orig;
     GNEnergy(test, params, orig);
@@ -623,8 +615,8 @@ void oneStep(Weave &weave, SolverParams params)
     // // counter++;
     // if (t <  0.0000625)
     // {
-    //    GNtestFiniteDifferences(weave, params);
-    //    exit(-1);
+       GNtestFiniteDifferences(weave, params);
+       exit(-1);
     // }
 }
 
