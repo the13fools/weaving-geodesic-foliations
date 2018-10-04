@@ -52,9 +52,9 @@ void FieldSurface::resetFields(double noiseScale)
         noise << unif(re), unif(re), unif(re);
         Eigen::Vector3d curTarget = target + noise * noiseScale;
         if (this->data().V(this->data().F(i), 1) < 0.)
-            curTarget = target2;
+            curTarget = target2 + noise * noiseScale;
         else 
-            curTarget = target;
+            curTarget = target + noise * noiseScale;
 
 
         Eigen::Matrix<double, 3, 2> B = this->data().Bs[i];

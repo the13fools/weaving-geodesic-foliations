@@ -26,7 +26,7 @@ void GNGradient(const Weave &weave, SolverParams params, Eigen::SparseMatrix<dou
 void GNtestFiniteDifferences(Weave &weave, SolverParams params);
 double lineSearch(Weave &weave, SolverParams params, double shiftEnergy, bool toProject, const Eigen::VectorXd &update);
 void oneStep(Weave &weave, SolverParams params);
-void firstStep(Weave &weave, SolverParams params);
+// void firstStep(Weave &weave, SolverParams params);
 
 /*
  * Computes |F| x m matrix of face energies due to vector field derivative incompatibility, contributed by each vector field on each face.
