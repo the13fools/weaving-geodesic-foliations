@@ -10,9 +10,8 @@ struct SolverParams
 {
     double lambdacompat; // weight of compatibility term
     double lambdareg;    // Tilhonov regularization
-    double curlreg; // Weight on the curl component of v
     int eigenvector; // Choose the eigenvector of s to display (for debugging - delete me!)
-    double smoothnessLambda; // Mangitude of the smoothness term in the eigenvalue problem
+    double unitLambda; // Mangitude of the smoothness term in the eigenvalue problem
     double curlLambda;  // Magnitude of the curl correction term in the eigenvalue problem
     double initNoiseScale;  // Magnitude of the noise vector 
     double handleWeight; // this is a hack-y placeholder to control handle setting

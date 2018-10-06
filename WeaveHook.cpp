@@ -32,15 +32,15 @@ void WeaveHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
         }
         if (ImGui::CollapsingHeader("Solver Parameters", ImGuiTreeNodeFlags_DefaultOpen))
         {
-            ImGui::InputDoubleScientific("Compatilibity Lambda", &params.lambdacompat);
             ImGui::InputDoubleScientific("Tikhonov Reg", &params.lambdareg);
-            ImGui::InputDoubleScientific("V curl reg", &params.curlreg);
-            ImGui::InputDoubleScientific("Smoothness Lambda", &params.smoothnessLambda);
+            ImGui::InputDoubleScientific("Dirchlet Lambda", &params.lambdacompat);
+            ImGui::InputDoubleScientific("Unit Lambda", &params.unitLambda);
             ImGui::InputDoubleScientific("Curl Lambda", &params.curlLambda);
-            ImGui::InputDoubleScientific("Noise Magnitude", &params.initNoiseScale);
             if (ImGui::Button("Reset Field", ImVec2(-1, 0)))
                 resetFields();     
+            ImGui::InputDoubleScientific("Noise Magnitude", &params.initNoiseScale);
 
+            
             if (ImGui::Button("Create Cover", ImVec2(-1, 0)))
                 augmentField();            
         }
