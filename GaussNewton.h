@@ -12,6 +12,7 @@ struct SolverParams
     double lambdareg;    // Tilhonov regularization
     int eigenvector; // Choose the eigenvector of s to display (for debugging - delete me!)
     double unitLambda; // Mangitude of the smoothness term in the eigenvalue problem
+    double unitAreaLambda; // Mangitude of the smoothness term in the eigenvalue problem
     double curlLambda;  // Magnitude of the curl correction term in the eigenvalue problem
     double initNoiseScale;  // Magnitude of the noise vector 
     double handleWeight; // this is a hack-y placeholder to control handle setting

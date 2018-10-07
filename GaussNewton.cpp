@@ -147,6 +147,10 @@ void GNmetric(const Weave &weave, Eigen::SparseMatrix<double> &M)
 
     std::cout << intedges << " " << term << std::endl;
 
+    // int s|v| = Area constraint
+    // Mcoeffs.push_back(Triplet<double>(term, term, 1));
+    // term++;
+
     M.setFromTriplets(Mcoeffs.begin(), Mcoeffs.end());
 }
 
@@ -270,7 +274,23 @@ void GNEnergy(const Weave &weave, SolverParams params, Eigen::VectorXd &E)
             E[term] *= params.unitLambda * params.edgeWeights(e);
             term++;
         }
-    }   
+    }
+
+
+    // s|v| = area constraint.
+    // int nfaces = weave.fs->nFaces();
+    // double tot_product = 0.;
+    // for (int f = 0; f < nfaces; f++)
+    // {
+    //     for (int field = 0; field < m; field++)
+    //     {
+    //         Eigen::Vector2d update = weave.fs->v(f, field);
+    //         tot_product += weave.fs->sval(f, field) * update.norm();
+    //     }
+    // }
+
+    // E[term] = (nfaces - tot_product) * params.unitAreaLambda;
+    // term++;
 
 }
 
@@ -423,6 +443,7 @@ void GNGradient(const Weave &weave, SolverParams params, Eigen::SparseMatrix<dou
                 for (int k = 0; k < 2; k++)
                 {
                     Jcoeffs.push_back(Triplet<double>(term, weave.fs->vidx(f, i) + k, dE[k] * params.unitLambda * params.edgeWeights(e)));
+              //      Jcoeffs.push_back(Triplet<double>(nterms - 1, weave.fs->vidx(f, i) + k, dE[k] * params.unitAreaLambda * params.edgeWeights(e)));
                 }
                  
                 Eigen::Vector2d vperm(0, 0);
@@ -441,6 +462,7 @@ void GNGradient(const Weave &weave, SolverParams params, Eigen::SparseMatrix<dou
                     for (int k = 0; k < 2; k++)
                     {
                         Jcoeffs.push_back(Triplet<double>(term, weave.fs->vidx(g, field) + k, -dE[k] * params.unitLambda * params.edgeWeights(e)));
+                  //      Jcoeffs.push_back(Triplet<double>(nterms - 1, weave.fs->vidx(g, field) + k, -dE[k] * params.unitAreaLambda * params.edgeWeights(e)));
                     }
                 }
                 
@@ -462,13 +484,14 @@ void GNGradient(const Weave &weave, SolverParams params, Eigen::SparseMatrix<dou
 void GNtestFiniteDifferences(Weave &weave, SolverParams params)
 {
     Weave test = weave;
- //   test.fs->vectorFields.setRandom();
+    test.fs->vectorFields.setRandom();
 
     params.handleWeight = 0.;
-    params.lambdacompat = 1.; // weight of compatibility term
+    params.lambdacompat = 0.; // weight of compatibility term
     params.lambdareg = 0.000001;    // Tilhonov regularization
     params.curlLambda = 0.; // Weight on the curl component of v
-    params.unitLambda = 1.; // Smoothness of s|v|
+    params.unitLambda = 0.; // Smoothness of s|v|
+    params.unitAreaLambda = 1.; // reprojection of area
 
     Eigen::VectorXd orig;
     GNEnergy(test, params, orig);
@@ -490,18 +513,80 @@ void GNtestFiniteDifferences(Weave &weave, SolverParams params)
     }
 }
 
-void projectGradient(Weave &weave, Eigen::VectorXd &gradient)
-{
+
+ void projectGradient(Weave &weave, SolverParams params, Eigen::VectorXd &gradient) 
+ {
     int nfaces = weave.fs->nFaces();
+    int nedges = weave.fs->nEdges();
+    int nhandles = weave.nHandles();
     int m = weave.fs->nFields();
-    for (int i = 0; i < nfaces * m; i++)
+
+    Eigen::VectorXd constraint; 
+    constraint.resize( 2 *nhandles + 6 * nfaces * m);
+    constraint.setZero();
+
+    for (int e = 0; e < nedges; e++)
     {
-        Eigen::Vector2d correction = gradient.segment<2>(i*2);
-        Eigen::Vector2d curVec = weave.fs->vectorFields.segment<2>(i*2);
-        correction = correction - correction.dot(curVec) * curVec;
-        gradient.segment<2>(i*2) = correction;
+        if(weave.fs->data().E(e,0) == -1 || weave.fs->data().E(e,1) == -1)
+            continue;
+        for (int i = 0; i < m; i++)
+        {
+                int f = weave.fs->data().E(e, 0);
+                int g = weave.fs->data().E(e, 1);
+                Eigen::Vector3d edge = weave.fs->data().V.row(weave.fs->data().edgeVerts(e, 0)) - 
+                                           weave.fs->data().V.row(weave.fs->data().edgeVerts(e, 1));
+                Eigen::Vector2d vif = weave.fs->v(f, i);
+                Eigen::Matrix<double, 3, 2> B_f = weave.fs->data().Bs[f];
+                double n_v = (B_f * vif).norm();
+                Eigen::Vector2d dE = (B_f * vif).transpose() * B_f * weave.fs->sval(f, i) / n_v;
+
+                for (int k = 0; k < 2; k++)
+                {
+                    constraint( 2 * nhandles + 2 * weave.fs->vidx(f, i) + k ) = dE[k] * params.edgeWeights(e);
+                }
+                 
+                Eigen::Vector2d vperm(0, 0);
+                Eigen::MatrixXi permut = weave.fs->Ps(e);
+                for (int field = 0; field < m; field++)
+                {
+                    vperm += permut(i, field) * weave.fs->v(g, field);  
+                }
+                Eigen::Matrix<double, 3, 2> B_g = weave.fs->data().Bs[g];
+                double n_vperm = (B_g * (vperm)).norm();
+                Eigen::Vector2d dE_g = (B_g * vperm).transpose() * B_g / n_vperm;
+                for (int field = 0; field < m; field++)
+                {
+                    Eigen::Vector2d dE = dE_g; 
+                    dE *= permut(i, field) * weave.fs->sval(g, field);  
+                    for (int k = 0; k < 2; k++)
+                    {
+                        constraint( 2 * nhandles + 2 * weave.fs->vidx(g, field) + k ) = dE[k] * params.edgeWeights(e);
+                    }
+                }
+        }
     }
-}
+
+    constraint.normalize();
+    std::cout << "grad size: " << gradient.size() << " constraint size " << constraint.size() << std::endl;
+    gradient = gradient - constraint * constraint.transpose() * gradient;
+
+ }
+// {
+//     int nfaces = weave.fs->nFaces();
+//     int m = weave.fs->nFields();
+//     double tot_product = 0.;
+//     for (int f = 0; f < nfaces; f++)
+//     {
+//         for (int field = 0; field < m; field++)
+//         {
+//             Eigen::Vector2d update = weave.fs->v(f, field) + gradient.segment<2>(2 * (f * m) + 2 * field);
+//             tot_product += weave.fs->sval(f, field) * update.norm();
+//         }
+//     }
+//     double s = gradient.size(); 
+
+//     gradient += Eigen::VectorXd::Constant(s, (s - tot_product) / s );
+// }
 
 int counter = 0;
 
@@ -577,7 +662,9 @@ void oneStep(Weave &weave, SolverParams params)
     params.handleWeight = 1.;
     // params.lambdacompat = 0.;
     // params.curlLambda = 0.;
-    // params.unitLambda = 1.;
+    // params.unitLambda = 0.;
+    // params.unitAreaLambda = 1.;
+
 
     GNEnergy(weave, params, r);
     Eigen::SparseMatrix<double> M;
@@ -648,9 +735,9 @@ void oneStep(Weave &weave, SolverParams params)
     std::cout << "Solving" << std::endl;
     solver.factorize(optMat);
     Eigen::VectorXd update = solver.solve(rhs);
-  //  projectGradient(weave, update);
+    projectGradient(weave, params, update);
 
-    double t = lineSearch(weave, params, sEnergy, false, update);
+    double t = lineSearch(weave, params, sEnergy, true, update);
     
     GNEnergy(weave, params, r);
     std::cout << "Done, new energy: " << 0.5 * r.transpose()*M*r + sEnergy<< std::endl;
@@ -720,8 +807,8 @@ void oneStep(Weave &weave, SolverParams params)
     // // counter++;
     // if (t <  0.0000625)
     // {
-       // GNtestFiniteDifferences(weave, params);
-       // exit(-1);
+ //      GNtestFiniteDifferences(weave, params);
+   //    exit(-1);
     // }
 }
 
@@ -749,7 +836,7 @@ double lineSearch(Weave &weave, SolverParams params, double shiftEnergy, bool to
     double orig = 0.5 * r.transpose() * M * r + shiftEnergy;
     dE = J.transpose() * M * r;
     if (toProject)
-        projectGradient(weave, dE);
+        projectGradient(weave, params, dE);
     double deriv = -dE.dot(update);
     assert(deriv < 0);
     
@@ -763,7 +850,7 @@ double lineSearch(Weave &weave, SolverParams params, double shiftEnergy, bool to
         GNGradient(weave, params, J);
         newdE = J.transpose() * M * r;
         if (toProject)
-            projectGradient(weave, newdE);
+            projectGradient(weave, params, newdE);
 
    //     std::cout << "Trying t = " << t << ", energy now " << newenergy<< std::endl;
         
