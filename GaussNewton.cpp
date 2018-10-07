@@ -522,7 +522,7 @@ void GNtestFiniteDifferences(Weave &weave, SolverParams params)
     int m = weave.fs->nFields();
 
     Eigen::VectorXd constraint; 
-    constraint.resize( 2 *nhandles + 6 * nfaces * m);
+    constraint.resize(weave.fs->vectorFields.size());
     constraint.setZero();
 
     for (int e = 0; e < nedges; e++)
@@ -542,7 +542,7 @@ void GNtestFiniteDifferences(Weave &weave, SolverParams params)
 
                 for (int k = 0; k < 2; k++)
                 {
-                    constraint( 2 * nhandles + 2 * weave.fs->vidx(f, i) + k ) = dE[k] * params.edgeWeights(e);
+                    constraint( 2 * weave.fs->vidx(f, i) + k ) = dE[k] * params.edgeWeights(e);
                 }
                  
                 Eigen::Vector2d vperm(0, 0);
@@ -560,7 +560,7 @@ void GNtestFiniteDifferences(Weave &weave, SolverParams params)
                     dE *= permut(i, field) * weave.fs->sval(g, field);  
                     for (int k = 0; k < 2; k++)
                     {
-                        constraint( 2 * nhandles + 2 * weave.fs->vidx(g, field) + k ) = dE[k] * params.edgeWeights(e);
+                        constraint( 2 * weave.fs->vidx(g, field) + k ) = dE[k] * params.edgeWeights(e);
                     }
                 }
         }
