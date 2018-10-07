@@ -659,7 +659,7 @@ void oneStep(Weave &weave, SolverParams params)
 {    
     int nvars = weave.fs->vectorFields.size();
     Eigen::VectorXd r;
-    params.handleWeight = 1.;
+  //  params.handleWeight = 1.;
     // params.lambdacompat = 0.;
     // params.curlLambda = 0.;
     // params.unitLambda = 0.;

@@ -33,6 +33,7 @@ void WeaveHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
         if (ImGui::CollapsingHeader("Solver Parameters", ImGuiTreeNodeFlags_DefaultOpen))
         {
             ImGui::InputDoubleScientific("Tikhonov Reg", &params.lambdareg);
+            ImGui::InputDoubleScientific("Handle Lambda", &params.handleWeight);
             ImGui::InputDoubleScientific("Dirchlet Lambda", &params.lambdacompat);
             ImGui::InputDoubleScientific("Unit Lambda", &params.unitLambda);
             ImGui::InputDoubleScientific("Curl Lambda", &params.curlLambda);
