@@ -51,6 +51,7 @@ public:
         params.lambdacompat = 0;
         params.lambdareg = 1e-3;
         params.unitLambda = 1.;
+        params.smoothnessLambda = 1.;
         params.curlLambda = 10.;
         params.eigenvector = 0;
         params.initNoiseScale = .1;

@@ -35,7 +35,8 @@ void WeaveHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
             ImGui::InputDoubleScientific("Tikhonov Reg", &params.lambdareg);
             ImGui::InputDoubleScientific("Handle Lambda", &params.handleWeight);
             ImGui::InputDoubleScientific("Dirchlet Lambda", &params.lambdacompat);
-            ImGui::InputDoubleScientific("Unit Lambda", &params.unitLambda);
+            ImGui::InputDoubleScientific("s|v| Unit Lambda", &params.unitLambda);
+            ImGui::InputDoubleScientific("s smoothness Lambda", &params.smoothnessLambda);
             ImGui::InputDoubleScientific("Curl Lambda", &params.curlLambda);
             if (ImGui::Button("Reset Field", ImVec2(-1, 0)))
                 resetFields();     

@@ -592,13 +592,15 @@ int counter = 0;
 
 void computeSMatrix(Weave &weave, SolverParams params, 
                     Eigen::SparseMatrix<double> &newS, 
-                    Eigen::SparseMatrix<double> &newSCurl)
+                    Eigen::SparseMatrix<double> &newSCurl, 
+                    Eigen::SparseMatrix<double> &newSmoothness)
 {
     int nfaces = weave.fs->nFaces();
     int m = weave.fs->nFields();
 
     std::vector<Eigen::Triplet<double> > newScoeffs;
     std::vector<Eigen::Triplet<double> > newSCurlcoeffs;
+    std::vector<Eigen::Triplet<double> > newSmoothnesscoeffs;
 
   //  std::cout << "update S" << std::endl;
 
@@ -638,6 +640,9 @@ void computeSMatrix(Weave &weave, SolverParams params,
 
                 newScoeffs.push_back(Triplet<double>(e, m*f + i, params.unitLambda * n_v));
                 newScoeffs.push_back(Triplet<double>(e, m*g + adj_field, -params.unitLambda * n_vperm));
+
+                newSmoothnesscoeffs.push_back(Triplet<double>(e, m*f + i, params.smoothnessLambda));
+                newSmoothnesscoeffs.push_back(Triplet<double>(e, m*g + adj_field, -params.smoothnessLambda));
         
                 newSCurlcoeffs.push_back(Triplet<double>(e, m*f + i, params.curlLambda * (B_f * vif).dot(edge) ));
                 newSCurlcoeffs.push_back(Triplet<double>(e, m*g + adj_field, -params.curlLambda * (B_g * vperm).dot(edge) ));
@@ -653,6 +658,10 @@ void computeSMatrix(Weave &weave, SolverParams params,
     newSCurl.resize(weave.fs->nEdges(), m*nfaces);
     newSCurl.setZero();
     newSCurl.setFromTriplets(newSCurlcoeffs.begin(), newSCurlcoeffs.end());
+
+    newSmoothness.resize(weave.fs->nEdges(), m*nfaces);
+    newSmoothness.setZero();
+    newSmoothness.setFromTriplets(newSmoothnesscoeffs.begin(), newSmoothnesscoeffs.end());
 }
 
 void oneStep(Weave &weave, SolverParams params)
@@ -674,9 +683,11 @@ void oneStep(Weave &weave, SolverParams params)
     int m = weave.fs->nFields();
 
     Eigen::SparseMatrix<double> oldS;
+    Eigen::SparseMatrix<double> oldSmoothness;
     Eigen::SparseMatrix<double> oldSCurl;
-    computeSMatrix(weave, params, oldS, oldSCurl);
+    computeSMatrix(weave, params, oldS, oldSCurl, oldSmoothness);
     Eigen::VectorXd curSVals = weave.fs->vectorFields.segment(5*nfaces*m, nfaces);
+    // THIS IS WRONG!!!
     double sEnergy = curSVals.transpose() * Eigen::MatrixXd(oldS).transpose() * Eigen::MatrixXd(oldS) * curSVals; 
 
     std::cout << "original energy: " << 0.5 * r.transpose() * M * r + sEnergy << std::endl;
@@ -749,7 +760,8 @@ void oneStep(Weave &weave, SolverParams params)
     
     Eigen::SparseMatrix<double> newS;
     Eigen::SparseMatrix<double> newSCurl;
-    computeSMatrix(weave, params, newS, newSCurl);
+    Eigen::SparseMatrix<double> newSmoothness;
+    computeSMatrix(weave, params, newS, newSCurl, newSmoothness);
 
     Eigen::SparseMatrix<double> iden;
     iden.resize(m*nfaces, m*nfaces);
@@ -784,7 +796,8 @@ void oneStep(Weave &weave, SolverParams params)
     // } 
 
     // curSVals = largestEigenVec;
-    Eigen::MatrixXd STS =    Eigen::MatrixXd(newS).transpose() * Eigen::MatrixXd(newS)
+    Eigen::MatrixXd STS =    Eigen::MatrixXd(newS).transpose() * Eigen::MatrixXd(newS) 
+                             + Eigen::MatrixXd(newSmoothness).transpose() * Eigen::MatrixXd(newSmoothness)
                              + 0.5 * Eigen::MatrixXd(newSCurl).transpose() * Eigen::MatrixXd(newSCurl) 
                              + scale * Eigen::MatrixXd(iden);
 
