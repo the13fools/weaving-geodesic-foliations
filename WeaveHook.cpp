@@ -395,6 +395,8 @@ void WeaveHook::setFaceColorsWeave(igl::opengl::glfw::Viewer &viewer)
     double min = 10000;
     double max = -10000;
 
+ //   std::cout << " **** Shading State **** " << weave_shading_state << " ";
+
     for (int i = 0; i < faces; i++)
     {
         switch (weave_shading_state)
@@ -402,16 +404,29 @@ void WeaveHook::setFaceColorsWeave(igl::opengl::glfw::Viewer &viewer)
         case F1_ENERGY:
          //   Z(i) = log(curFaceEnergies(i, 0));
             Z(i) = weave->fs->vectorFields(5*faces*m + i);
+            std::cout << Z(i) << " ";
             if (Z(i) < min)
                 min = Z(i);
             if (Z(i) > max)
                 max = Z(i);
             break;
         case F2_ENERGY:
-            Z(i) = log(curFaceEnergies(i, 1));
+            Z(i) = (weave->fs->data().Bs[i] * weave->fs->vectorFields.segment<2>(2*i)).norm();
+            std::cout << Z(i) << " ";
+            if (Z(i) < min)
+                min = Z(i);
+            if (Z(i) > max)
+                max = Z(i);
+         //   Z(i) = log(curFaceEnergies(i, 1));
             break;
         case F3_ENERGY:
-            Z(i) = log(curFaceEnergies(i, 2));
+     //       Z(i) = log(curFaceEnergies(i, 2));
+            Z(i) = (weave->fs->data().Bs[i] * weave->fs->vectorFields.segment<2>(2*i)).norm() * weave->fs->vectorFields(5*faces*m + i);
+            std::cout << Z(i) << " ";
+            if (Z(i) < min)
+                min = Z(i);
+            if (Z(i) > max)
+                max = Z(i);
             break;
         case TOT_ENERGY:
             Z(i) = log(curFaceEnergies.row(i).norm());

@@ -47,11 +47,11 @@ public:
         vectorFieldName = "tet.rlx";
         rodFilename = "example.rod";
         exportPrefix = "export/example";
-        params.handleWeight = 1.;
-        params.lambdacompat = 0;
+        params.handleWeight = 100.;
+        params.lambdacompat = .001;
         params.lambdareg = 1e-3;
-        params.unitLambda = 1.;
-        params.smoothnessLambda = 1.;
+        params.unitLambda = 100.;
+        params.smoothnessLambda = 0.;
         params.curlLambda = 10.;
         params.eigenvector = 0;
         params.initNoiseScale = .1;
