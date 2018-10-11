@@ -486,12 +486,12 @@ void GNtestFiniteDifferences(Weave &weave, SolverParams params)
     Weave test = weave;
     test.fs->vectorFields.setRandom();
 
-    // params.handleWeight = 0.;
-    // params.lambdacompat = 0.; // weight of compatibility term
-    // params.lambdareg = 0.000001;    // Tilhonov regularization
-    // params.curlLambda = 0.; // Weight on the curl component of v
-    // params.unitLambda = 0.; // Smoothness of s|v|
-    // params.unitAreaLambda = 1.; // reprojection of area
+    params.handleWeight = 1.;
+    params.lambdacompat = 0.; // weight of compatibility term
+    params.lambdareg = 0.000001;    // Tilhonov regularization
+    params.curlLambda = 1000.; // Weight on the curl component of v
+    params.unitLambda = 10.; // Smoothness of s|v|
+    params.unitAreaLambda = 1.; // reprojection of area
 
     Eigen::VectorXd orig;
     GNEnergy(test, params, orig);
@@ -525,53 +525,45 @@ void projectGradient(Weave &weave, SolverParams params, Eigen::VectorXd &gradien
     constraint.resize(weave.fs->vectorFields.size());
     constraint.setZero();
 
-    for (int e = 0; e < nedges; e++)
+    for (int f = 0; f < nfaces; f++)
     {
-        if(weave.fs->data().E(e,0) == -1 || weave.fs->data().E(e,1) == -1)
-            continue;
-        for (int i = 0; i < m; i++)
+        for (int field = 0; field < m; field++)
         {
-                int f = weave.fs->data().E(e, 0);
-                int g = weave.fs->data().E(e, 1);
-                Eigen::Vector3d edge = weave.fs->data().V.row(weave.fs->data().edgeVerts(e, 0)) - 
-                                           weave.fs->data().V.row(weave.fs->data().edgeVerts(e, 1));
-                Eigen::Vector2d vif = weave.fs->v(f, i);
-                Eigen::Matrix<double, 3, 2> B_f = weave.fs->data().Bs[f];
-                double n_v = (B_f * vif).norm();
-            //    Eigen::Vector2d dE = (B_f * vif).transpose() * B_f * weave.fs->sval(f, i) / n_v;
-                Eigen::Vector2d dE = (B_f * vif).transpose() * B_f * weave.fs->sval(f, i) * weave.fs->sval(f, i);
-
-                for (int k = 0; k < 2; k++)
-                {
-                    constraint( 2 * weave.fs->vidx(f, i) + k ) = dE[k] * params.edgeWeights(e);
-                }
-                 
-                Eigen::Vector2d vperm(0, 0);
-                Eigen::MatrixXi permut = weave.fs->Ps(e);
-                for (int field = 0; field < m; field++)
-                {
-                    vperm += permut(i, field) * weave.fs->v(g, field);  
-                }
-                Eigen::Matrix<double, 3, 2> B_g = weave.fs->data().Bs[g];
-                double n_vperm = (B_g * (vperm)).norm();
-            //    Eigen::Vector2d dE_g = (B_g * vperm).transpose() * B_g / n_vperm;
-                Eigen::Vector2d dE_g = 2 * (B_g * vperm).transpose() * B_g ;
-                for (int field = 0; field < m; field++)
-                {
-                    Eigen::Vector2d dE = dE_g; 
-                    dE *= permut(i, field) * weave.fs->sval(g, field) * weave.fs->sval(g, field);  
-                    for (int k = 0; k < 2; k++)
-                    {
-                        constraint( 2 * weave.fs->vidx(g, field) + k ) = dE[k] * params.edgeWeights(e);
-                    }
-                }
+            Eigen::Matrix<double, 3, 2> B_f = weave.fs->data().Bs[f];
+            Eigen::Vector2d vif = weave.fs->v(f, field);
+            constraint.segment<2>(2*field + 2 * f * m) = 2 * (B_f * vif).transpose() * B_f * weave.fs->sval(f, field) * weave.fs->sval(f, field);
         }
     }
 
-    constraint.normalize();
-//    std::cout << "grad size: " << gradient.size() << " constraint size " << constraint.size() << std::endl;
-    gradient = gradient - constraint * constraint.transpose() * gradient;
 
+    constraint.normalize();
+    Eigen::VectorXd oldGrad = gradient;
+  //  std::cout << " gradient " << gradient << std::endl;
+    gradient = gradient - constraint * constraint.transpose() * gradient;
+    std::cout << " gradient length change " << oldGrad.norm() - gradient.norm() << std::endl;
+
+}
+
+void rescaleFieldEnergy(Weave &weave) 
+{
+    int nfaces = weave.fs->nFaces();
+    int m = weave.fs->nFields();
+    double tot_product = 0.;
+
+    for (int f = 0; f < nfaces; f++)
+    {
+        for (int field = 0; field < m; field++)
+        {
+            Eigen::Matrix<double, 3, 2> B_f = weave.fs->data().Bs[f];
+            double faceval = (B_f * weave.fs->v(f, field)).norm() * weave.fs->sval(f, field);
+            tot_product += faceval * faceval;
+        }
+    }
+    double s = nfaces * m; 
+    double scale = sqrt( (s) / tot_product);
+    std::cout << " s " << s << " m " << m << " scale " << scale << " tot_product " << tot_product << "\n";
+
+  //  gradient += Eigen::VectorXd::Constant(s, (s - tot_product) / s );
 }
 
 void rescaleField(Weave &weave) 
@@ -590,10 +582,62 @@ void rescaleField(Weave &weave)
         }
     }
     double s = nfaces * m; 
-    double scale = sqrt( s / tot_product);
-    std::cout << scale << "\n";
+    double scale = sqrt( (s) / tot_product);
+    std::cout << " s " << s << " m " << m << " scale " << scale << " tot_product " << tot_product << "\n";
 
-    weave.fs->vectorFields.segment(0, nfaces * m) *= scale;
+    weave.fs->vectorFields.segment(0, 2 * nfaces * m) *= scale;
+
+    tot_product = 0.;
+
+    for (int f = 0; f < nfaces; f++)
+    {
+        for (int field = 0; field < m; field++)
+        {
+            Eigen::Matrix<double, 3, 2> B_f = weave.fs->data().Bs[f];
+            double faceval = (B_f * weave.fs->v(f, field)).norm() * weave.fs->sval(f, field);
+            tot_product += faceval * faceval;
+        }
+    }
+
+    std::cout << " rescaled tot_product " << tot_product << "\n";
+
+  //  gradient += Eigen::VectorXd::Constant(s, (s - tot_product) / s );
+}
+
+void rescaleSvals(Weave &weave) 
+{
+    int nfaces = weave.fs->nFaces();
+    int m = weave.fs->nFields();
+    double tot_product = 0.;
+
+    for (int f = 0; f < nfaces; f++)
+    {
+        for (int field = 0; field < m; field++)
+        {
+            Eigen::Matrix<double, 3, 2> B_f = weave.fs->data().Bs[f];
+            double faceval = (B_f * weave.fs->v(f, field)).norm() * weave.fs->sval(f, field);
+            tot_product += faceval * faceval;
+        }
+    }
+    double s = nfaces * m; 
+    double scale = sqrt( (s) / tot_product);
+    std::cout << " s " << s << " m " << m << " scale " << scale << " tot_product " << tot_product << "\n";
+    weave.fs->vectorFields.segment(5 * nfaces * m, nfaces * m) *= scale;
+
+
+    tot_product = 0.;
+
+    for (int f = 0; f < nfaces; f++)
+    {
+        for (int field = 0; field < m; field++)
+        {
+            Eigen::Matrix<double, 3, 2> B_f = weave.fs->data().Bs[f];
+            double faceval = (B_f * weave.fs->v(f, field)).norm() * weave.fs->sval(f, field);
+            tot_product += faceval * faceval;
+        }
+    }
+
+    std::cout << " rescaled tot_product " << tot_product << "\n";
 
   //  gradient += Eigen::VectorXd::Constant(s, (s - tot_product) / s );
 }
@@ -651,8 +695,8 @@ void computeSMatrix(Weave &weave, SolverParams params,
                 newScoeffs.push_back(Triplet<double>(e, m*f + i, params.unitLambda * n_v));
                 newScoeffs.push_back(Triplet<double>(e, m*g + adj_field, -params.unitLambda * n_vperm));
 
-                diagVNormscoeffs.push_back(Triplet<double>(m*f + i, m*f + i, n_v * .5));
-                diagVNormscoeffs.push_back(Triplet<double>(m*g + adj_field, m*g + adj_field, n_vperm * .5));
+                diagVNormscoeffs.push_back(Triplet<double>(m*f + i, m*f + i, n_v * n_v));
+                diagVNormscoeffs.push_back(Triplet<double>(m*g + adj_field, m*g + adj_field, n_vperm * n_vperm));
         
                 newSCurlcoeffs.push_back(Triplet<double>(e, m*f + i, params.curlLambda * (B_f * vif).dot(edge) ));
                 newSCurlcoeffs.push_back(Triplet<double>(e, m*g + adj_field, -params.curlLambda * (B_g * vperm).dot(edge) ));
@@ -771,7 +815,9 @@ void oneStep(Weave &weave, SolverParams params)
     Eigen::SparseMatrix<double> newS;
     Eigen::SparseMatrix<double> newSCurl;
     Eigen::SparseMatrix<double> diagVNorms;
+    std::cout << " here " << std::endl; 
     computeSMatrix(weave, params, newS, newSCurl, diagVNorms);
+    std::cout << " beer " << std::endl; 
 
     Eigen::SparseMatrix<double> iden;
     iden.resize(m*nfaces, m*nfaces);
@@ -810,14 +856,17 @@ void oneStep(Weave &weave, SolverParams params)
                              + 0.5 * Eigen::MatrixXd(newSCurl).transpose() * Eigen::MatrixXd(newSCurl) 
                              + scale * Eigen::MatrixXd(iden);
 
+    std::cout << " dear " << std::endl; 
+
 
     GeneralizedSelfAdjointEigenSolver<MatrixXd> eigensolver(STS, Eigen::MatrixXd(diagVNorms));
-    curSVals = eigensolver.eigenvectors().col(params.eigenvector).real().normalized() * nfaces;
+    curSVals = eigensolver.eigenvectors().col(params.eigenvector).real();
 
     for (int i = 0; i < m; i++) // DOUBLE CHECK FOR M > 1, probably will be buggy.
     {
-        weave.fs->vectorFields.segment(5*nfaces*m + nfaces * i, nfaces) = curSVals;
+        weave.fs->vectorFields.segment(5*nfaces*m + nfaces * i, nfaces) = Eigen::VectorXd::Constant(nfaces, 1); //curSVals;
     }
+    rescaleSvals(weave);
 
     //    std::cout << "The eigenvectors of A are:\n" << curSVals << std::endl;
 
@@ -825,12 +874,13 @@ void oneStep(Weave &weave, SolverParams params)
     curSVals = weave.fs->vectorFields.segment(5*nfaces*m, nfaces);
     sEnergy = curSVals.transpose() * Eigen::MatrixXd(newS).transpose() * Eigen::MatrixXd(newS) * curSVals; 
     std::cout << "Account for S smoothness ***: " << 0.5 * r.transpose()*M*r + sEnergy << std::endl;
+    rescaleFieldEnergy(weave);
 
     // // counter++;
     // if (t <  0.0000625)
-    // {
- //      GNtestFiniteDifferences(weave, params);
-   //    exit(-1);
+    // // {
+    //    GNtestFiniteDifferences(weave, params);
+    //    exit(-1);
     // }
 }
 
@@ -862,7 +912,43 @@ double lineSearch(Weave &weave, SolverParams params, double shiftEnergy, bool to
     if (toProject)
         projectGradient(weave, params, dE);
     double deriv = -dE.dot(update);
-    assert(deriv < 0);
+    if (deriv < 0)
+    {
+        std::cout << "uh oh, deriv is < 0, are you sure this is ok?" << std::endl;
+        while (true)
+        {
+            weave.fs->vectorFields = startVF - t * update;
+            rescaleField(weave); // ensure that s|v| is unit...
+            GNEnergy(weave, params, r);
+            double newenergy = 0.5 * r.transpose() * M * r + shiftEnergy;
+            GNGradient(weave, params, J);
+            newdE = J.transpose() * M * r;
+            if (toProject)
+                projectGradient(weave, params, newdE);
+
+            std::cout << "Trying t = " << t << ", energy now " << newenergy << " gradient norm" << J.norm() << std::endl;
+
+            if ( t == 0){
+                std::cout << "bad t!!" << std::endl;
+                exit(-1);
+            }
+            
+            if (std::isnan(newenergy) || newenergy > orig + t*deriv*c1)
+            {
+                beta = t;
+                t = 0.5*(alpha + beta);
+            }
+            else if (beta == infinity)
+            {
+                alpha = t;
+                t = 2 * alpha;
+            }
+            else
+            {
+                return t;
+            }
+        }
+    }
     
   //  std::cout << "Starting line search, original energy " << orig << ", descent magnitude " << deriv << std::endl;
 
@@ -877,7 +963,13 @@ double lineSearch(Weave &weave, SolverParams params, double shiftEnergy, bool to
         if (toProject)
             projectGradient(weave, params, newdE);
 
-   //     std::cout << "Trying t = " << t << ", energy now " << newenergy<< std::endl;
+
+        std::cout << "Trying t = " << t << ", energy now " << newenergy << " gradient norm" << J.norm() << std::endl;
+
+        if ( t == 0){
+            std::cout << "bad t!!" << std::endl;
+            exit(-1);
+        }
         
         if (std::isnan(newenergy) || newenergy > orig + t*deriv*c1)
         {
