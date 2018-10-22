@@ -90,6 +90,8 @@ int main(int argc, char *argv[])
   viewer.callback_mouse_down = mouseDownCallback;
   viewer.callback_mouse_up = mouseUpCallback;
 
+  viewer.core.background_color = Eigen::Vector4f(.3, .3, .3, 1);
+
   igl::opengl::glfw::imgui::ImGuiMenu menu;
   viewer.plugins.push_back(&menu);
 
