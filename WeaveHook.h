@@ -4,6 +4,7 @@
 #include "PhysicsHook.h"
 #include "Weave.h"
 #include "GaussNewton.h"
+#include "LinearSolver.h"
 #include "Traces.h"
 #include <string>
 #include "Surface.h"
@@ -48,6 +49,8 @@ public:
         exportPrefix = "export/example";
         params.lambdacompat = 100;
         params.lambdareg = 1e-3;
+
+     //   ls = new LinearSolver();
 
         traceIdx = 0;
         traceSign = 1;
@@ -139,6 +142,8 @@ private:
 
     Eigen::VectorXd handleParams;
     int handleLocation;
+
+    LinearSolver ls;
 
     Eigen::MatrixXd curFaceEnergies;
     Eigen::MatrixXd tempFaceEnergies;

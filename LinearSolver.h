@@ -8,11 +8,11 @@
 class Weave;
 struct SolverParams;
 
-struct Handle
-{
-    int face;
-    Eigen::Vector2d dir;
-};
+struct Handle;
+// {
+//     int face;
+//     Eigen::Vector2d dir;
+// };
 
 class LinearSolver
 {
@@ -31,9 +31,9 @@ public:
     void updateDualVars(const Weave &weave, const Eigen::VectorXd &primalVars, Eigen::VectorXd &dualVars);
 
     // Problem dimensions
-    int numPrimalDOFs(); // involved in GN part of optimization
-    int numDualDOFs(); // involved in eigenvector problem part of optimization
-    void setFaceEnergies(const Eigen::VectorXd &primalVars, const Eigen::VectorXd &dualVars, Eigen::VectorXd &faceEnergies);
+    // int numPrimalDOFs(); // involved in GN part of optimization
+    // int numDualDOFs(); // involved in eigenvector problem part of optimization
+   // void setFaceEnergies(const Eigen::VectorXd &primalVars, const Eigen::VectorXd &dualVars, Eigen::VectorXd &faceEnergies);
 
 private:
     // Eigen::MatrixXd V;

@@ -1,5 +1,6 @@
 #include "WeaveHook.h"
 #include "GaussNewton.h"
+#include "LinearSolver.h"
 #include <iostream>
 #include "Permutations.h"
 #include <igl/opengl/glfw/imgui/ImGuiHelpers.h>
@@ -224,6 +225,7 @@ void WeaveHook::clear()
     h.dir << 1, 0;
     h.field = 2;
     weave->addHandle(h);
+  //  ls.addHandle(h);
     h.face = 0;
     h.dir << 0, 1;
     h.field = 1;
@@ -255,7 +257,7 @@ void WeaveHook::initSimulation()
 {
     if (weave)
         delete weave;
-    weave = new Weave(meshName, 3);    
+    weave = new Weave(meshName, 1);    
     clear();    
 }
 
@@ -278,7 +280,7 @@ void WeaveHook::resample()
     
     delete weave;
     
-    weave = new Weave(V, F, 3);    
+    weave = new Weave(V, F, 1);    
     clear();  
 
     // Hacky... 
@@ -578,8 +580,25 @@ bool WeaveHook::simulateOneStep()
             params.edgeWeights[weave->cuts[i].path[j].first] = 0.0;
         }
     }
-    oneStep(*weave, params);
-    faceEnergies(*weave, params, tempFaceEnergies);
+
+    int nfaces = weave->fs->data().F.rows();
+    int nfields = weave->fs->nFields();
+    double smoothingCoeff = 1000.;
+
+    Eigen::VectorXd primal = weave->fs->vectorFields.segment(0, 2*nfaces*nfields);
+    Eigen::VectorXd dual = weave->fs->vectorFields.segment(2*nfaces*nfields, 2*nfaces*nfields);
+    
+    for (int i = 0; i < 100; i++)
+    {            
+        ls.updateDualVars(*weave, primal, dual);
+        ls.updatePrimalVars(*weave, primal, dual, smoothingCoeff);
+    }
+    weave->fs->vectorFields.segment(0, 2*nfaces*nfields) = primal;
+    weave->fs->vectorFields.segment(2*nfaces*nfields, 2*nfaces*nfields) = dual;
+    std::cout << "ran a step" << std::endl;
+
+ //   oneStep(*weave, params);
+ //   faceEnergies(*weave, params, tempFaceEnergies);
     return false;
 }
 
