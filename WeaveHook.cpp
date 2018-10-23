@@ -591,7 +591,7 @@ bool WeaveHook::simulateOneStep()
     for (int i = 0; i < 100; i++)
     {            
         ls.updateDualVars(*weave, primal, dual);
-        ls.updatePrimalVars(*weave, primal, dual, smoothingCoeff);
+        ls.updatePrimalVars(*weave, primal, dual, params.lambdacompat);
     }
     weave->fs->vectorFields.segment(0, 2*nfaces*nfields) = primal;
     weave->fs->vectorFields.segment(2*nfaces*nfields, 2*nfaces*nfields) = dual;
