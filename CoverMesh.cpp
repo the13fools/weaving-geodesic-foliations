@@ -262,7 +262,7 @@ void CoverMesh::computeFunc(double globalScale)
     {
         scales[it.second] = globalScale * s[it.first];
     }
-    int totalIter = 6;
+    int totalIter = 15;
     for (int iter = 0; iter < totalIter; iter++)
     {
         vector<double> difVec;
@@ -306,7 +306,7 @@ void CoverMesh::computeFunc(double globalScale)
         Eigen::VectorXd eigenVec(Lmat.rows());
         eigenVec.setRandom();
         eigenVec /= eigenVec.norm();
-        for (int i = 0; i < 10; i++)
+        for (int i = 0; i < 100; i++)
         {
             eigenVec = solverL.solve(eigenVec);
             eigenVec /= eigenVec.norm();

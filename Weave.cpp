@@ -531,12 +531,12 @@ std::vector<Eigen::MatrixXd> Weave::_augmentPs() const
                 if( fs->Ps(e)(j, k) == 1 )
                 {
                     perm(j,k) = 1;
-                    perm(j+3, k+3) = 1;
+                    perm(j+fs->nFields(), k+fs->nFields()) = 1;
                 }
                 if( fs->Ps(e)(j, k) == -1 )
                 {
-                    perm(j,k+3) = 1;
-                    perm(j+3, k) = 1;
+                    perm(j,k+fs->nFields()) = 1;
+                    perm(j+fs->nFields(), k) = 1;
                 }
             }
         }

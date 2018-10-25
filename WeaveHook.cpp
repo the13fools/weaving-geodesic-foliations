@@ -4,7 +4,7 @@
 #include <iostream>
 #include "Permutations.h"
 #include <igl/opengl/glfw/imgui/ImGuiHelpers.h>
-#include "ImGuiDouble.h"
+//#include "ImGuiDouble.h"
 #include "Surface.h"
 #include "CoverMesh.h"
 
@@ -22,7 +22,7 @@ void WeaveHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
     {
         if (ImGui::CollapsingHeader("Visualization (Weave)", ImGuiTreeNodeFlags_DefaultOpen))
         {
-            ImGui::InputDoubleScientific("Vector Scale", &vectorScale);
+            ImGui::InputDouble("Vector Scale", &vectorScale);
             ImGui::Checkbox("Normalize Vectors", &normalizeVectors);
             ImGui::Checkbox("Hide Vectors", &hideVectors);
             ImGui::Checkbox("Wireframe", &wireframe);
@@ -33,9 +33,9 @@ void WeaveHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
         }
         if (ImGui::CollapsingHeader("Solver Parameters", ImGuiTreeNodeFlags_DefaultOpen))
         {
-            ImGui::InputDoubleScientific("Compatilibity Lambda", &params.lambdacompat);
-            ImGui::InputDoubleScientific("Tikhonov Reg", &params.lambdareg);
-            ImGui::InputDoubleScientific("V curl reg", &params.curlreg);
+            ImGui::InputDouble("Compatilibity Lambda", &params.lambdacompat);
+            ImGui::InputDouble("Tikhonov Reg", &params.lambdareg);
+            ImGui::InputDouble("V curl reg", &params.curlreg);
 
             if (ImGui::Button("Create Cover", ImVec2(-1, 0)))
                 augmentField();            
@@ -82,12 +82,12 @@ void WeaveHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
             );
 
             ImGui::InputInt("Face Location", &handleLocation, 0, 0);
-            ImGui::InputDoubleScientific("P0", &handleParams[0]);
-            ImGui::InputDoubleScientific("P1", &handleParams[1]);
-            ImGui::InputDoubleScientific("P2", &handleParams[2]);
-            ImGui::InputDoubleScientific("P3", &handleParams[3]);
-            ImGui::InputDoubleScientific("P4", &handleParams[4]);
-            ImGui::InputDoubleScientific("P5", &handleParams[5]);
+            ImGui::InputDouble("P0", &handleParams[0]);
+            ImGui::InputDouble("P1", &handleParams[1]);
+            ImGui::InputDouble("P2", &handleParams[2]);
+            ImGui::InputDouble("P3", &handleParams[3]);
+            ImGui::InputDouble("P4", &handleParams[4]);
+            ImGui::InputDouble("P5", &handleParams[5]);
 
             ImGui::End();
 
@@ -127,10 +127,10 @@ void WeaveHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
             if (ImGui::CollapsingHeader("Rods", ImGuiTreeNodeFlags_DefaultOpen))
             {
                 ImGui::Checkbox("Show Rod Segments", &showRatTraces);
-                ImGui::InputDoubleScientific("Extend Traces By", &extendTrace);
-                ImGui::InputDoubleScientific("Segment Lenght", &segLen);
-                ImGui::InputDoubleScientific("Max Curvature", &maxCurvature);
-                ImGui::InputDoubleScientific("Min Rod Length", &minRodLen);
+                ImGui::InputDouble("Extend Traces By", &extendTrace);
+                ImGui::InputDouble("Segment Lenght", &segLen);
+                ImGui::InputDouble("Max Curvature", &maxCurvature);
+                ImGui::InputDouble("Min Rod Length", &minRodLen);
                 if (ImGui::Button("Generate From Traces", ImVec2(-1, 0)))
                 {
                     rationalizeTraces();
@@ -148,7 +148,7 @@ void WeaveHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
     {
         if (ImGui::CollapsingHeader("Visualization (Cover)", ImGuiTreeNodeFlags_DefaultOpen))
         {
-            ImGui::InputDoubleScientific("Vector Scale", &vectorScale);
+            ImGui::InputDouble("Vector Scale", &vectorScale);
             ImGui::Checkbox("Hide Vectors", &hideVectors);
             ImGui::Combo("Shading", (int *)&cover_shading_state, "None\0S Value\0Theta Value\0Connection\0\0");
             ImGui::Checkbox("Show Cuts", &showCoverCuts);
@@ -156,10 +156,10 @@ void WeaveHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
 
         if (ImGui::CollapsingHeader("Cover Controls", ImGuiTreeNodeFlags_DefaultOpen))
         {
-            ImGui::InputDoubleScientific("Regularization", &initSReg);
+            ImGui::InputDouble("Regularization", &initSReg);
             if (ImGui::Button("Initialize S", ImVec2(-1,0)))
                 initializeS();
-            ImGui::InputDoubleScientific("Global Rescaling", &globalSScale);
+            ImGui::InputDouble("Global Rescaling", &globalSScale);
             if (ImGui::Button("Compute Function Value", ImVec2(-1, 0)))
                 computeFunc();
             ImGui::InputInt("Num Isolines", &numISOLines);
