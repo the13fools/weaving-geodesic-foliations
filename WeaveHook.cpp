@@ -225,15 +225,17 @@ void WeaveHook::clear()
     h.dir << 1, 0;
     h.field = 2;
     weave->addHandle(h);
-  //  ls.addHandle(h);
+    ls.addHandle(h);
     h.face = 0;
     h.dir << 0, 1;
     h.field = 1;
     weave->addHandle(h);
+    ls.addHandle(h);
     h.face = 0;
     h.dir << 1, -1;
     h.field = 0;
     weave->addHandle(h);
+    ls.addHandle(h);
     curFaceEnergies = Eigen::MatrixXd::Zero(3, 3);
     selectedVertices.clear();
     renderSelectedVertices.clear();
@@ -257,7 +259,7 @@ void WeaveHook::initSimulation()
 {
     if (weave)
         delete weave;
-    weave = new Weave(meshName, 1);    
+    weave = new Weave(meshName, 3);    
     clear();    
 }
 
@@ -280,7 +282,7 @@ void WeaveHook::resample()
     
     delete weave;
     
-    weave = new Weave(V, F, 1);    
+    weave = new Weave(V, F, 3);    
     clear();  
 
     // Hacky... 
@@ -583,6 +585,7 @@ bool WeaveHook::simulateOneStep()
 
     int nfaces = weave->fs->data().F.rows();
     int nfields = weave->fs->nFields();
+    std::cout << "there are " << nfields << " fields " << std::endl;
     double smoothingCoeff = 1000.;
 
     Eigen::VectorXd primal = weave->fs->vectorFields.segment(0, 2*nfaces*nfields);

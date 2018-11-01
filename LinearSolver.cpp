@@ -125,7 +125,7 @@ void LinearSolver::updatePrimalVars(const Weave &weave, Eigen::VectorXd &primalV
     int nfaces = weave.fs->data().F.rows();
     int m = weave.fs->nFields();
     
-    for (int i = 0; i < nfaces; i++)
+    for (int i = 0; i < nfaces * m; i++)
     {
         primalVars.segment<2>(2 * i) = primalVars.segment<2>(2 * i) + dualVars.segment<2>(2 * i);
     }
@@ -141,26 +141,32 @@ void LinearSolver::updatePrimalVars(const Weave &weave, Eigen::VectorXd &primalV
     Eigen::SparseMatrix<double> op = I + t * D.transpose() * D;
     Eigen::SparseMatrix<double> M = P.transpose() * op * P;
     Eigen::SimplicialLDLT<Eigen::SparseMatrix<double> > solver(M);
-    Eigen::VectorXd handlevals(2 * nfaces);
+    Eigen::VectorXd handlevals(2 * nfaces * m);
     handlevals.setZero();
     for (int i = 0; i < nhandles; i++)
     {
         handlevals.segment<2>(2 * handles[i].face) = handles[i].dir / handles[i].dir.norm() * 100;
+        std::cout << " here's a handle " << std::endl;
     }
     Eigen::VectorXd rhs = P.transpose() * (primalVars - op * handlevals);
+
     Eigen::VectorXd newprim = solver.solve(rhs);
     primalVars = P * newprim + handlevals;
     for (int i = 0; i < nfaces; i++)
     {
-        Eigen::Matrix<double, 3, 2> B_f = weave.fs->data().Bs[i];
-        Eigen::Vector3d ambient = (B_f * primalVars.segment<2>(2 * i));
-        primalVars.segment<2>(2 * i) /= ambient.norm();
+        for ( int cover = 0; cover < m; cover++)
+        {
+            Eigen::Matrix<double, 3, 2> B_f = weave.fs->data().Bs[i];
+            Eigen::Vector3d ambient = (B_f * primalVars.segment<2>(2 * i * m + 2 * cover));
+            primalVars.segment<2>(2 * i * m + 2 * cover) /= ambient.norm();
+        }
     }
 
     for (int i = 0; i < nhandles; i++)
     {
         primalVars.segment<2>(2 * handles[i].face) = handles[i].dir / handles[i].dir.norm();
     }
+
 }
 
 
@@ -300,24 +306,25 @@ void LinearSolver::updateDualVars(const Weave &weave, const Eigen::VectorXd &pri
     Eigen::SparseMatrix<double> curlOp;
     curlOperator(weave, curlOp);
     int nfaces = weave.fs->data().F.rows();
+    int m = weave.fs->nFields();
+    
     Eigen::SparseMatrix<double> V;
     unconstrainedProjection(weave, V);
-    int nedges = weave.fs->data().E.rows();
     int intedges = weave.fs->numInteriorEdges();
 
     std::vector<Eigen::Triplet<double> > regcoeffs;
     double reg = 1e-8;
-    for (int i = 0; i < intedges; i++)
+    for (int i = 0; i < intedges * m; i++)
     {
         regcoeffs.push_back(Eigen::Triplet<double>(i, i, reg));
     }
-    Eigen::SparseMatrix<double> Reg(intedges, intedges);
+    Eigen::SparseMatrix<double> Reg(intedges * m, intedges * m);
     Reg.setFromTriplets(regcoeffs.begin(), regcoeffs.end());
 
     Eigen::SparseMatrix<double> M = curlOp * V * V.transpose() * curlOp.transpose() + Reg;
     Eigen::SimplicialLDLT<Eigen::SparseMatrix<double> > solver(M);
     
-    Eigen::VectorXd rhs(intedges);
+    Eigen::VectorXd rhs(intedges * m);
     rhs = curlOp * primalVars;
     
     Eigen::VectorXd lambda = solver.solve(rhs);
@@ -325,6 +332,11 @@ void LinearSolver::updateDualVars(const Weave &weave, const Eigen::VectorXd &pri
     dualVars = -V * V.transpose() * curlOp.transpose() * lambda;
 
     std::cout << "Dual vars now " << dualVars.norm() << " geodesic residual " << (curlOp * (primalVars + dualVars)).norm() << std::endl;
+    // if ( std::isnan( dualVars.norm() ) )
+    // {
+    //     std::cout << "whoops" << std::endl;
+    //     exit(-1);
+    // }
 }
 
 void LinearSolver::unconstrainedProjection(const Weave &weave, Eigen::SparseMatrix<double> &proj)
@@ -337,15 +349,15 @@ void LinearSolver::unconstrainedProjection(const Weave &weave, Eigen::SparseMatr
         handlefaces.insert(handles[i].face);
     std::vector<Eigen::Triplet<double> > Vcoeffs;
     int col = 0;
-    for (int i = 0; i < nfaces; i++)
+    for (int i = 0; i < nfaces * m; i++)
     {
-        if (handlefaces.count(i))
+        if (handlefaces.count(i / m))
             continue;
         Vcoeffs.push_back(Eigen::Triplet<double>(2 * i, col, 1.0));
         Vcoeffs.push_back(Eigen::Triplet<double>(2 * i + 1, col + 1, 1.0));
         col += 2;
     }
-    assert(col == 2*nfaces - 2*nhandles);
+    assert(col == 2*nfaces*m - 2*nhandles);
     proj.resize(2 * nfaces * m, 2*nfaces * m - 2*nhandles);
     proj.setFromTriplets(Vcoeffs.begin(), Vcoeffs.end());
 
