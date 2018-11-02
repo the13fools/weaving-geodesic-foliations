@@ -19,6 +19,7 @@ class LinearSolver
 public:
  //   LinearSolver(const Eigen::MatrixXd &V, const Eigen::MatrixXi &F);
     void addHandle(const Handle &h);
+    void clearHandles();
     const std::vector<Handle> &getHandles() { return handles; }
 
     // void generateRandomField(Eigen::VectorXd &primalVars, Eigen::VectorXd &dualVars);

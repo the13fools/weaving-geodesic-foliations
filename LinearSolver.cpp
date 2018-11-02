@@ -16,6 +16,11 @@ void LinearSolver::addHandle(const Handle &h)
     handles.push_back(h);
 }
 
+void LinearSolver::clearHandles()
+{
+    handles.clear();
+}
+
 // int LinearSolver::numPrimalDOFs()
 // {
 //     return 2 * F.rows();
@@ -145,8 +150,7 @@ void LinearSolver::updatePrimalVars(const Weave &weave, Eigen::VectorXd &primalV
     handlevals.setZero();
     for (int i = 0; i < nhandles; i++)
     {
-        handlevals.segment<2>(2 * handles[i].face) = handles[i].dir / handles[i].dir.norm() * 100;
-        std::cout << " here's a handle " << std::endl;
+        handlevals.segment<2>(2 * (handles[i].face * m + handles[i].field ) ) = handles[i].dir / handles[i].dir.norm() * 10000;
     }
     Eigen::VectorXd rhs = P.transpose() * (primalVars - op * handlevals);
 
@@ -164,7 +168,7 @@ void LinearSolver::updatePrimalVars(const Weave &weave, Eigen::VectorXd &primalV
 
     for (int i = 0; i < nhandles; i++)
     {
-        primalVars.segment<2>(2 * handles[i].face) = handles[i].dir / handles[i].dir.norm();
+        primalVars.segment<2>(2 * (handles[i].face * m + handles[i].field ) ) = handles[i].dir / handles[i].dir.norm();
     }
 
 }
@@ -346,12 +350,12 @@ void LinearSolver::unconstrainedProjection(const Weave &weave, Eigen::SparseMatr
     int m = weave.fs->nFields();
     std::set<int> handlefaces;
     for (int i = 0; i < nhandles; i++)
-        handlefaces.insert(handles[i].face);
+        handlefaces.insert( handles[i].face * m + handles[i].field );
     std::vector<Eigen::Triplet<double> > Vcoeffs;
     int col = 0;
     for (int i = 0; i < nfaces * m; i++)
     {
-        if (handlefaces.count(i / m))
+        if (handlefaces.count(i))
             continue;
         Vcoeffs.push_back(Eigen::Triplet<double>(2 * i, col, 1.0));
         Vcoeffs.push_back(Eigen::Triplet<double>(2 * i + 1, col + 1, 1.0));
