@@ -594,8 +594,8 @@ bool WeaveHook::simulateOneStep()
     
     for (int i = 0; i < 100; i++)
     {            
-        ls.updateDualVars(*weave, primal, dual);
-        ls.updatePrimalVars(*weave, primal, dual, params.lambdacompat);
+        ls.updateDualVars(*weave, params, primal, dual);
+        ls.updatePrimalVars(*weave, params, primal, dual);
     }
     weave->fs->vectorFields.segment(0, 2*nfaces*nfields) = primal;
     weave->fs->vectorFields.segment(2*nfaces*nfields, 2*nfaces*nfields) = dual;
@@ -794,15 +794,15 @@ void WeaveHook::updateRenderGeometry()
 
     if (weave->handles.size() < 3)
         weave->handles.resize(3);
-    weave->handles[0].face = handleLocation;
-    weave->handles[0].dir(0) = handleParams(0);
-    weave->handles[0].dir(1) = handleParams(1);
-    weave->handles[1].face = handleLocation;
-    weave->handles[1].dir(0) = handleParams(2);
-    weave->handles[1].dir(1) = handleParams(3);
-    weave->handles[2].face = handleLocation;
-    weave->handles[2].dir(0) = handleParams(4);
-    weave->handles[2].dir(1) = handleParams(5);
+    ls.handles[0].face = handleLocation;
+    ls.handles[0].dir(0) = handleParams(0);
+    ls.handles[0].dir(1) = handleParams(1);
+    ls.handles[1].face = handleLocation;
+    ls.handles[1].dir(0) = handleParams(2);
+    ls.handles[1].dir(1) = handleParams(3);
+    ls.handles[2].face = handleLocation;
+    ls.handles[2].dir(0) = handleParams(4);
+    ls.handles[2].dir(1) = handleParams(5);
 
     int tracesegs = 0;
     for (int i = 0; i < traces.nTraces(); i++)

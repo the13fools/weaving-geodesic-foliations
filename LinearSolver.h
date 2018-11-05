@@ -24,17 +24,19 @@ public:
 
     // void generateRandomField(Eigen::VectorXd &primalVars, Eigen::VectorXd &dualVars);
     // void generateHarmonicField(Eigen::VectorXd &primalVars, Eigen::VectorXd &dualVars);
-    void curlOperator(const Weave &weave, Eigen::SparseMatrix<double> &curlOp);
-    void differentialOperator(const Weave &weave, Eigen::SparseMatrix<double> &D);
+    void curlOperator(const Weave &weave, SolverParams params, Eigen::SparseMatrix<double> &curlOp);
+    void differentialOperator(const Weave &weave, SolverParams params, Eigen::SparseMatrix<double> &D);
     void unconstrainedProjection(const Weave &weave, Eigen::SparseMatrix<double> &proj);
 
-    void updatePrimalVars(const Weave &weave, Eigen::VectorXd &primalVars, const Eigen::VectorXd &dualVars, double smoothingCoeff);
-    void updateDualVars(const Weave &weave, const Eigen::VectorXd &primalVars, Eigen::VectorXd &dualVars);
+    void updatePrimalVars(const Weave &weave, SolverParams params, Eigen::VectorXd &primalVars, const Eigen::VectorXd &dualVars);
+    void updateDualVars(const Weave &weave, SolverParams params, const Eigen::VectorXd &primalVars, Eigen::VectorXd &dualVars);
 
     // Problem dimensions
     // int numPrimalDOFs(); // involved in GN part of optimization
     // int numDualDOFs(); // involved in eigenvector problem part of optimization
    // void setFaceEnergies(const Eigen::VectorXd &primalVars, const Eigen::VectorXd &dualVars, Eigen::VectorXd &faceEnergies);
+
+     std::vector<Handle> handles;
 
 private:
     // Eigen::MatrixXd V;
@@ -42,7 +44,7 @@ private:
     // Eigen::MatrixXi E;
     // Eigen::MatrixXd centroids;
 
-    std::vector<Handle> handles;
+    
 
 };
 

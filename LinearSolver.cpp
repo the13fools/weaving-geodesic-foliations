@@ -4,6 +4,7 @@
 #include <set>
 #include <cassert>
 #include <Eigen/Geometry>
+#include <Eigen/SPQRSupport>
 #include <iostream>
 
 #include "GaussNewton.h"
@@ -125,7 +126,7 @@ static void identityMatrix(int n, Eigen::SparseMatrix<double> &I)
     I.setFromTriplets(coeffs.begin(), coeffs.end());
 }
 
-void LinearSolver::updatePrimalVars(const Weave &weave, Eigen::VectorXd &primalVars, const Eigen::VectorXd &dualVars, double smoothingCoeff)
+void LinearSolver::updatePrimalVars(const Weave &weave, SolverParams params, Eigen::VectorXd &primalVars, const Eigen::VectorXd &dualVars )
 {
     int nfaces = weave.fs->data().F.rows();
     int m = weave.fs->nFields();
@@ -138,19 +139,19 @@ void LinearSolver::updatePrimalVars(const Weave &weave, Eigen::VectorXd &primalV
     Eigen::SparseMatrix<double> D;
     Eigen::SparseMatrix<double> P;
     Eigen::SparseMatrix<double> I;
-    differentialOperator(weave, D);
+    differentialOperator(weave, params, D);
     unconstrainedProjection(weave, P);
     int nhandles = handles.size();
     identityMatrix(2 * nfaces * m, I);
-    double t = smoothingCoeff;
+    double t = params.lambdacompat;
     Eigen::SparseMatrix<double> op = I + t * D.transpose() * D;
     Eigen::SparseMatrix<double> M = P.transpose() * op * P;
-    Eigen::SimplicialLDLT<Eigen::SparseMatrix<double> > solver(M);
+    Eigen::SPQR<Eigen::SparseMatrix<double> > solver(M);
     Eigen::VectorXd handlevals(2 * nfaces * m);
     handlevals.setZero();
     for (int i = 0; i < nhandles; i++)
     {
-        handlevals.segment<2>(2 * (handles[i].face * m + handles[i].field ) ) = handles[i].dir / handles[i].dir.norm() * 10000;
+        handlevals.segment<2>(2 * (handles[i].face * m + handles[i].field ) ) = handles[i].dir / handles[i].dir.norm() * 10000000;
     }
     Eigen::VectorXd rhs = P.transpose() * (primalVars - op * handlevals);
 
@@ -177,7 +178,7 @@ void LinearSolver::updatePrimalVars(const Weave &weave, Eigen::VectorXd &primalV
 
 // TODO
 // *************************
-void LinearSolver::curlOperator(const Weave &weave, Eigen::SparseMatrix<double> &curlOp)
+void LinearSolver::curlOperator(const Weave &weave, SolverParams params, Eigen::SparseMatrix<double> &curlOp)
 {
     std::vector<Eigen::Triplet<double> > coeffs;
     int nedges = weave.fs->data().E.rows();
@@ -213,10 +214,13 @@ void LinearSolver::curlOperator(const Weave &weave, Eigen::SparseMatrix<double> 
                 Eigen::Matrix<double, 3, 2> B_f = weave.fs->data().Bs[f];
                 Eigen::Matrix<double, 3, 2> B_g = weave.fs->data().Bs[g];
 
-                for (int j = 0; j < 2; j++)
+                if (params.edgeWeights(e) > 0.) 
                 {
-                    coeffs.push_back(Eigen::Triplet<double>(term, weave.fs->vidx(f, i) + j, (B_f.transpose() * edge)[j]));
-                    coeffs.push_back(Eigen::Triplet<double>(term, weave.fs->vidx(g, adj_field) + j, -(B_g.transpose() * edge)[j]));
+                    for (int j = 0; j < 2; j++)
+                    {
+                        coeffs.push_back(Eigen::Triplet<double>(term, weave.fs->vidx(f, i) + j, (B_f.transpose() * edge)[j]));
+                        coeffs.push_back(Eigen::Triplet<double>(term, weave.fs->vidx(g, adj_field) + j, -(B_g.transpose() * edge)[j]));
+                    }
                 }
                 term++;
         }
@@ -229,7 +233,7 @@ void LinearSolver::curlOperator(const Weave &weave, Eigen::SparseMatrix<double> 
 
 // TODO: Steal this from prev version.
 // *************************
-void LinearSolver::differentialOperator(const Weave &weave, Eigen::SparseMatrix<double> &D)
+void LinearSolver::differentialOperator(const Weave &weave, SolverParams params, Eigen::SparseMatrix<double> &D)
 {
     std::vector<Eigen::Triplet<double> > coeffs;
     int nedges = weave.fs->data().E.rows();
@@ -268,10 +272,13 @@ void LinearSolver::differentialOperator(const Weave &weave, Eigen::SparseMatrix<
 
                 for (int coeff = 0; coeff < 3; coeff++)
                 {
-                    for (int k = 0; k < 2; k++)
+                    if (params.edgeWeights(e) > 0.) 
                     {
-                        coeffs.push_back(Eigen::Triplet<double>(term, weave.fs->vidx(f, i) + k, B_f(coeff, k)));
-                        coeffs.push_back(Eigen::Triplet<double>(term, weave.fs->vidx(g, adj_field) + k, -B_g(coeff, k)));
+                        for (int k = 0; k < 2; k++)
+                        {
+                            coeffs.push_back(Eigen::Triplet<double>(term, weave.fs->vidx(f, i) + k, B_f(coeff, k)));
+                            coeffs.push_back(Eigen::Triplet<double>(term, weave.fs->vidx(g, adj_field) + k, -B_g(coeff, k)));
+                        }
                     }
                     term++;
                 }
@@ -299,7 +306,7 @@ void LinearSolver::differentialOperator(const Weave &weave, Eigen::SparseMatrix<
     D.setFromTriplets(coeffs.begin(), coeffs.end());
 }
 
-void LinearSolver::updateDualVars(const Weave &weave, const Eigen::VectorXd &primalVars, Eigen::VectorXd &dualVars)
+void LinearSolver::updateDualVars(const Weave &weave, SolverParams params, const Eigen::VectorXd &primalVars, Eigen::VectorXd &dualVars)
 {
     // min_delta, \lambda   0.5 delta^2 + \lambda^T L (v + delta)
     // delta + L^T \lambda = 0
@@ -308,7 +315,7 @@ void LinearSolver::updateDualVars(const Weave &weave, const Eigen::VectorXd &pri
     // LL^T \lambda = Lv
     // delta = - L^T \lambda
     Eigen::SparseMatrix<double> curlOp;
-    curlOperator(weave, curlOp);
+    curlOperator(weave, params, curlOp);
     int nfaces = weave.fs->data().F.rows();
     int m = weave.fs->nFields();
     
