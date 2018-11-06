@@ -115,10 +115,10 @@ void LinearSolver::clearHandles()
 //     }
 // }
 
-static void identityMatrix(int n, Eigen::SparseMatrix<double> &I)
+static void identityMatrix(int k, int n, Eigen::SparseMatrix<double> &I)
 {
     std::vector<Eigen::Triplet<double> > coeffs;
-    for (int i = 0; i < n; i++)
+    for (int i = 0; i < k; i++)
     {
         coeffs.push_back(Eigen::Triplet<double>(i, i, 1.0));
     }
@@ -126,37 +126,60 @@ static void identityMatrix(int n, Eigen::SparseMatrix<double> &I)
     I.setFromTriplets(coeffs.begin(), coeffs.end());
 }
 
-void LinearSolver::updatePrimalVars(const Weave &weave, SolverParams params, Eigen::VectorXd &primalVars, const Eigen::VectorXd &dualVars )
+void LinearSolver::computeEnergy(const Weave &weave, SolverParams params, const Eigen::VectorXd &primalVars, const Eigen::VectorXd &dualVars )
+{
+    Eigen::SparseMatrix<double> D;
+    Eigen::SparseMatrix<double> P;
+    differentialOperator(weave, params, D);
+    unconstrainedProjection(weave, P);
+    std::cout << " The current energy is " << dualVars.transpose() * dualVars << " + " 
+              << (primalVars + dualVars).transpose() * D.transpose() * D * (primalVars + dualVars)  << " = " 
+              << (primalVars + dualVars).transpose() * D.transpose() * D * (primalVars + dualVars) + dualVars.transpose() * dualVars << std::endl;
+    // Eigen::SparseMatrix<double> I;
+    // differentialOperator(weave, params, D);
+}
+
+void LinearSolver::updatePrimalVars(const Weave &weave, SolverParams params, Eigen::VectorXd &primalVars, Eigen::VectorXd &dualVars )
 {
     int nfaces = weave.fs->data().F.rows();
     int m = weave.fs->nFields();
+    std::cout << " pre-primal update ";
+    computeEnergy(weave, params, primalVars, dualVars);
     
     for (int i = 0; i < nfaces * m; i++)
     {
         primalVars.segment<2>(2 * i) = primalVars.segment<2>(2 * i) + dualVars.segment<2>(2 * i);
+        dualVars.segment<2>(2 * i) = primalVars.segment<2>(2 * i);
     }
 
-    Eigen::SparseMatrix<double> D;
+    // Eigen::SparseMatrix<double> D;
     Eigen::SparseMatrix<double> P;
-    Eigen::SparseMatrix<double> I;
-    differentialOperator(weave, params, D);
+    // Eigen::SparseMatrix<double> I;
+    // differentialOperator(weave, params, D);
     unconstrainedProjection(weave, P);
     int nhandles = handles.size();
-    identityMatrix(2 * nfaces * m, I);
-    double t = params.lambdacompat;
-    Eigen::SparseMatrix<double> op = I + t * D.transpose() * D;
-    Eigen::SparseMatrix<double> M = P.transpose() * op * P;
-    Eigen::SPQR<Eigen::SparseMatrix<double> > solver(M);
-    Eigen::VectorXd handlevals(2 * nfaces * m);
-    handlevals.setZero();
+    // identityMatrix(2 * nfaces * m, I);
+    // double t = params.lambdacompat;
+    // Eigen::SparseMatrix<double> op = I + t * D.transpose() * D;
+    // Eigen::SparseMatrix<double> M = P.transpose() * op * P;
+    // Eigen::SPQR<Eigen::SparseMatrix<double> > solver(M);
+
+    // Eigen::VectorXd handlevals(2 * nfaces * m);
+    // handlevals.setZero();
+    // for (int i = 0; i < nhandles; i++)
+    // {
+    //     handlevals.segment<2>(2 * (handles[i].face * m + handles[i].field ) ) = handles[i].dir / handles[i].dir.norm() * 1.;
+    // }
+    // // Eigen::VectorXd rhs = P.transpose() * (primalVars - op * handlevals);
+
+    // // Eigen::VectorXd newprim = solver.solve(rhs);
+    // primalVars = P * primalVars + handlevals;
+
     for (int i = 0; i < nhandles; i++)
     {
-        handlevals.segment<2>(2 * (handles[i].face * m + handles[i].field ) ) = handles[i].dir / handles[i].dir.norm() * 10000000;
+        primalVars.segment<2>(2 * (handles[i].face * m + handles[i].field ) ) = handles[i].dir / handles[i].dir.norm();
     }
-    Eigen::VectorXd rhs = P.transpose() * (primalVars - op * handlevals);
 
-    Eigen::VectorXd newprim = solver.solve(rhs);
-    primalVars = P * newprim + handlevals;
     for (int i = 0; i < nfaces; i++)
     {
         for ( int cover = 0; cover < m; cover++)
@@ -164,14 +187,89 @@ void LinearSolver::updatePrimalVars(const Weave &weave, SolverParams params, Eig
             Eigen::Matrix<double, 3, 2> B_f = weave.fs->data().Bs[i];
             Eigen::Vector3d ambient = (B_f * primalVars.segment<2>(2 * i * m + 2 * cover));
             primalVars.segment<2>(2 * i * m + 2 * cover) /= ambient.norm();
+            dualVars.segment<2>(2 * i * m + 2 * cover) -= primalVars.segment<2>(2 * i * m + 2 * cover);
         }
     }
 
-    for (int i = 0; i < nhandles; i++)
-    {
-        primalVars.segment<2>(2 * (handles[i].face * m + handles[i].field ) ) = handles[i].dir / handles[i].dir.norm();
-    }
 
+    std::cout << "post-primal update ";
+    computeEnergy(weave, params, primalVars, dualVars);
+
+}
+
+void LinearSolver::updateDualVars_new(const Weave &weave, SolverParams params, Eigen::VectorXd &primalVars, Eigen::VectorXd &dualVars)
+{
+    // min_delta, \lambda   0.5 delta^2 + \lambda^T L (v + delta)
+    // delta + L^T \lambda = 0
+    // L delta + LL^T \lambda = 0
+    // -L v + LL^T \lambda = 0
+    // LL^T \lambda = Lv
+    // delta = - L^T \lambda
+
+    Eigen::SparseMatrix<double> D;
+    Eigen::SparseMatrix<double> P;
+    Eigen::SparseMatrix<double> I;
+    Eigen::SparseMatrix<double> curlOp;
+
+    differentialOperator(weave, params, D);
+    unconstrainedProjection(weave, P);
+
+    curlOperator(weave, params, curlOp);
+
+    int nfaces = weave.fs->data().F.rows();
+    int m = weave.fs->nFields();
+    int intedges = weave.fs->numInteriorEdges();
+    int nhandles = handles.size();
+    identityMatrix(2*nfaces*m, 2*nfaces*m + intedges*m, I);
+    double t = params.lambdacompat;
+    Eigen::SparseMatrix<double> op = I + t * D.transpose() * D;
+    Eigen::SparseMatrix<double> M = P.transpose() * op * P; // this might be wrong w handles
+
+    Eigen::SparseMatrix<double> Full;
+    Full.resize(2  * nfaces * m + intedges * m, 2 * m * nfaces + intedges * m);
+    Full += op;
+    Full += curlOp;
+    Full += Eigen::SparseMatrix<double>(curlOp.transpose());
+
+    Eigen::SPQR<Eigen::SparseMatrix<double> > solver(Full);
+
+    Eigen::VectorXd top_primal(2  * nfaces * m + intedges * m);
+    top_primal.segment(0, 2 * nfaces * m) = primalVars;
+
+    Eigen::VectorXd rhs(2  * nfaces * m + intedges * m);
+    rhs.setZero();
+    rhs -= t * D.transpose() * D * top_primal;
+    rhs -= curlOp * top_primal;
+
+    Eigen::VectorXd deltalambda = solver.solve(rhs);
+
+    dualVars = deltalambda.segment(0, 2  * nfaces * m);
+   
+
+
+    // std::vector<Eigen::Triplet<double> > regcoeffs;
+    // double reg = 1e-8;
+    // for (int i = 0; i < intedges * m; i++)
+    // {
+    //     regcoeffs.push_back(Eigen::Triplet<double>(i, i, reg));
+    // }
+    // Eigen::SparseMatrix<double> Reg(intedges * m, intedges * m);
+    // Reg.setFromTriplets(regcoeffs.begin(), regcoeffs.end());
+
+    // Eigen::SparseMatrix<double> M = curlOp * P * P.transpose() * curlOp.transpose() + Reg;
+    // Eigen::SimplicialLDLT<Eigen::SparseMatrix<double> > solver(M);
+    
+    // Eigen::VectorXd rhs(intedges * m);
+    // rhs = curlOp * primalVars;
+    
+    // Eigen::VectorXd lambda = solver.solve(rhs);
+
+    // dualVars = -P * P.transpose() * curlOp.transpose() * lambda;
+    
+    std::cout << "  post-dual update ";
+    computeEnergy(weave, params, primalVars, dualVars);
+    std::cout << "Dual vars now " << dualVars.norm() << " geodesic residual " << (curlOp * (primalVars + dualVars)).norm() << std::endl;
+    // if ( std::isnan( dualVars.norm() ) )
 }
 
 
@@ -184,8 +282,9 @@ void LinearSolver::curlOperator(const Weave &weave, SolverParams params, Eigen::
     int nedges = weave.fs->data().E.rows();
     int intedges = weave.fs->numInteriorEdges();
     int m = weave.fs->nFields();
+    int nfaces = weave.fs->data().F.rows();
 
-    int term = 0;
+    int term = 2*nfaces*m;
 
     for (int e = 0; e < weave.fs->nEdges(); e++)
     {
@@ -226,8 +325,8 @@ void LinearSolver::curlOperator(const Weave &weave, SolverParams params, Eigen::
         }
     }
 
-    int nfaces = weave.fs->data().F.rows();
-    curlOp.resize(intedges * m, 2 * m * nfaces);
+
+    curlOp.resize(2*nfaces*m + intedges*m, 2 * m * nfaces + intedges*m);
     curlOp.setFromTriplets(coeffs.begin(), coeffs.end());
 }
 
@@ -302,11 +401,11 @@ void LinearSolver::differentialOperator(const Weave &weave, SolverParams params,
     //     }
     // }
     int nfaces = weave.fs->data().F.rows();
-    D.resize(3 * intedges * m, 2  * nfaces * m);
+    D.resize(3 * intedges * m, 2*nfaces*m + intedges*m);
     D.setFromTriplets(coeffs.begin(), coeffs.end());
 }
 
-void LinearSolver::updateDualVars(const Weave &weave, SolverParams params, const Eigen::VectorXd &primalVars, Eigen::VectorXd &dualVars)
+void LinearSolver::updateDualVars(const Weave &weave, SolverParams params, Eigen::VectorXd &primalVars, Eigen::VectorXd &dualVars)
 {
     // min_delta, \lambda   0.5 delta^2 + \lambda^T L (v + delta)
     // delta + L^T \lambda = 0
@@ -341,7 +440,9 @@ void LinearSolver::updateDualVars(const Weave &weave, SolverParams params, const
     Eigen::VectorXd lambda = solver.solve(rhs);
 
     dualVars = -V * V.transpose() * curlOp.transpose() * lambda;
-
+    
+    std::cout << "  post-dual update ";
+    computeEnergy(weave, params, primalVars, dualVars);
     std::cout << "Dual vars now " << dualVars.norm() << " geodesic residual " << (curlOp * (primalVars + dualVars)).norm() << std::endl;
     // if ( std::isnan( dualVars.norm() ) )
     // {
@@ -353,6 +454,7 @@ void LinearSolver::updateDualVars(const Weave &weave, SolverParams params, const
 void LinearSolver::unconstrainedProjection(const Weave &weave, Eigen::SparseMatrix<double> &proj)
 {
     int nfaces = weave.fs->data().F.rows();
+    int intedges = weave.fs->numInteriorEdges();
     int nhandles = handles.size();
     int m = weave.fs->nFields();
     std::set<int> handlefaces;
@@ -369,7 +471,7 @@ void LinearSolver::unconstrainedProjection(const Weave &weave, Eigen::SparseMatr
         col += 2;
     }
     assert(col == 2*nfaces*m - 2*nhandles);
-    proj.resize(2 * nfaces * m, 2*nfaces * m - 2*nhandles);
+    proj.resize(2*nfaces*m + intedges*m, 2*nfaces * m - 2*nhandles);
     proj.setFromTriplets(Vcoeffs.begin(), Vcoeffs.end());
 
 }

@@ -28,8 +28,10 @@ public:
     void differentialOperator(const Weave &weave, SolverParams params, Eigen::SparseMatrix<double> &D);
     void unconstrainedProjection(const Weave &weave, Eigen::SparseMatrix<double> &proj);
 
-    void updatePrimalVars(const Weave &weave, SolverParams params, Eigen::VectorXd &primalVars, const Eigen::VectorXd &dualVars);
-    void updateDualVars(const Weave &weave, SolverParams params, const Eigen::VectorXd &primalVars, Eigen::VectorXd &dualVars);
+    void computeEnergy(const Weave &weave, SolverParams params, const Eigen::VectorXd &primalVars, const Eigen::VectorXd &dualVars );
+    void updatePrimalVars(const Weave &weave, SolverParams params, Eigen::VectorXd &primalVars, Eigen::VectorXd &dualVars);
+    void updateDualVars(const Weave &weave, SolverParams params, Eigen::VectorXd &primalVars, Eigen::VectorXd &dualVars);
+    void updateDualVars_new(const Weave &weave, SolverParams params, Eigen::VectorXd &primalVars, Eigen::VectorXd &dualVars);
 
     // Problem dimensions
     // int numPrimalDOFs(); // involved in GN part of optimization
