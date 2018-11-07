@@ -4,6 +4,7 @@
 #include <Eigen/Core>
 #include <vector>
 #include <Eigen/Sparse>
+#include <Eigen/SPQRSupport>
 
 class Weave;
 struct SolverParams;
@@ -31,8 +32,10 @@ public:
     void computeEnergy(const Weave &weave, SolverParams params, const Eigen::VectorXd &primalVars, const Eigen::VectorXd &dualVars );
     void updatePrimalVars(const Weave &weave, SolverParams params, Eigen::VectorXd &primalVars, Eigen::VectorXd &dualVars);
     void updateDualVars(const Weave &weave, SolverParams params, Eigen::VectorXd &primalVars, Eigen::VectorXd &dualVars);
+    void buildDualMatrix(const Weave &weave, SolverParams params, Eigen::VectorXd &primalVars, Eigen::VectorXd &dualVars);
     void updateDualVars_new(const Weave &weave, SolverParams params, Eigen::VectorXd &primalVars, Eigen::VectorXd &dualVars);
 
+    int dualMatrixSize(const Weave &weave);
     // Problem dimensions
     // int numPrimalDOFs(); // involved in GN part of optimization
     // int numDualDOFs(); // involved in eigenvector problem part of optimization
@@ -41,6 +44,8 @@ public:
      std::vector<Handle> handles;
 
 private:
+    Eigen::SPQR<Eigen::SparseMatrix<double> > * dualSolver;
+
     // Eigen::MatrixXd V;
     // Eigen::MatrixXi F;
     // Eigen::MatrixXi E;

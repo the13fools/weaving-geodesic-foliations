@@ -126,15 +126,52 @@ static void identityMatrix(int k, int n, Eigen::SparseMatrix<double> &I)
     I.setFromTriplets(coeffs.begin(), coeffs.end());
 }
 
+static void massMatrix(const Weave &weave, Eigen::SparseMatrix<double> &M)
+{
+    std::vector<Eigen::Triplet<double> > Mcoeffs;
+    int nfaces = weave.fs->data().F.rows();
+    int m = weave.fs->nFields();
+
+    M.resize(2*m*nfaces, 2*m*nfaces);
+    M.setZero();
+
+    int term = 0;
+    for (int f = 0; f < nfaces; f++)
+    {
+        for (int i = 0; i < m; i++)
+        {
+            double area = weave.fs->faceArea(f);
+            Eigen::Matrix2d BTB = weave.fs->data().Bs[f].transpose() * weave.fs->data().Bs[f];
+            for (int j = 0; j < 2; j++)
+            {
+                for (int k = 0; k < 2; k++)
+                {
+                    Mcoeffs.push_back(Eigen::Triplet<double>(term + j, term + k, area*BTB(j, k)));
+                }
+            }
+            term += 2;
+        }
+    }
+
+    M.setFromTriplets(Mcoeffs.begin(), Mcoeffs.end());
+}
+
 void LinearSolver::computeEnergy(const Weave &weave, SolverParams params, const Eigen::VectorXd &primalVars, const Eigen::VectorXd &dualVars )
 {
+    int nfaces = weave.fs->data().F.rows();
+    int m = weave.fs->nFields();
+
     Eigen::SparseMatrix<double> D;
     Eigen::SparseMatrix<double> P;
+    Eigen::SparseMatrix<double> BTB;
+
     differentialOperator(weave, params, D);
     unconstrainedProjection(weave, P);
-    std::cout << " The current energy is " << dualVars.transpose() * dualVars << " + " 
+    massMatrix(weave, BTB);
+
+    std::cout << " The current energy is " << dualVars.transpose() * BTB * dualVars << " + " 
               << (primalVars + dualVars).transpose() * D.transpose() * D * (primalVars + dualVars)  << " = " 
-              << (primalVars + dualVars).transpose() * D.transpose() * D * (primalVars + dualVars) + dualVars.transpose() * dualVars << std::endl;
+              << (primalVars + dualVars).transpose() * D.transpose() * D * (primalVars + dualVars) + dualVars.transpose() * BTB * dualVars << std::endl;
     // Eigen::SparseMatrix<double> I;
     // differentialOperator(weave, params, D);
 }
@@ -197,6 +234,87 @@ void LinearSolver::updatePrimalVars(const Weave &weave, SolverParams params, Eig
 
 }
 
+int LinearSolver::dualMatrixSize(const Weave &weave)
+{
+    int nfaces = weave.fs->data().F.rows();
+    int m = weave.fs->nFields();
+    int intedges = weave.fs->numInteriorEdges();
+    int nhandles = handles.size();
+
+    return 2*nfaces*m - 2*nhandles + intedges*m;
+}
+
+void LinearSolver::buildDualMatrix(const Weave &weave, SolverParams params, Eigen::VectorXd &primalVars, Eigen::VectorXd &dualVars)
+{
+    // min_delta, \lambda   0.5 delta^2 + \lambda^T L (v + delta)
+    // delta + L^T \lambda = 0
+    // L delta + LL^T \lambda = 0
+    // -L v + LL^T \lambda = 0
+    // LL^T \lambda = Lv
+    // delta = - L^T \lambda
+
+    Eigen::SparseMatrix<double> D;
+    Eigen::SparseMatrix<double> P;
+    Eigen::SparseMatrix<double> C;
+    Eigen::SparseMatrix<double> BTB;
+
+    differentialOperator(weave, params, D);
+    unconstrainedProjection(weave, P);
+
+    curlOperator(weave, params, C);
+
+    int nfaces = weave.fs->data().F.rows();
+    int m = weave.fs->nFields();
+    int intedges = weave.fs->numInteriorEdges();
+    int nhandles = handles.size();
+
+    int matrixSize = dualMatrixSize(weave);
+
+    massMatrix(weave, BTB);
+
+    double t = params.lambdacompat;
+    Eigen::SparseMatrix<double> op = BTB + t * D.transpose() * D;
+    Eigen::SparseMatrix<double> M = P.transpose() * op * P; // this might be wrong w handles
+
+    std::vector<Eigen::Triplet<double> > dualCoeffs;
+
+    for (int k=0; k<M.outerSize(); ++k)
+    {
+        for (Eigen::SparseMatrix<double>::InnerIterator it(M,k); it; ++it)
+        {
+            dualCoeffs.push_back(Eigen::Triplet<double>(it.row(), it.col(), it.value()));
+        }
+    }
+
+    Eigen::SparseMatrix<double> CP = (C*P);
+    for (int k=0; k<CP.outerSize(); ++k)
+    {
+        for (Eigen::SparseMatrix<double>::InnerIterator it(CP,k); it; ++it)
+        {
+            dualCoeffs.push_back(Eigen::Triplet<double>(it.row() + 2*m*nfaces-2*nhandles, it.col(), it.value()));
+        }
+    }
+
+    Eigen::SparseMatrix<double> CPT = Eigen::SparseMatrix<double>((C*P).transpose());
+    for (int k=0; k<CPT.outerSize(); ++k)
+    {
+        for (Eigen::SparseMatrix<double>::InnerIterator it(CPT,k); it; ++it)
+        {
+            dualCoeffs.push_back(Eigen::Triplet<double>(it.row(), it.col() + 2*m*nfaces-2*nhandles, it.value()));
+        }
+    }
+    Eigen::SparseMatrix<double> dualMat;
+    dualMat.resize(matrixSize, matrixSize);
+    dualMat.setFromTriplets(dualCoeffs.begin(), dualCoeffs.end());
+
+    std::cout << matrixSize<< " matrix size " << std::endl;
+
+    Eigen::SPQR<Eigen::SparseMatrix<double> > solver(dualMat);
+    dualSolver = &solver;
+ //   dualSolver.analyzePattern(dualMat);   // for this step the numerical values of A are not used
+ //   dualSolver.factorize(dualMat);
+}
+
 void LinearSolver::updateDualVars_new(const Weave &weave, SolverParams params, Eigen::VectorXd &primalVars, Eigen::VectorXd &dualVars)
 {
     // min_delta, \lambda   0.5 delta^2 + \lambda^T L (v + delta)
@@ -208,8 +326,9 @@ void LinearSolver::updateDualVars_new(const Weave &weave, SolverParams params, E
 
     Eigen::SparseMatrix<double> D;
     Eigen::SparseMatrix<double> P;
-    Eigen::SparseMatrix<double> I;
+  //  Eigen::SparseMatrix<double> I;
     Eigen::SparseMatrix<double> curlOp;
+    Eigen::SparseMatrix<double> BTB;
 
     differentialOperator(weave, params, D);
     unconstrainedProjection(weave, P);
@@ -218,32 +337,37 @@ void LinearSolver::updateDualVars_new(const Weave &weave, SolverParams params, E
 
     int nfaces = weave.fs->data().F.rows();
     int m = weave.fs->nFields();
-    int intedges = weave.fs->numInteriorEdges();
     int nhandles = handles.size();
-    identityMatrix(2*nfaces*m, 2*nfaces*m + intedges*m, I);
+    
+    int matrixSize = dualMatrixSize(weave);
+
+  // //  identityMatrix(2*nfaces*m, 2*nfaces*m + intedges*m, I);
+    massMatrix(weave, BTB);
     double t = params.lambdacompat;
-    Eigen::SparseMatrix<double> op = I + t * D.transpose() * D;
+    Eigen::SparseMatrix<double> op = BTB + t * D.transpose() * D;
     Eigen::SparseMatrix<double> M = P.transpose() * op * P; // this might be wrong w handles
 
-    Eigen::SparseMatrix<double> Full;
-    Full.resize(2  * nfaces * m + intedges * m, 2 * m * nfaces + intedges * m);
-    Full += op;
-    Full += curlOp;
-    Full += Eigen::SparseMatrix<double>(curlOp.transpose());
+  //   Eigen::SparseMatrix<double> Full;
+  //   Full.resize(2  * nfaces * m + intedges * m, 2 * m * nfaces + intedges * m);
+  //   Full += op;
+  //   Full += curlOp;
+  //   Full += Eigen::SparseMatrix<double>(curlOp.transpose());
 
-    Eigen::SPQR<Eigen::SparseMatrix<double> > solver(Full);
+  //   Eigen::SPQR<Eigen::SparseMatrix<double> > solver(Full);
 
-    Eigen::VectorXd top_primal(2  * nfaces * m + intedges * m);
-    top_primal.segment(0, 2 * nfaces * m) = primalVars;
+    Eigen::VectorXd top_primal(matrixSize);
+    top_primal.segment(0, 2*nfaces*m - 2*nhandles) = t * P.transpose() * D.transpose() * D * primalVars;
 
-    Eigen::VectorXd rhs(2  * nfaces * m + intedges * m);
+    Eigen::VectorXd rhs(matrixSize);
     rhs.setZero();
-    rhs -= t * D.transpose() * D * top_primal;
-    rhs -= curlOp * top_primal;
+    rhs -= t * P.transpose() * D.transpose() * D * top_primal;
+    rhs -= curlOp * primalVars;
 
-    Eigen::VectorXd deltalambda = solver.solve(rhs);
+    std::cout << rhs.size() << " rhs size " << std::endl;
 
-    dualVars = deltalambda.segment(0, 2  * nfaces * m);
+    Eigen::VectorXd deltalambda = dualSolver->solve(rhs);
+
+    dualVars = P * deltalambda.segment(0, 2  * nfaces * m - 2*nhandles);
    
 
 
@@ -283,8 +407,9 @@ void LinearSolver::curlOperator(const Weave &weave, SolverParams params, Eigen::
     int intedges = weave.fs->numInteriorEdges();
     int m = weave.fs->nFields();
     int nfaces = weave.fs->data().F.rows();
+    int nhandles = handles.size();
 
-    int term = 2*nfaces*m;
+    int term = 0;
 
     for (int e = 0; e < weave.fs->nEdges(); e++)
     {
@@ -326,7 +451,7 @@ void LinearSolver::curlOperator(const Weave &weave, SolverParams params, Eigen::
     }
 
 
-    curlOp.resize(2*nfaces*m + intedges*m, 2 * m * nfaces + intedges*m);
+    curlOp.resize(intedges*m, 2 * m * nfaces);
     curlOp.setFromTriplets(coeffs.begin(), coeffs.end());
 }
 
@@ -401,7 +526,7 @@ void LinearSolver::differentialOperator(const Weave &weave, SolverParams params,
     //     }
     // }
     int nfaces = weave.fs->data().F.rows();
-    D.resize(3 * intedges * m, 2*nfaces*m + intedges*m);
+    D.resize(3 * intedges * m, 2*nfaces*m);
     D.setFromTriplets(coeffs.begin(), coeffs.end());
 }
 
@@ -454,7 +579,6 @@ void LinearSolver::updateDualVars(const Weave &weave, SolverParams params, Eigen
 void LinearSolver::unconstrainedProjection(const Weave &weave, Eigen::SparseMatrix<double> &proj)
 {
     int nfaces = weave.fs->data().F.rows();
-    int intedges = weave.fs->numInteriorEdges();
     int nhandles = handles.size();
     int m = weave.fs->nFields();
     std::set<int> handlefaces;
@@ -471,7 +595,7 @@ void LinearSolver::unconstrainedProjection(const Weave &weave, Eigen::SparseMatr
         col += 2;
     }
     assert(col == 2*nfaces*m - 2*nhandles);
-    proj.resize(2*nfaces*m + intedges*m, 2*nfaces * m - 2*nhandles);
+    proj.resize(2*nfaces*m, 2*nfaces * m-2*nhandles);
     proj.setFromTriplets(Vcoeffs.begin(), Vcoeffs.end());
 
 }
