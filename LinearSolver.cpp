@@ -292,6 +292,7 @@ void LinearSolver::buildDualMatrix(const Weave &weave, SolverParams params, Eige
         for (Eigen::SparseMatrix<double>::InnerIterator it(CP,k); it; ++it)
         {
             dualCoeffs.push_back(Eigen::Triplet<double>(it.row() + 2*m*nfaces-2*nhandles, it.col(), it.value()));
+            std::cout << it.row() + 2*m*nfaces-2*nhandles << " ";
         }
     }
 
@@ -301,13 +302,14 @@ void LinearSolver::buildDualMatrix(const Weave &weave, SolverParams params, Eige
         for (Eigen::SparseMatrix<double>::InnerIterator it(CPT,k); it; ++it)
         {
             dualCoeffs.push_back(Eigen::Triplet<double>(it.row(), it.col() + 2*m*nfaces-2*nhandles, it.value()));
+            std::cout << it.col() + 2*m*nfaces-2*nhandles << " ";
         }
     }
     Eigen::SparseMatrix<double> dualMat;
     dualMat.resize(matrixSize, matrixSize);
     dualMat.setFromTriplets(dualCoeffs.begin(), dualCoeffs.end());
 
-    std::cout << matrixSize<< " matrix size " << std::endl;
+    std::cout << matrixSize << " matrix size " << std::endl;
 
     Eigen::SPQR<Eigen::SparseMatrix<double> > solver(dualMat);
     dualSolver = &solver;
@@ -365,7 +367,55 @@ void LinearSolver::updateDualVars_new(const Weave &weave, SolverParams params, E
 
     std::cout << rhs.size() << " rhs size " << std::endl;
 
-    Eigen::VectorXd deltalambda = dualSolver->solve(rhs);
+/////////////////////**********************************************************************************///////////////////////
+    Eigen::SparseMatrix<double> C;
+
+    curlOperator(weave, params, C);
+
+    int intedges = weave.fs->numInteriorEdges();
+
+    massMatrix(weave, BTB);
+
+    std::vector<Eigen::Triplet<double> > dualCoeffs;
+
+    for (int k=0; k<M.outerSize(); ++k)
+    {
+        for (Eigen::SparseMatrix<double>::InnerIterator it(M,k); it; ++it)
+        {
+            dualCoeffs.push_back(Eigen::Triplet<double>(it.row(), it.col(), it.value()));
+        }
+    }
+
+    Eigen::SparseMatrix<double> CP = (C*P);
+    for (int k=0; k<CP.outerSize(); ++k)
+    {
+        for (Eigen::SparseMatrix<double>::InnerIterator it(CP,k); it; ++it)
+        {
+            dualCoeffs.push_back(Eigen::Triplet<double>(it.row() + 2*m*nfaces-2*nhandles, it.col(), it.value()));
+            std::cout << it.row() + 2*m*nfaces-2*nhandles << " ";
+        }
+    }
+
+    Eigen::SparseMatrix<double> CPT = Eigen::SparseMatrix<double>((C*P).transpose());
+    for (int k=0; k<CPT.outerSize(); ++k)
+    {
+        for (Eigen::SparseMatrix<double>::InnerIterator it(CPT,k); it; ++it)
+        {
+            dualCoeffs.push_back(Eigen::Triplet<double>(it.row(), it.col() + 2*m*nfaces-2*nhandles, it.value()));
+            std::cout << it.col() + 2*m*nfaces-2*nhandles << " ";
+        }
+    }
+    Eigen::SparseMatrix<double> dualMat;
+    dualMat.resize(matrixSize, matrixSize);
+    dualMat.setFromTriplets(dualCoeffs.begin(), dualCoeffs.end());
+
+    std::cout << matrixSize << " matrix size " << std::endl;
+
+    Eigen::SPQR<Eigen::SparseMatrix<double> > solver(dualMat);
+
+/////////////////////**********************************************************************************///////////////////////
+
+    Eigen::VectorXd deltalambda = solver.solve(rhs);
 
     dualVars = P * deltalambda.segment(0, 2  * nfaces * m - 2*nhandles);
    

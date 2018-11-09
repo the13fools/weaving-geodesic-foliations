@@ -593,7 +593,7 @@ bool WeaveHook::simulateOneStep()
     Eigen::VectorXd dual = weave->fs->vectorFields.segment(2*nfaces*nfields, 2*nfaces*nfields);
 
     ls.clearHandles();
-    ls.buildDualMatrix(*weave, params, primal, dual);
+ //   ls.buildDualMatrix(*weave, params, primal, dual);
     
     for (int i = 0; i < 10; i++)
     {            
