@@ -340,7 +340,8 @@ void LinearSolver::updateDualVars_new(const Weave &weave, SolverParams params, E
     int nfaces = weave.fs->data().F.rows();
     int m = weave.fs->nFields();
     int nhandles = handles.size();
-    
+    int intedges = weave.fs->numInteriorEdges();
+
     int matrixSize = dualMatrixSize(weave);
 
   // //  identityMatrix(2*nfaces*m, 2*nfaces*m + intedges*m, I);
@@ -357,13 +358,14 @@ void LinearSolver::updateDualVars_new(const Weave &weave, SolverParams params, E
 
   //   Eigen::SPQR<Eigen::SparseMatrix<double> > solver(Full);
 
-    Eigen::VectorXd top_primal(matrixSize);
-    top_primal.segment(0, 2*nfaces*m - 2*nhandles) = t * P.transpose() * D.transpose() * D * primalVars;
-
     Eigen::VectorXd rhs(matrixSize);
-    rhs.setZero();
-    rhs -= t * P.transpose() * D.transpose() * D * top_primal;
-    rhs -= curlOp * primalVars;
+    rhs.segment(0, 2*nfaces*m - 2*nhandles) = -t * P.transpose() * D.transpose() * D * primalVars;
+    rhs.segment(2*nfaces*m - 2*nhandles, intedges * m) = -curlOp * primalVars;
+
+    // Eigen::VectorXd rhs(matrixSize);
+    // rhs.setZero();
+    // rhs -= t * P.transpose() * D.transpose() * D * top_primal;
+    // rhs -= curlOp * primalVars;
 
     std::cout << rhs.size() << " rhs size " << std::endl;
 
@@ -372,7 +374,7 @@ void LinearSolver::updateDualVars_new(const Weave &weave, SolverParams params, E
 
     curlOperator(weave, params, C);
 
-    int intedges = weave.fs->numInteriorEdges();
+
 
     massMatrix(weave, BTB);
 

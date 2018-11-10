@@ -260,7 +260,7 @@ void WeaveHook::initSimulation()
 {
     if (weave)
         delete weave;
-    weave = new Weave(meshName, 1);    
+    weave = new Weave(meshName, 3);    
     clear();    
 }
 
@@ -283,7 +283,7 @@ void WeaveHook::resample()
     
     delete weave;
     
-    weave = new Weave(V, F, 1);    
+    weave = new Weave(V, F, 3);    
     clear();  
 
     // Hacky... 
@@ -592,7 +592,7 @@ bool WeaveHook::simulateOneStep()
     Eigen::VectorXd primal = weave->fs->vectorFields.segment(0, 2*nfaces*nfields);
     Eigen::VectorXd dual = weave->fs->vectorFields.segment(2*nfaces*nfields, 2*nfaces*nfields);
 
-    ls.clearHandles();
+   // ls.clearHandles();
  //   ls.buildDualMatrix(*weave, params, primal, dual);
     
     for (int i = 0; i < 10; i++)
