@@ -64,6 +64,7 @@ void WeaveHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
         if (ImGui::CollapsingHeader("Misc", ImGuiTreeNodeFlags_DefaultOpen))
         {
             ImGui::InputInt("Target # faces", &targetResolution, 0, 0);
+            ImGui::InputInt("Num Fields", &fieldCount, 0, 0);
             if (ImGui::Button("Resample Mesh", ImVec2(-1, 0)))
                 resample();
             ImGui::InputInt("Num Isolines", &numISOLines);
@@ -81,11 +82,16 @@ void WeaveHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
                 ImGuiWindowFlags_NoSavedSettings
             );
 
-            ImGui::InputInt("Face Location", &handleLocation, 0, 0);
+            ImGui::InputInt("Face1", &handleLocation[0], 0, 0);
+            ImGui::InputInt("Field1", &handleLocation[1], 0, 0);
             ImGui::InputDouble("P0", &handleParams[0]);
             ImGui::InputDouble("P1", &handleParams[1]);
+            ImGui::InputInt("Face2", &handleLocation[2], 0, 0);
+            ImGui::InputInt("Field2", &handleLocation[3], 0, 0);
             ImGui::InputDouble("P2", &handleParams[2]);
             ImGui::InputDouble("P3", &handleParams[3]);
+            ImGui::InputInt("Face3", &handleLocation[4], 0, 0);
+            ImGui::InputInt("Field3", &handleLocation[5], 0, 0);
             ImGui::InputDouble("P4", &handleParams[4]);
             ImGui::InputDouble("P5", &handleParams[5]);
 
@@ -260,7 +266,7 @@ void WeaveHook::initSimulation()
 {
     if (weave)
         delete weave;
-    weave = new Weave(meshName, 3);    
+    weave = new Weave(meshName, fieldCount);    
     clear();    
 }
 
@@ -283,7 +289,8 @@ void WeaveHook::resample()
     
     delete weave;
     
-    weave = new Weave(V, F, 3);    
+    weave = new Weave(V, F, fieldCount); 
+    std::cout << fieldCount << std::endl;   
     clear();  
 
     // Hacky... 
@@ -795,17 +802,31 @@ void WeaveHook::updateRenderGeometry()
     baseLength = weave->fs->data().averageEdgeLength;
     curFaceEnergies = tempFaceEnergies;
 
-    if (weave->handles.size() < 3)
-        weave->handles.resize(3);
-    ls.handles[0].face = handleLocation;
-    ls.handles[0].dir(0) = handleParams(0);
-    ls.handles[0].dir(1) = handleParams(1);
-    ls.handles[1].face = handleLocation;
-    ls.handles[1].dir(0) = handleParams(2);
-    ls.handles[1].dir(1) = handleParams(3);
-    ls.handles[2].face = handleLocation;
-    ls.handles[2].dir(0) = handleParams(4);
-    ls.handles[2].dir(1) = handleParams(5);
+    // if (weave->handles.size() < 3)
+    //     weave->handles.resize(3);
+    // ls.handles[0].face = handleLocation[0];
+    // ls.handles[0].field = handleLocation[1];
+    // ls.handles[0].dir(0) = handleParams(0);
+    // ls.handles[0].dir(1) = handleParams(1);
+    // ls.handles[1].face = handleLocation[2];
+    // ls.handles[1].field = handleLocation[3] + 1;
+    // ls.handles[1].dir(0) = handleParams(2);
+    // ls.handles[1].dir(1) = handleParams(3);
+    // ls.handles[2].face = handleLocation[4];
+    // ls.handles[2].field = handleLocation[5]+ 2;
+    // ls.handles[2].dir(0) = handleParams(4);
+    // ls.handles[2].dir(1) = handleParams(5);
+
+    // // TODO CLEAN THIS UP!! 
+    // weave->handles[0].face = handleLocation[0];
+    // weave->handles[0].dir(0) = handleParams(0);
+    // weave->handles[0].dir(1) = handleParams(1);
+    // weave->handles[1].face = handleLocation[2];
+    // weave->handles[1].dir(0) = handleParams(2);
+    // weave->handles[1].dir(1) = handleParams(3);
+    // weave->handles[2].face = handleLocation[4];
+    // weave->handles[2].dir(0) = handleParams(4);
+    // weave->handles[2].dir(1) = handleParams(5);
 
     int tracesegs = 0;
     for (int i = 0; i < traces.nTraces(); i++)

@@ -292,7 +292,6 @@ void LinearSolver::buildDualMatrix(const Weave &weave, SolverParams params, Eige
         for (Eigen::SparseMatrix<double>::InnerIterator it(CP,k); it; ++it)
         {
             dualCoeffs.push_back(Eigen::Triplet<double>(it.row() + 2*m*nfaces-2*nhandles, it.col(), it.value()));
-            std::cout << it.row() + 2*m*nfaces-2*nhandles << " ";
         }
     }
 
@@ -302,7 +301,6 @@ void LinearSolver::buildDualMatrix(const Weave &weave, SolverParams params, Eige
         for (Eigen::SparseMatrix<double>::InnerIterator it(CPT,k); it; ++it)
         {
             dualCoeffs.push_back(Eigen::Triplet<double>(it.row(), it.col() + 2*m*nfaces-2*nhandles, it.value()));
-            std::cout << it.col() + 2*m*nfaces-2*nhandles << " ";
         }
     }
     Eigen::SparseMatrix<double> dualMat;
@@ -394,7 +392,6 @@ void LinearSolver::updateDualVars_new(const Weave &weave, SolverParams params, E
         for (Eigen::SparseMatrix<double>::InnerIterator it(CP,k); it; ++it)
         {
             dualCoeffs.push_back(Eigen::Triplet<double>(it.row() + 2*m*nfaces-2*nhandles, it.col(), it.value()));
-            std::cout << it.row() + 2*m*nfaces-2*nhandles << " ";
         }
     }
 
@@ -404,7 +401,6 @@ void LinearSolver::updateDualVars_new(const Weave &weave, SolverParams params, E
         for (Eigen::SparseMatrix<double>::InnerIterator it(CPT,k); it; ++it)
         {
             dualCoeffs.push_back(Eigen::Triplet<double>(it.row(), it.col() + 2*m*nfaces-2*nhandles, it.value()));
-            std::cout << it.col() + 2*m*nfaces-2*nhandles << " ";
         }
     }
     Eigen::SparseMatrix<double> dualMat;

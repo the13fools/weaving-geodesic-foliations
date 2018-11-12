@@ -63,7 +63,8 @@ public:
 
         targetResolution = 5000;
     
-        handleLocation = 0;
+        fieldCount = 3;
+        handleLocation = Eigen::VectorXi::Zero(6);
         handleParams = Eigen::VectorXd::Zero(6);
         handleParams(0) = 0;
         handleParams(1) = 1;
@@ -140,8 +141,10 @@ private:
     double vectorScale;
     double baseLength;
 
+    int fieldCount;
+
     Eigen::VectorXd handleParams;
-    int handleLocation;
+    Eigen::VectorXi handleLocation;
 
     LinearSolver ls;
 
