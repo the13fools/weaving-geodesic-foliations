@@ -82,18 +82,16 @@ void WeaveHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
                 ImGuiWindowFlags_NoSavedSettings
             );
 
-            ImGui::InputInt("Face1", &handleLocation[0], 0, 0);
-            ImGui::InputInt("Field1", &handleLocation[1], 0, 0);
+            ImGui::InputInt("Handle Face", &handleLocation[0], 0, 0);
+            ImGui::InputInt("Handle Field", &handleLocation[1], 0, 0);
             ImGui::InputDouble("P0", &handleParams[0]);
             ImGui::InputDouble("P1", &handleParams[1]);
-            ImGui::InputInt("Face2", &handleLocation[2], 0, 0);
-            ImGui::InputInt("Field2", &handleLocation[3], 0, 0);
             ImGui::InputDouble("P2", &handleParams[2]);
-            ImGui::InputDouble("P3", &handleParams[3]);
-            ImGui::InputInt("Face3", &handleLocation[4], 0, 0);
-            ImGui::InputInt("Field3", &handleLocation[5], 0, 0);
-            ImGui::InputDouble("P4", &handleParams[4]);
-            ImGui::InputDouble("P5", &handleParams[5]);
+
+            if (ImGui::Button("Add Handle", ImVec2(-1, 0)))
+                addHandle();
+            if (ImGui::Button("Remove Handle", ImVec2(-1, 0)))
+                removeHandle();
 
             ImGui::End();
 
@@ -227,22 +225,22 @@ void WeaveHook::clear()
     cover = NULL;
     gui_mode = GUIMode_Enum::WEAVE;
     ls.clearHandles();
-    Handle h;
-    h.face = 0;
-    h.dir << 1, 0;
-    h.field = 2;
-    weave->addHandle(h);
-    ls.addHandle(h);
-    h.face = 0;
-    h.dir << 0, 1;
-    h.field = 1;
-    weave->addHandle(h);
-    ls.addHandle(h);
-    h.face = 0;
-    h.dir << 1, -1;
-    h.field = 0;
-    weave->addHandle(h);
-    ls.addHandle(h);
+    
+    for (int i = 0; i < fieldCount; i++)
+    {
+        Handle h;
+        h.face = 0;
+        Eigen::Vector3d handleVec(sin( ( 2 * 3.1415 * i) / fieldCount), cos( ( 2 * 3.1415 * i) / fieldCount), 0);
+        
+        Eigen::Matrix<double, 3, 2> B = weave->fs->data().Bs[h.face];
+        Eigen::Matrix<double, 2, 3> toBarys = (B.transpose()*B).inverse() * B.transpose();
+
+        h.dir = toBarys * handleVec;
+        h.field = i;
+        ls.addHandle(h);
+    }
+    weave->handles = ls.handles;
+
     curFaceEnergies = Eigen::MatrixXd::Zero(3, 3);
     selectedVertices.clear();
     renderSelectedVertices.clear();
@@ -294,6 +292,37 @@ void WeaveHook::resample()
     clear();  
 
     // Hacky... 
+    updateRenderGeometry();
+}
+
+void WeaveHook::addHandle()
+{
+    Handle h;
+    h.face = handleLocation[0];
+    h.face = h.face < weave->fs->nFaces() ? h.face : weave->fs->nFaces() - 1;
+
+    Eigen::Vector3d handleVec(handleParams[0], handleParams[1], handleParams[2]);
+    handleVec.normalize();
+    
+    Eigen::Matrix<double, 3, 2> B = weave->fs->data().Bs[h.face];
+    Eigen::Matrix<double, 2, 3> toBarys = (B.transpose()*B).inverse() * B.transpose();
+
+    h.dir = toBarys * handleVec;
+    h.field = handleLocation[1];
+    h.field = h.field < weave->fs->nFields() ? h.field : weave->fs->nFields() - 1;
+    std::cout << "Just added a handle to face: " << h.face << " field: " << h.field << " projected vector " << (weave->fs->data().Bs[h.face] * h.dir).transpose() << std::endl;
+
+    ls.addHandle(h);
+    weave->handles = ls.handles;
+    updateRenderGeometry();
+}
+
+void WeaveHook::removeHandle()
+{
+    if (ls.handles.size() > 0)
+        ls.handles.pop_back();
+    weave->handles = ls.handles;
+    std::cout << " There are now " << ls.handles.size() << " handles " << std::endl;
     updateRenderGeometry();
 }
 
@@ -802,8 +831,9 @@ void WeaveHook::updateRenderGeometry()
     baseLength = weave->fs->data().averageEdgeLength;
     curFaceEnergies = tempFaceEnergies;
 
-    // if (weave->handles.size() < 3)
-    //     weave->handles.resize(3);
+
+
+
     // ls.handles[0].face = handleLocation[0];
     // ls.handles[0].field = handleLocation[1];
     // ls.handles[0].dir(0) = handleParams(0);
@@ -817,16 +847,8 @@ void WeaveHook::updateRenderGeometry()
     // ls.handles[2].dir(0) = handleParams(4);
     // ls.handles[2].dir(1) = handleParams(5);
 
-    // // TODO CLEAN THIS UP!! 
-    // weave->handles[0].face = handleLocation[0];
-    // weave->handles[0].dir(0) = handleParams(0);
-    // weave->handles[0].dir(1) = handleParams(1);
-    // weave->handles[1].face = handleLocation[2];
-    // weave->handles[1].dir(0) = handleParams(2);
-    // weave->handles[1].dir(1) = handleParams(3);
-    // weave->handles[2].face = handleLocation[4];
-    // weave->handles[2].dir(0) = handleParams(4);
-    // weave->handles[2].dir(1) = handleParams(5);
+    // TODO: refactor, just used for rendering 
+    weave->handles = ls.handles;
 
     int tracesegs = 0;
     for (int i = 0; i < traces.nTraces(); i++)

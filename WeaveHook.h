@@ -64,14 +64,11 @@ public:
         targetResolution = 5000;
     
         fieldCount = 3;
-        handleLocation = Eigen::VectorXi::Zero(6);
-        handleParams = Eigen::VectorXd::Zero(6);
-        handleParams(0) = 0;
+        handleLocation = Eigen::VectorXi::Zero(2);
+        handleParams = Eigen::VectorXd::Zero(3);
+        handleParams(0) = 1;
         handleParams(1) = 1;
         handleParams(2) = 1;
-        handleParams(3) = 0;
-        handleParams(4) = 1;
-        handleParams(5) = -1;
 
         showCoverCuts = true;
         numISOLines = 0;
@@ -103,6 +100,8 @@ public:
     void resetCutSelection();
     void addCut();
     void resample();
+    void addHandle();
+    void removeHandle();
     void removeSingularities();
     void removePrevCut(); 
     void clearTraces();
