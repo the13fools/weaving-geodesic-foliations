@@ -17,6 +17,7 @@ void WeaveHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
 {
     ImGui::InputText("Mesh", meshName);
     ImGui::Combo("GUI Mode", (int *)&gui_mode, cover ? "Weave\0Cover\0\0" : "Weave\0\0");
+    ImGui::Combo("Solver Mode", (int *)&solver_mode, "Curl Free\0Dirchlet (Knoppel '13)\0\0");
 
     if (gui_mode == GUIMode_Enum::WEAVE)
     {
@@ -312,7 +313,18 @@ void WeaveHook::addHandle()
     h.field = h.field < weave->fs->nFields() ? h.field : weave->fs->nFields() - 1;
     std::cout << "Just added a handle to face: " << h.face << " field: " << h.field << " projected vector " << (weave->fs->data().Bs[h.face] * h.dir).transpose() << std::endl;
 
-    ls.addHandle(h);
+    bool toAdd = true;
+    for (int i = 0; i < ls.handles.size(); i++)
+    {
+        if (ls.handles[i].face == h.face && ls.handles[i].field == h.field)
+        {
+            ls.handles[i].dir = h.dir;
+            toAdd = false;
+        }
+    }
+    if (toAdd)
+        ls.addHandle(h);
+
     weave->handles = ls.handles;
     updateRenderGeometry();
 }
@@ -323,6 +335,7 @@ void WeaveHook::removeHandle()
         ls.handles.pop_back();
     weave->handles = ls.handles;
     std::cout << " There are now " << ls.handles.size() << " handles " << std::endl;
+    weave->handles = ls.handles;
     updateRenderGeometry();
 }
 
@@ -622,26 +635,29 @@ bool WeaveHook::simulateOneStep()
 
     int nfaces = weave->fs->data().F.rows();
     int nfields = weave->fs->nFields();
-    std::cout << "there are " << nfields << " fields " << std::endl;
-    double smoothingCoeff = 1000.;
 
-    Eigen::VectorXd primal = weave->fs->vectorFields.segment(0, 2*nfaces*nfields);
-    Eigen::VectorXd dual = weave->fs->vectorFields.segment(2*nfaces*nfields, 2*nfaces*nfields);
+    if ( solver_mode == Solver_Enum::CURLFREE )
+    {
+        Eigen::VectorXd primal = weave->fs->vectorFields.segment(0, 2*nfaces*nfields);
+        Eigen::VectorXd dual = weave->fs->vectorFields.segment(2*nfaces*nfields, 2*nfaces*nfields);
 
-   // ls.clearHandles();
- //   ls.buildDualMatrix(*weave, params, primal, dual);
-    
-    for (int i = 0; i < 10; i++)
-    {            
-        ls.updateDualVars_new(*weave, params, primal, dual);
-        ls.updatePrimalVars(*weave, params, primal, dual);
+     //   ls.buildDualMatrix(*weave, params, primal, dual);
+        
+        for (int i = 0; i < 10; i++)
+        {            
+            ls.updateDualVars_new(*weave, params, primal, dual);
+            ls.updatePrimalVars(*weave, params, primal, dual);
+        }
+        weave->fs->vectorFields.segment(0, 2*nfaces*nfields) = primal;
+        weave->fs->vectorFields.segment(2*nfaces*nfields, 2*nfaces*nfields) = dual;
     }
-    weave->fs->vectorFields.segment(0, 2*nfaces*nfields) = primal;
-    weave->fs->vectorFields.segment(2*nfaces*nfields, 2*nfaces*nfields) = dual;
-    std::cout << "ran a step" << std::endl;
+    else 
+    {
+        oneStep(*weave, params);
+        faceEnergies(*weave, params, tempFaceEnergies);
+    }
 
- //   oneStep(*weave, params);
- //   faceEnergies(*weave, params, tempFaceEnergies);
+    std::cout << "ran a step" << std::endl;
     return false;
 }
 
@@ -830,22 +846,6 @@ void WeaveHook::updateRenderGeometry()
     weave->createVisualizationCuts(cutPos1Weave, cutPos2Weave);
     baseLength = weave->fs->data().averageEdgeLength;
     curFaceEnergies = tempFaceEnergies;
-
-
-
-
-    // ls.handles[0].face = handleLocation[0];
-    // ls.handles[0].field = handleLocation[1];
-    // ls.handles[0].dir(0) = handleParams(0);
-    // ls.handles[0].dir(1) = handleParams(1);
-    // ls.handles[1].face = handleLocation[2];
-    // ls.handles[1].field = handleLocation[3] + 1;
-    // ls.handles[1].dir(0) = handleParams(2);
-    // ls.handles[1].dir(1) = handleParams(3);
-    // ls.handles[2].face = handleLocation[4];
-    // ls.handles[2].field = handleLocation[5]+ 2;
-    // ls.handles[2].dir(0) = handleParams(4);
-    // ls.handles[2].dir(1) = handleParams(5);
 
     // TODO: refactor, just used for rendering 
     weave->handles = ls.handles;

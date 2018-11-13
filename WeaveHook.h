@@ -33,12 +33,18 @@ enum GUIMode_Enum {
     COVER
 };
 
+enum Solver_Enum {
+    CURLFREE = 0,
+    SMOOTH
+};
+
 class WeaveHook : public PhysicsHook
 {
 public:
     WeaveHook() : PhysicsHook(), weave(NULL), cover(NULL), vectorScale(1.0), normalizeVectors(true)
     {
         gui_mode = GUIMode_Enum::WEAVE;
+        solver_mode = Solver_Enum::CURLFREE;
         weave_shading_state = WeaveShading_Enum::WS_NONE;
         cover_shading_state = CoverShading_Enum::CS_NONE;
         // meshName = "meshes/bunny_coarser.obj";
@@ -168,7 +174,7 @@ private:
     Eigen::MatrixXd renderQCover;
     Eigen::MatrixXi renderFCover;
     
-
+    Solver_Enum solver_mode;
     GUIMode_Enum gui_mode;
     WeaveShading_Enum weave_shading_state;
     CoverShading_Enum cover_shading_state;
