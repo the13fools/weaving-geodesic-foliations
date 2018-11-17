@@ -653,6 +653,9 @@ bool WeaveHook::simulateOneStep()
     }
     else 
     {
+        Eigen::VectorXd curField = weave->fs->vectorFields.segment(0, 2*nfaces*nfields);
+        weave->fs->vectorFields.setZero();
+        weave->fs->vectorFields.segment(0, 2*nfaces*nfields) = curField;
         oneStep(*weave, params);
         faceEnergies(*weave, params, tempFaceEnergies);
     }
