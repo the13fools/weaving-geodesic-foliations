@@ -214,7 +214,9 @@ void LinearSolver::updatePrimalVars(const Weave &weave, SolverParams params, Eig
 
     for (int i = 0; i < nhandles; i++)
     {
-        primalVars.segment<2>(2 * (handles[i].face * m + handles[i].field ) ) = handles[i].dir / handles[i].dir.norm();
+        Eigen::Matrix<double, 3, 2> B_f = weave.fs->data().Bs[handles[i].face];
+        Eigen::Vector3d ambient = B_f * handles[i].dir;
+        primalVars.segment<2>(2 * (handles[i].face * m + handles[i].field ) ) = handles[i].dir / ambient.norm();
     }
 
     for (int i = 0; i < nfaces; i++)
@@ -475,13 +477,17 @@ void LinearSolver::curlOperator(const Weave &weave, SolverParams params, Eigen::
                 Eigen::Vector2d vperm(0, 0);
                 Eigen::MatrixXi permut = weave.fs->Ps(e);
 
+                std::cout << permut << std::endl;
+
                 int adj_field = -1;
 
                 for (int field = 0; field < m; field++)
                 {
                     vperm += permut(i, field) * weave.fs->v(g, field);
                     if (permut(i, field) != 0) 
+                    {
                         adj_field = field;
+                    }
                 }
                 Eigen::Matrix<double, 3, 2> B_f = weave.fs->data().Bs[f];
                 Eigen::Matrix<double, 3, 2> B_g = weave.fs->data().Bs[g];
@@ -491,7 +497,7 @@ void LinearSolver::curlOperator(const Weave &weave, SolverParams params, Eigen::
                     for (int j = 0; j < 2; j++)
                     {
                         coeffs.push_back(Eigen::Triplet<double>(term, weave.fs->vidx(f, i) + j, (B_f.transpose() * edge)[j]));
-                        coeffs.push_back(Eigen::Triplet<double>(term, weave.fs->vidx(g, adj_field) + j, -(B_g.transpose() * edge)[j]));
+                        coeffs.push_back(Eigen::Triplet<double>(term, weave.fs->vidx(g, adj_field) + j, - permut(i, adj_field) * (B_g.transpose() * edge)[j]));
                     }
                 }
                 term++;
@@ -501,6 +507,7 @@ void LinearSolver::curlOperator(const Weave &weave, SolverParams params, Eigen::
 
     curlOp.resize(intedges*m, 2 * m * nfaces);
     curlOp.setFromTriplets(coeffs.begin(), coeffs.end());
+ //   curlOp.setZero();
 }
 
 // TODO: Steal this from prev version.
@@ -521,42 +528,90 @@ void LinearSolver::differentialOperator(const Weave &weave, SolverParams params,
             continue;
         for (int i = 0; i < m; i++)
         {
-            for (int side = 0; side < 1; side++)
+            for (int side = 0; side < 2; side++)
             {
                 int f = (side == 0 ? weave.fs->data().E(e, 0) : weave.fs->data().E(e, 1));
                 int g = (side == 0 ? weave.fs->data().E(e, 1) : weave.fs->data().E(e, 0));
+                Eigen::Matrix2d Jf = weave.fs->data().Js.block<2, 2>(2 * f, 0);
                 Eigen::Vector2d vif = weave.fs->v(f, i);
+                Eigen::Vector2d cdiff = weave.fs->data().cDiffs.row(2 * e + side);
                 Eigen::Vector2d vpermut(0, 0);
                 Eigen::MatrixXi permut = weave.fs->Ps(e);
                 if (side == 1)
                     permut.transposeInPlace();
-
-                int adj_field = -1;
                 for (int field = 0; field < m; field++)
                 {
                     vpermut += permut(i, field) * weave.fs->v(g, field);
-                    if (permut(i, field) != 0) 
-                        adj_field = field;
                 }
+                Eigen::Matrix2d Tgf = weave.fs->data().Ts.block<2, 2>(2 * e, 2 - 2 * side);
 
-                Eigen::Matrix<double, 3, 2> B_f = weave.fs->data().Bs[f];
-                Eigen::Matrix<double, 3, 2> B_g = weave.fs->data().Bs[g];
-
-                for (int coeff = 0; coeff < 3; coeff++)
+                for (int coeff = 0; coeff < 2; coeff++)
                 {
-                    if (params.edgeWeights(e) > 0.) 
+                    Eigen::Vector2d innervec(0, 0);
+                    innervec[coeff] = sqrt(params.edgeWeights(e));
+                    Eigen::Vector2d dE = innervec;
+                    for (int k = 0; k < 2; k++)
                     {
+                        coeffs.push_back(Eigen::Triplet<double>(term, weave.fs->vidx(f, i) + k, dE[k]));
+                    }
+                    for (int field = 0; field < m; field++)
+                    {
+                        dE = -permut(i, field) * Tgf.transpose() * innervec;
                         for (int k = 0; k < 2; k++)
                         {
-                            coeffs.push_back(Eigen::Triplet<double>(term, weave.fs->vidx(f, i) + k, B_f(coeff, k)));
-                            coeffs.push_back(Eigen::Triplet<double>(term, weave.fs->vidx(g, adj_field) + k, -B_g(coeff, k)));
+                            coeffs.push_back(Eigen::Triplet<double>(term, weave.fs->vidx(g, field) + k, dE[k]));
                         }
                     }
+
                     term++;
                 }
             }
         }
     }
+
+        // compatibility constraint
+    // for (int e = 0; e < nedges; e++)
+    // {
+    //     if(weave.fs->data().E(e,0) == -1 || weave.fs->data().E(e,1) == -1)
+    //         continue;
+    //     for (int i = 0; i < m; i++)
+    //     {
+    //         for (int side = 0; side < 1; side++)
+    //         {
+    //             int f = (side == 0 ? weave.fs->data().E(e, 0) : weave.fs->data().E(e, 1));
+    //             int g = (side == 0 ? weave.fs->data().E(e, 1) : weave.fs->data().E(e, 0));
+    //             Eigen::Vector2d vif = weave.fs->v(f, i);
+    //             Eigen::Vector2d vpermut(0, 0);
+    //             Eigen::MatrixXi permut = weave.fs->Ps(e);
+    //             if (side == 1)
+    //                 permut.transposeInPlace();
+
+    //             int adj_field = -1;
+    //             for (int field = 0; field < m; field++)
+    //             {
+    //                 vpermut += permut(i, field) * weave.fs->v(g, field);
+    //                 if (permut(i, field) != 0) 
+    //                     adj_field = field;
+    //             }
+
+    //             Eigen::Matrix<double, 3, 2> B_f = weave.fs->data().Bs[f];
+    //             Eigen::Matrix<double, 3, 2> B_g = weave.fs->data().Bs[g];
+
+    //             for (int coeff = 0; coeff < 3; coeff++)
+    //             {
+    //                 if (params.edgeWeights(e) > 0.) 
+    //                 {
+    //                     for (int k = 0; k < 2; k++)
+    //                     {
+    //                         coeffs.push_back(Eigen::Triplet<double>(term, weave.fs->vidx(f, i) + k, B_f(coeff, k)));
+    //                         coeffs.push_back(Eigen::Triplet<double>(term, weave.fs->vidx(g, adj_field) + k, -B_g(coeff, k)));
+    //                     }
+    //                 }
+    //                 term++;
+    //             }
+    //         }
+    //     }
+    // }
 
     // for (int e = 0; e < weave.fs->nEdges(); e++)
     // {
@@ -574,7 +629,7 @@ void LinearSolver::differentialOperator(const Weave &weave, SolverParams params,
     //     }
     // }
     int nfaces = weave.fs->data().F.rows();
-    D.resize(3 * intedges * m, 2*nfaces*m);
+    D.resize(4 * intedges * m, 2*nfaces*m);
     D.setFromTriplets(coeffs.begin(), coeffs.end());
 }
 
