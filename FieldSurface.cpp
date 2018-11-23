@@ -343,9 +343,12 @@ void FieldSurface::connectionEnergy(Eigen::VectorXd &energies)
             Eigen::Vector3d v1 = data().Bs[opp]*mappedvec;
             Eigen::Vector3d v2 = data().Bs[opp]*oppvec;
             Eigen::Vector3d n = faceNormal(opp);
-            double angle = 2.0 * atan2(v1.cross(v2).dot(n), v1.norm() * v2.norm() + v1.dot(v2));
-            energies[face] += facearea*fabs(angle);
-            energies[opp] += opparea*fabs(angle);
+         //   double angle = 2.0 * atan2(v1.cross(v2).dot(n), v1.norm() * v2.norm() + v1.dot(v2));
+            double angle = acos(v1.normalized().dot(v2.normalized()));
+            // energies[face] += facearea*fabs(angle);
+            // energies[opp] += opparea*fabs(angle);
+            energies[face] += fabs(angle);
+            energies[opp] +=  fabs(angle);
         }
     }
 }

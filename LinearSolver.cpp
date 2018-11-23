@@ -359,8 +359,8 @@ void LinearSolver::updateDualVars_new(const Weave &weave, SolverParams params, E
   //   Eigen::SPQR<Eigen::SparseMatrix<double> > solver(Full);
 
     Eigen::VectorXd rhs(matrixSize);
-    rhs.segment(0, 2*nfaces*m - 2*nhandles) = -t * P.transpose() * D.transpose() * D * primalVars;
-    rhs.segment(2*nfaces*m - 2*nhandles, intedges * m) = -curlOp * primalVars;
+    rhs.segment(0, 2*nfaces*m - 2*nhandles) = -t * P.transpose() * D.transpose() * D * (primalVars + dualVars);
+    rhs.segment(2*nfaces*m - 2*nhandles, intedges * m) = -curlOp * (primalVars + dualVars);
 
     // Eigen::VectorXd rhs(matrixSize);
     // rhs.setZero();
@@ -477,7 +477,7 @@ void LinearSolver::curlOperator(const Weave &weave, SolverParams params, Eigen::
                 Eigen::Vector2d vperm(0, 0);
                 Eigen::MatrixXi permut = weave.fs->Ps(e);
 
-                std::cout << permut << std::endl;
+      //          std::cout << permut << std::endl;
 
                 int adj_field = -1;
 

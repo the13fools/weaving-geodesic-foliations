@@ -420,7 +420,7 @@ void WeaveHook::setFaceColorsWeave(igl::opengl::glfw::Viewer &viewer)
     // if ( curFaceEnergies.rows() != faces && shading_state != NONE) { return ; }
     // cout << "fuck" << endl;
 
-    igl::ColorMapType viz_color = igl::COLOR_MAP_TYPE_MAGMA;
+    igl::ColorMapType viz_color = igl::COLOR_MAP_TYPE_PARULA;
 
     Eigen::VectorXd Z(faces);    
 
@@ -565,22 +565,37 @@ void WeaveHook::renderRenderGeometry(igl::opengl::glfw::Viewer &viewer)
     if (gui_mode == GUIMode_Enum::WEAVE)
     {
         viewer.data().set_mesh(renderQWeave, renderFWeave);
-        int edges = edgeSegsWeave.rows();
-        Eigen::MatrixXd renderPts(2 * edges, 3);
-        for (int i = 0; i < edges; i++)
+        int nfaces = weave->fs->nFaces();
+        int m = weave->fs->nFields();
+      //  int edges = edgeSegsWeave.rows();
+        Eigen::MatrixXd renderPts(4 * nfaces * m, 3);
+        for (int i = 0; i < nfaces * m; i++)
         {
             Eigen::Vector3d vec = edgeVecsWeave.row(i);
+            Eigen::Vector3d delta = edgeVecsWeave.row(i + nfaces * m);
             if (normalizeVectors)
             {
                 if (vec.norm() != 0.0)
+                {
                     vec *= baseLength / vec.norm() * sqrt(3.0) / 6.0 * 0.75;
+                    delta *= baseLength / vec.norm() * sqrt(3.0) / 6.0 * 0.75;
+                }
             }
-            renderPts.row(2 * i) = edgePtsWeave.row(i) - vectorScale*vec.transpose();
+        //    renderPts.row(2 * i) = edgePtsWeave.row(i) - vectorScale*vec.transpose();
+            renderPts.row(2 * i) = edgePtsWeave.row(i);
             renderPts.row(2 * i + 1) = edgePtsWeave.row(i) + vectorScale*vec.transpose();
+
+      //      renderPts.row(2 * i + edges/2) = edgePtsWeave.row(i);
+      //      renderPts.row(2 * i + 1 + edges/2) = edgePtsWeave.row(i) + vectorScale*delta.transpose();
+            renderPts.row(2 * i + nfaces * m * 2 ) = edgePtsWeave.row(i + nfaces * m) + vectorScale*vec.transpose();
+            renderPts.row(2 * i + 1 + nfaces * m * 2 ) = edgePtsWeave.row(i + nfaces * m) + vectorScale*vec.transpose() + vectorScale*delta.transpose();
+    //        std::cout << "delta" << i << " " << delta.transpose() << " " << vec.transpose() << std::endl;
         }
         if (!hideVectors)
         {
             viewer.data().set_edges(renderPts, edgeSegsWeave, edgeColorsWeave);
+     //       std::cout << renderPts.rows() << " " << edgeSegsWeave.rows() << " " << edgeColorsWeave.rows() << std::endl;
+     //                   std::cout << renderPts << " " << edgeSegsWeave << " " << edgeColorsWeave << std::endl;
         }
         setFaceColorsWeave(viewer);
         if(showTraces)
@@ -643,13 +658,14 @@ bool WeaveHook::simulateOneStep()
 
      //   ls.buildDualMatrix(*weave, params, primal, dual);
         
-        for (int i = 0; i < 10; i++)
+        for (int i = 0; i < 1; i++)
         {            
             ls.updateDualVars_new(*weave, params, primal, dual);
             ls.updatePrimalVars(*weave, params, primal, dual);
         }
         weave->fs->vectorFields.segment(0, 2*nfaces*nfields) = primal;
         weave->fs->vectorFields.segment(2*nfaces*nfields, 2*nfaces*nfields) = dual;
+ //       std::cout << dual << std::endl;
     }
     else 
     {

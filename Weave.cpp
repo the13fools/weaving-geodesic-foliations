@@ -95,11 +95,13 @@ void Weave::createVisualizationEdges(Eigen::MatrixXd &edgePts, Eigen::MatrixXd &
     // edgeVecs.setZero();
     // edgeSegs.resize(m*nfaces + nhandles, 2);
     // colors.resize(m*nfaces + nhandles, 3);
-    edgePts.resize(m*nfaces, 3);
-    edgeVecs.resize(m*nfaces, 3);
+    edgePts.resize(m*nfaces * 2, 3);
+    edgeVecs.resize(m*nfaces * 2, 3);
     edgeVecs.setZero();
-    edgeSegs.resize(m*nfaces, 2);
-    colors.resize(m*nfaces, 3);
+    edgeSegs.resize(m*nfaces * 2, 2);
+    colors.resize(m*nfaces * 2, 3);
+
+    Eigen::Vector3d deltacolor = Eigen::Vector3d(1,0,0);
     
     Eigen::MatrixXd fcolors(m, 3);
     for (int i = 0; i < m; i++)
@@ -120,8 +122,17 @@ void Weave::createVisualizationEdges(Eigen::MatrixXd &edgePts, Eigen::MatrixXd &
             edgeSegs(m*i + j, 0) = 2 * (m*i + j);
             edgeSegs(m*i + j, 1) = 2 * (m*i + j) + 1;
             colors.row(m*i + j) = fcolors.row(j);
+
+            edgePts.row(m*i + j + m*nfaces) = centroid;
+            edgeVecs.row(m*i + j + m*nfaces) = fs->data().Bs[i] * fs->beta(i, j); // this is actually delta now...
+      //      std::cout << edgeVecs.row(m*i + j + m*nfaces).norm() << std::endl;
+            edgeSegs(m*i + j + m*nfaces, 0) = 2 * (m*i + j) + 2*m*nfaces;
+            edgeSegs(m*i + j + m*nfaces, 1) = 2 * (m*i + j) + 1 + 2*m*nfaces;
+            colors.row(m*i + j + m*nfaces) = deltacolor;
         }
     }
+
+ //   std::cout <<  "edgeVecs" << edgeVecs << std::endl;
 
     for (int i = 0; i < nhandles; i++)
     {
