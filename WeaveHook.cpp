@@ -18,6 +18,11 @@ void WeaveHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
     ImGui::InputText("Mesh", meshName);
     ImGui::Combo("GUI Mode", (int *)&gui_mode, cover ? "Weave\0Cover\0\0" : "Weave\0\0");
     ImGui::Combo("Solver Mode", (int *)&solver_mode, "Curl Free\0Dirchlet (Knoppel '13)\0\0");
+    if (ImGui::Button("One Step", ImVec2(-1, 0)))
+    {
+        simulateOneStep();
+        updateRenderGeometry();
+    }
 
     if (gui_mode == GUIMode_Enum::WEAVE)
     {
@@ -27,6 +32,7 @@ void WeaveHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
             ImGui::Checkbox("Normalize Vectors", &normalizeVectors);
             ImGui::Checkbox("Hide Vectors", &hideVectors);
             ImGui::Checkbox("Wireframe", &wireframe);
+            ImGui::InputDouble("Handle Scale", &params.handleScale);
             ImGui::Combo("Shading", (int *)&weave_shading_state, "None\0F1 Energy\0F2 Energy\0F3 Energy\0Total Energy\0Connection\0\0");
             if (ImGui::Button("Normalize Fields", ImVec2(-1, 0)))
                 normalizeFields();
@@ -569,6 +575,7 @@ void WeaveHook::renderRenderGeometry(igl::opengl::glfw::Viewer &viewer)
         int m = weave->fs->nFields();
       //  int edges = edgeSegsWeave.rows();
         Eigen::MatrixXd renderPts(4 * nfaces * m, 3);
+        renderPts.setZero();
         for (int i = 0; i < nfaces * m; i++)
         {
             Eigen::Vector3d vec = edgeVecsWeave.row(i);
@@ -578,20 +585,28 @@ void WeaveHook::renderRenderGeometry(igl::opengl::glfw::Viewer &viewer)
                 if (vec.norm() != 0.0)
                 {
                     vec *= baseLength / vec.norm() * sqrt(3.0) / 6.0 * 0.75;
-                    delta *= baseLength / vec.norm() * sqrt(3.0) / 6.0 * 0.75;
+                    delta *= baseLength / delta.norm() * sqrt(3.0) / 6.0 * 0.75;
                 }
             }
         //    renderPts.row(2 * i) = edgePtsWeave.row(i) - vectorScale*vec.transpose();
-            renderPts.row(2 * i) = edgePtsWeave.row(i);
-            renderPts.row(2 * i + 1) = edgePtsWeave.row(i) + vectorScale*vec.transpose();
+            if (!hideVectors)
+            {
+                renderPts.row(2 * i) = edgePtsWeave.row(i);
+                renderPts.row(2 * i + 1) = edgePtsWeave.row(i) + vectorScale*vec.transpose();
+            }
+            else 
+            {
+                renderPts.row(2 * i + nfaces * m * 2 ) = edgePtsWeave.row(i + nfaces * m);
+                renderPts.row(2 * i + 1 + nfaces * m * 2 ) = edgePtsWeave.row(i + nfaces * m) + vectorScale*vec.transpose() + vectorScale*delta.transpose();
+            }
 
       //      renderPts.row(2 * i + edges/2) = edgePtsWeave.row(i);
       //      renderPts.row(2 * i + 1 + edges/2) = edgePtsWeave.row(i) + vectorScale*delta.transpose();
-            renderPts.row(2 * i + nfaces * m * 2 ) = edgePtsWeave.row(i + nfaces * m) + vectorScale*vec.transpose();
-            renderPts.row(2 * i + 1 + nfaces * m * 2 ) = edgePtsWeave.row(i + nfaces * m) + vectorScale*vec.transpose() + vectorScale*delta.transpose();
+            // renderPts.row(2 * i + nfaces * m * 2 ) = edgePtsWeave.row(i + nfaces * m) + vectorScale*vec.transpose();
+            // renderPts.row(2 * i + 1 + nfaces * m * 2 ) = edgePtsWeave.row(i + nfaces * m) + vectorScale*vec.transpose() + vectorScale*delta.transpose();
     //        std::cout << "delta" << i << " " << delta.transpose() << " " << vec.transpose() << std::endl;
         }
-        if (!hideVectors)
+   //     if (!hideVectors)
         {
             viewer.data().set_edges(renderPts, edgeSegsWeave, edgeColorsWeave);
      //       std::cout << renderPts.rows() << " " << edgeSegsWeave.rows() << " " << edgeColorsWeave.rows() << std::endl;
@@ -665,7 +680,9 @@ bool WeaveHook::simulateOneStep()
         }
         weave->fs->vectorFields.segment(0, 2*nfaces*nfields) = primal;
         weave->fs->vectorFields.segment(2*nfaces*nfields, 2*nfaces*nfields) = dual;
- //       std::cout << dual << std::endl;
+ //       std::cout << primal.transpose()<< std::endl << primal.norm() << std::endl<< std::endl;
+  //      std::cout << dual.transpose() << std::endl <<dual.norm() << std::endl<< std::endl;
+        std::cout << "primal norm " << primal.norm() << " dual norm " <<dual.norm() <<  std::endl;
     }
     else 
     {

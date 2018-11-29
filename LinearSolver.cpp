@@ -212,13 +212,6 @@ void LinearSolver::updatePrimalVars(const Weave &weave, SolverParams params, Eig
     // // Eigen::VectorXd newprim = solver.solve(rhs);
     // primalVars = P * primalVars + handlevals;
 
-    for (int i = 0; i < nhandles; i++)
-    {
-        Eigen::Matrix<double, 3, 2> B_f = weave.fs->data().Bs[handles[i].face];
-        Eigen::Vector3d ambient = B_f * handles[i].dir;
-        primalVars.segment<2>(2 * (handles[i].face * m + handles[i].field ) ) = handles[i].dir / ambient.norm();
-    }
-
     for (int i = 0; i < nfaces; i++)
     {
         for ( int cover = 0; cover < m; cover++)
@@ -228,6 +221,24 @@ void LinearSolver::updatePrimalVars(const Weave &weave, SolverParams params, Eig
             primalVars.segment<2>(2 * i * m + 2 * cover) /= ambient.norm();
             dualVars.segment<2>(2 * i * m + 2 * cover) -= primalVars.segment<2>(2 * i * m + 2 * cover);
         }
+    }
+
+    for (int i = 0; i < nhandles; i++)
+    {
+        // double scale = 0;
+        // for ( int n = 0; n < 3; n++)
+        // {
+        //     int neighbor = weave.fs->data().faceNeighbors(handles[i].face, n);
+        //     Eigen::Matrix<double, 3, 2> B_n = weave.fs->data().Bs[i];
+        //     Eigen::Vector3d ambient = B_n * primalVars.segment<2>(neighbor);
+        //     scale += ambient.norm();
+        // }
+        // if(!params.handleScale)
+        //     scale = 3.;
+        std::cout << params.handleScale << " scale " << std::endl;
+        Eigen::Matrix<double, 3, 2> B_f = weave.fs->data().Bs[handles[i].face];
+        Eigen::Vector3d ambient = B_f * handles[i].dir;
+        primalVars.segment<2>(2 * (handles[i].face * m + handles[i].field ) ) = handles[i].dir / ambient.norm() * params.handleScale;
     }
 
 
@@ -359,8 +370,8 @@ void LinearSolver::updateDualVars_new(const Weave &weave, SolverParams params, E
   //   Eigen::SPQR<Eigen::SparseMatrix<double> > solver(Full);
 
     Eigen::VectorXd rhs(matrixSize);
-    rhs.segment(0, 2*nfaces*m - 2*nhandles) = -t * P.transpose() * D.transpose() * D * (primalVars + dualVars);
-    rhs.segment(2*nfaces*m - 2*nhandles, intedges * m) = -curlOp * (primalVars + dualVars);
+    rhs.segment(0, 2*nfaces*m - 2*nhandles) = -t * P.transpose() * D.transpose() * D * (primalVars);
+    rhs.segment(2*nfaces*m - 2*nhandles, intedges * m) = -curlOp * (primalVars);
 
     // Eigen::VectorXd rhs(matrixSize);
     // rhs.setZero();
