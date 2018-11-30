@@ -67,9 +67,9 @@ public:
         showSingularities = false;
         wireframe = false;
 
-        targetResolution = 5000;
+        targetResolution = 1000;
     
-        fieldCount = 3;
+        fieldCount = 1;
         handleLocation = Eigen::VectorXi::Zero(2);
         handleParams = Eigen::VectorXd::Zero(3);
         handleParams(0) = 1;
