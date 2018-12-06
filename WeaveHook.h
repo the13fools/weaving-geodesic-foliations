@@ -55,6 +55,7 @@ public:
         exportPrefix = "export/example";
         params.lambdacompat = 100;
         params.lambdareg = 1e-3;
+        params.softHandleConstraint = true;
 
      //   ls = new LinearSolver();
 
@@ -64,6 +65,7 @@ public:
         traceFaceId = 0;
         
         hideVectors = false;
+        showDelta = true;
         showSingularities = false;
         wireframe = false;
 
@@ -168,6 +170,7 @@ private:
     std::vector<Eigen::Vector3d> renderSelectedVertices; // teal selected vertex spheres
     bool normalizeVectors;
     bool hideVectors;
+    bool showDelta;
     bool showCoverCuts;
     bool wireframe;
 

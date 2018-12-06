@@ -115,10 +115,10 @@ void LinearSolver::clearHandles()
 //     }
 // }
 
-static void identityMatrix(int k, int n, Eigen::SparseMatrix<double> &I)
+static void identityMatrix(int n, Eigen::SparseMatrix<double> &I)
 {
     std::vector<Eigen::Triplet<double> > coeffs;
-    for (int i = 0; i < k; i++)
+    for (int i = 0; i < n; i++)
     {
         coeffs.push_back(Eigen::Triplet<double>(i, i, 1.0));
     }
@@ -223,25 +223,27 @@ void LinearSolver::updatePrimalVars(const Weave &weave, SolverParams params, Eig
         }
     }
 
-//     for (int i = 0; i < nhandles; i++)
-//     {
-//         // double scale = 0;
-//         // for ( int n = 0; n < 3; n++)
-//         // {
-//         //     int neighbor = weave.fs->data().faceNeighbors(handles[i].face, n);
-//         //     Eigen::Matrix<double, 3, 2> B_n = weave.fs->data().Bs[i];
-//         //     Eigen::Vector3d ambient = B_n * primalVars.segment<2>(neighbor);
-//         //     scale += ambient.norm();
-//         // }
-//         // if(!params.handleScale)
-//         //     scale = 3.;
-//         std::cout << params.handleScale << " scale " << std::endl;
-//         Eigen::Matrix<double, 3, 2> B_f = weave.fs->data().Bs[handles[i].face];
-//         Eigen::Vector3d ambient = B_f * handles[i].dir;
-// //        primalVars.segment<2>(2 * (handles[i].face * m + handles[i].field ) ) = handles[i].dir / ambient.norm() * params.handleScale;
-//         primalVars.segment<2>(2 * (handles[i].face * m + handles[i].field ) ) = handles[i].dir / ambient.norm();
-
-//     }
+    if ( params.softHandleConstraint ) 
+    {
+        for (int i = 0; i < nhandles; i++)
+        {
+            // double scale = 0;
+            // for ( int n = 0; n < 3; n++)
+            // {
+            //     int neighbor = weave.fs->data().faceNeighbors(handles[i].face, n);
+            //     Eigen::Matrix<double, 3, 2> B_n = weave.fs->data().Bs[i];
+            //     Eigen::Vector3d ambient = B_n * primalVars.segment<2>(neighbor);
+            //     scale += ambient.norm();
+            // }
+            // if(!params.handleScale)
+            //     scale = 3.;
+            std::cout << params.handleScale << " scale " << std::endl;
+            Eigen::Matrix<double, 3, 2> B_f = weave.fs->data().Bs[handles[i].face];
+            Eigen::Vector3d ambient = B_f * handles[i].dir;
+    //        primalVars.segment<2>(2 * (handles[i].face * m + handles[i].field ) ) = handles[i].dir / ambient.norm() * params.handleScale;
+            primalVars.segment<2>(2 * (handles[i].face * m + handles[i].field ) ) = handles[i].dir / ambient.norm();
+        }
+    }
 
 
     std::cout << "post-primal update ";
@@ -341,6 +343,11 @@ void LinearSolver::updateDualVars_new(const Weave &weave, SolverParams params, E
     // LL^T \lambda = Lv
     // delta = - L^T \lambda
 
+    int nfaces = weave.fs->data().F.rows();
+    int m = weave.fs->nFields();
+    int nhandles = handles.size();
+    int intedges = weave.fs->numInteriorEdges();
+
     Eigen::SparseMatrix<double> D;
     Eigen::SparseMatrix<double> H;
     Eigen::SparseMatrix<double> P;
@@ -352,12 +359,11 @@ void LinearSolver::updateDualVars_new(const Weave &weave, SolverParams params, E
     handleConstraintOperator(weave, params, H);
     unconstrainedProjection(weave, P);
 
-    curlOperator(weave, params, curlOp);
+    if ( params.softHandleConstraint )
+    identityMatrix(2*m*nfaces, P);
 
-    int nfaces = weave.fs->data().F.rows();
-    int m = weave.fs->nFields();
-    int nhandles = handles.size();
-    int intedges = weave.fs->numInteriorEdges();
+
+    curlOperator(weave, params, curlOp);
 
     int matrixSize = dualMatrixSize(weave);
 
@@ -375,9 +381,17 @@ void LinearSolver::updateDualVars_new(const Weave &weave, SolverParams params, E
 
   //   Eigen::SPQR<Eigen::SparseMatrix<double> > solver(Full);
 
+    int handleProject = 2*nhandles;
+    if (params.softHandleConstraint)
+        handleProject = 0;
+
     Eigen::VectorXd rhs(matrixSize);
-    rhs.segment(0, 2*nfaces*m ) = -t * P.transpose() * D.transpose() * D * (primalVars);
-    rhs.segment(2*nfaces*m, intedges * m + nhandles) = -curlOp * (primalVars);
+    rhs.setZero();
+    rhs.segment(0, 2*nfaces*m - handleProject ) = -t * P.transpose() * D.transpose() * D * (primalVars);
+    rhs.segment(2*nfaces*m - handleProject, intedges * m ) = -curlOp * (primalVars);
+
+    if ( params.softHandleConstraint )
+        rhs.segment(2*nfaces*m + intedges * m, nhandles) = -H * (primalVars);
 
     // Eigen::VectorXd rhs(matrixSize);
     // rhs.setZero();
@@ -390,10 +404,6 @@ void LinearSolver::updateDualVars_new(const Weave &weave, SolverParams params, E
     Eigen::SparseMatrix<double> C;
 
     curlOperator(weave, params, C);
-
-
-
-    massMatrix(weave, BTB);
 
     std::vector<Eigen::Triplet<double> > dualCoeffs;
 
@@ -410,7 +420,7 @@ void LinearSolver::updateDualVars_new(const Weave &weave, SolverParams params, E
     {
         for (Eigen::SparseMatrix<double>::InnerIterator it(CP,k); it; ++it)
         {
-            dualCoeffs.push_back(Eigen::Triplet<double>(it.row() + 2*m*nfaces, it.col(), it.value()));
+            dualCoeffs.push_back(Eigen::Triplet<double>(it.row() + 2*m*nfaces - handleProject, it.col(), it.value()));
         }
     }
 
@@ -419,14 +429,36 @@ void LinearSolver::updateDualVars_new(const Weave &weave, SolverParams params, E
     {
         for (Eigen::SparseMatrix<double>::InnerIterator it(CPT,k); it; ++it)
         {
-            dualCoeffs.push_back(Eigen::Triplet<double>(it.row(), it.col() + 2*m*nfaces, it.value()));
+            dualCoeffs.push_back(Eigen::Triplet<double>(it.row(), it.col() + 2*m*nfaces - handleProject, it.value()));
         }
     }
+
+    if (params.softHandleConstraint)
+    {
+        for (int k=0; k<H.outerSize(); ++k)
+        {
+            for (Eigen::SparseMatrix<double>::InnerIterator it(H,k); it; ++it)
+            {
+                dualCoeffs.push_back(Eigen::Triplet<double>(it.row() + 2*m*nfaces + intedges * m, it.col(), it.value()));
+            }
+        }
+
+        Eigen::SparseMatrix<double> HT = Eigen::SparseMatrix<double>(H.transpose());
+        for (int k=0; k<HT.outerSize(); ++k)
+        {
+            for (Eigen::SparseMatrix<double>::InnerIterator it(HT,k); it; ++it)
+            {
+                dualCoeffs.push_back(Eigen::Triplet<double>(it.row(), it.col() + 2*m*nfaces + intedges * m, it.value()));
+            }
+        }
+    }
+
     Eigen::SparseMatrix<double> dualMat;
     dualMat.resize(matrixSize, matrixSize);
     dualMat.setFromTriplets(dualCoeffs.begin(), dualCoeffs.end());
 
     std::cout << matrixSize << " matrix size " << std::endl;
+ //   std::cout << params.softHandleConstraint << " soft constraint " << std::endl;
 
     Eigen::SPQR<Eigen::SparseMatrix<double> > solver(dualMat);
 
@@ -474,7 +506,7 @@ void LinearSolver::curlOperator(const Weave &weave, SolverParams params, Eigen::
     int intedges = weave.fs->numInteriorEdges();
     int m = weave.fs->nFields();
     int nfaces = weave.fs->data().F.rows();
-  //  int nhandles = handles.size();
+    int nhandles = handles.size();
 
     int term = 0;
 
@@ -521,12 +553,49 @@ void LinearSolver::curlOperator(const Weave &weave, SolverParams params, Eigen::
         }
     }
 
+    curlOp.resize(intedges*m, 2 * m * nfaces);
+    curlOp.setFromTriplets(coeffs.begin(), coeffs.end());
+ //   curlOp.setZero();
+}
+
+// void LinearSolver::handleConstraintOperator(const Weave &weave, SolverParams params, Eigen::SparseMatrix<double> &H)
+// {
+//     std::vector<Eigen::Triplet<double> > coeffs;
+//     int nedges = weave.fs->data().E.rows();
+//     int intedges = weave.fs->numInteriorEdges();
+//     int nhandles = handles.size();
+//     int m = weave.fs->nFields();
+//     for (int i = 0; i < nhandles; i++)
+//     {
+//         int f = handles[i].face;
+//         Eigen::Matrix2d Jf = weave.fs->data().Js.block<2, 2>(2 * f, 0);
+//         Eigen::Vector2d dir = Jf * handles[i].dir;
+//         int idx = 2 * (handles[i].face * m + handles[i].field);
+//         coeffs.push_back(Eigen::Triplet<double>(idx, idx, dir(0)));
+//         coeffs.push_back(Eigen::Triplet<double>(idx, idx + 1, dir(1)));
+//         coeffs.push_back(Eigen::Triplet<double>(idx + 1, idx, dir(0)));
+//         coeffs.push_back(Eigen::Triplet<double>(idx + 1, idx + 1, dir(1)));
+//         std::cout << "idx " << idx << " dir " << dir.transpose() << std::endl;
+//     }
+//     int nfaces = weave.fs->data().F.rows();
+//     H.resize(2*nfaces*m,2*nfaces*m);
+//     H.setFromTriplets(coeffs.begin(), coeffs.end());
+// }
+void LinearSolver::handleConstraintOperator(const Weave &weave, SolverParams params, Eigen::SparseMatrix<double> &H)
+{
+    int m = weave.fs->nFields();
+    int nfaces = weave.fs->data().F.rows();
     int nhandles = handles.size();
+    std::vector<Eigen::Triplet<double> > coeffs;
+    int term = 0;
     for (int i = 0; i < nhandles; i++)
     {
         int f = handles[i].face;
         Eigen::Matrix2d Jf = weave.fs->data().Js.block<2, 2>(2 * f, 0);
-        Eigen::Vector2d dir = Jf * handles[i].dir;
+        double area = weave.fs->faceArea(f);
+        Eigen::Matrix2d BTB = weave.fs->data().Bs[f].transpose() * weave.fs->data().Bs[f];
+
+        Eigen::Vector2d dir = (Jf * handles[i].dir).transpose() * BTB;
         int idx = 2 * (handles[i].face * m + handles[i].field);
         coeffs.push_back(Eigen::Triplet<double>(term, idx, dir(0)));
         coeffs.push_back(Eigen::Triplet<double>(term, idx + 1, dir(1)));
@@ -534,35 +603,7 @@ void LinearSolver::curlOperator(const Weave &weave, SolverParams params, Eigen::
 
         term++;
     }
-
-
-    curlOp.resize(intedges*m + nhandles, 2 * m * nfaces);
-    curlOp.setFromTriplets(coeffs.begin(), coeffs.end());
- //   curlOp.setZero();
-}
-
-
-void LinearSolver::handleConstraintOperator(const Weave &weave, SolverParams params, Eigen::SparseMatrix<double> &H)
-{
-    std::vector<Eigen::Triplet<double> > coeffs;
-    int nedges = weave.fs->data().E.rows();
-    int intedges = weave.fs->numInteriorEdges();
-    int nhandles = handles.size();
-    int m = weave.fs->nFields();
-    for (int i = 0; i < nhandles; i++)
-    {
-        int f = handles[i].face;
-        Eigen::Matrix2d Jf = weave.fs->data().Js.block<2, 2>(2 * f, 0);
-        Eigen::Vector2d dir = Jf * handles[i].dir;
-        int idx = 2 * (handles[i].face * m + handles[i].field);
-        coeffs.push_back(Eigen::Triplet<double>(idx, idx, dir(0)));
-        coeffs.push_back(Eigen::Triplet<double>(idx, idx + 1, dir(1)));
-        coeffs.push_back(Eigen::Triplet<double>(idx + 1, idx, dir(0)));
-        coeffs.push_back(Eigen::Triplet<double>(idx + 1, idx + 1, dir(1)));
-        std::cout << "idx " << idx << " dir " << dir.transpose() << std::endl;
-    }
-    int nfaces = weave.fs->data().F.rows();
-    H.resize(2*nfaces*m,2*nfaces*m);
+    H.resize(nhandles, 2 * m * nfaces);
     H.setFromTriplets(coeffs.begin(), coeffs.end());
 }
 
@@ -747,15 +788,15 @@ void LinearSolver::unconstrainedProjection(const Weave &weave, Eigen::SparseMatr
     int col = 0;
     for (int i = 0; i < nfaces * m; i++)
     {
-   //     if (handlefaces.count(i))
-   //         continue;
+        if (handlefaces.count(i))
+            continue;
         Vcoeffs.push_back(Eigen::Triplet<double>(2 * i, col, 1.0));
         Vcoeffs.push_back(Eigen::Triplet<double>(2 * i + 1, col + 1, 1.0));
         col += 2;
     }
- //   assert(col == 2*nfaces*m - 2*nhandles);
- //   proj.resize(2*nfaces*m, 2*nfaces * m-2*nhandles);
-    proj.resize(2*nfaces*m, 2*nfaces * m);
+    assert(col == 2*nfaces*m - 2*nhandles);
+    proj.resize(2*nfaces*m, 2*nfaces*m-2*nhandles);
+ //   proj.resize(2*nfaces*m, 2*nfaces * m);
 
     proj.setFromTriplets(Vcoeffs.begin(), Vcoeffs.end());
 

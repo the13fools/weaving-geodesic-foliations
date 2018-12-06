@@ -95,13 +95,16 @@ void Weave::createVisualizationEdges(Eigen::MatrixXd &edgePts, Eigen::MatrixXd &
     // edgeVecs.setZero();
     // edgeSegs.resize(m*nfaces + nhandles, 2);
     // colors.resize(m*nfaces + nhandles, 3);
-    edgePts.resize(m*nfaces * 2, 3);
-    edgeVecs.resize(m*nfaces * 2, 3);
+    edgePts.resize(m*nfaces * 2 + nhandles, 3);
+    edgePts.setZero();
+    edgeVecs.resize(m*nfaces * 2 + nhandles, 3);
     edgeVecs.setZero();
-    edgeSegs.resize(m*nfaces * 2, 2);
-    colors.resize(m*nfaces * 2, 3);
+    edgeSegs.resize(m*nfaces * 2 + nhandles, 2);
+    edgeSegs.setZero();
+    colors.resize(m*nfaces * 2 + nhandles, 3);
 
     Eigen::Vector3d deltacolor = Eigen::Vector3d(1,0,0);
+    Eigen::VectorXd dual = fs->vectorFields.segment(2*nfaces*m, 2*nfaces*m);
     
     Eigen::MatrixXd fcolors(m, 3);
     for (int i = 0; i < m; i++)
@@ -124,7 +127,8 @@ void Weave::createVisualizationEdges(Eigen::MatrixXd &edgePts, Eigen::MatrixXd &
             colors.row(m*i + j) = fcolors.row(j);
 
             edgePts.row(m*i + j + m*nfaces) = centroid;
-            edgeVecs.row(m*i + j + m*nfaces) = fs->data().Bs[i] * fs->beta(i, j); // this is actually delta now...
+            edgeVecs.row(m*i + j + m*nfaces) = fs->data().Bs[i] * dual.segment<2>(m*i + j);
+       //     edgeVecs.row(m*i + j + m*nfaces) = fs->data().Bs[i] * fs->beta(i, j); // this is actually delta now...
       //      std::cout << edgeVecs.row(m*i + j + m*nfaces).norm() << std::endl;
             edgeSegs(m*i + j + m*nfaces, 0) = 2 * (m*i + j) + 2*m*nfaces;
             edgeSegs(m*i + j + m*nfaces, 1) = 2 * (m*i + j) + 1 + 2*m*nfaces;
@@ -142,11 +146,12 @@ void Weave::createVisualizationEdges(Eigen::MatrixXd &edgePts, Eigen::MatrixXd &
             centroid += fs->data().V.row(fs->data().F(handles[i].face, j));
         centroid /= 3.0;
 
-        // Eigen::Vector3d white(1, 1, 1);
-        // edgePts.row(m*nfaces + i) = centroid;
-        // edgeVecs.row(m*nfaces + i) = fs->data().Bs[handles[i].face] * handles[i].dir;
-        // edgeSegs(m*nfaces + i, 0) = 2 * m*nfaces + 2 * i;
-        // edgeSegs(m*nfaces + i, 1) = 2 * m*nfaces + 2 * i + 1;
+//      Eigen::Vector3d white(1, 1, 1);
+        // edgePts.row(2*m*nfaces + i) = centroid;
+        // edgeVecs.row(2*m*nfaces + i) = fs->data().Bs[handles[i].face] * handles[i].dir;
+        // edgeSegs(2*m*nfaces + i, 0) = 2 * m*nfaces + 2 * i;
+        // edgeSegs(2*m*nfaces + i, 1) = 2 * m*nfaces + 2 * i + 1;
+        // colors.row(2*m*nfaces + i).setConstant(1.0);
 
         int face = handles[i].face;
         int field = handles[i].field;

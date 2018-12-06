@@ -27,7 +27,7 @@ public:
     // void generateHarmonicField(Eigen::VectorXd &primalVars, Eigen::VectorXd &dualVars);
  //   void handleConstraintOperator(const Weave &weave, Eigen::VectorXd &primalVars, Eigen::SparseMatrix<double> &H);
     void handleConstraintOperator(const Weave &weave, SolverParams params, Eigen::SparseMatrix<double> &H);
-
+    
     void curlOperator(const Weave &weave, SolverParams params, Eigen::SparseMatrix<double> &curlOp);
     void differentialOperator(const Weave &weave, SolverParams params, Eigen::SparseMatrix<double> &D);
     void unconstrainedProjection(const Weave &weave, Eigen::SparseMatrix<double> &proj);

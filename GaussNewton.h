@@ -12,6 +12,7 @@ struct SolverParams
     double lambdareg;    // Tilhonov regularization
     double curlreg; // Weight on the curl component of v
     double handleScale;
+    bool softHandleConstraint; // in the Linear Solver, controls the handle mode
     Eigen::VectorXd edgeWeights;
 };
 

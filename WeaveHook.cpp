@@ -18,6 +18,7 @@ void WeaveHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
     ImGui::InputText("Mesh", meshName);
     ImGui::Combo("GUI Mode", (int *)&gui_mode, cover ? "Weave\0Cover\0\0" : "Weave\0\0");
     ImGui::Combo("Solver Mode", (int *)&solver_mode, "Curl Free\0Dirchlet (Knoppel '13)\0\0");
+    ImGui::Checkbox("Soft Handle Constraint", &params.softHandleConstraint);
     if (ImGui::Button("One Step", ImVec2(-1, 0)))
     {
         simulateOneStep();
@@ -31,6 +32,7 @@ void WeaveHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
             ImGui::InputDouble("Vector Scale", &vectorScale);
             ImGui::Checkbox("Normalize Vectors", &normalizeVectors);
             ImGui::Checkbox("Hide Vectors", &hideVectors);
+            ImGui::Checkbox("Show Delta", &showDelta);
             ImGui::Checkbox("Wireframe", &wireframe);
             ImGui::InputDouble("Handle Scale", &params.handleScale);
             ImGui::Combo("Shading", (int *)&weave_shading_state, "None\0F1 Energy\0F2 Energy\0F3 Energy\0Total Energy\0Connection\0\0");
@@ -224,6 +226,8 @@ bool WeaveHook::mouseClicked(igl::opengl::glfw::Viewer &viewer, int button)
     }
     return false;
 }
+
+// TODO add handle reset functionality...
 
 void WeaveHook::clear()
 {
@@ -573,8 +577,9 @@ void WeaveHook::renderRenderGeometry(igl::opengl::glfw::Viewer &viewer)
         viewer.data().set_mesh(renderQWeave, renderFWeave);
         int nfaces = weave->fs->nFaces();
         int m = weave->fs->nFields();
+        int nhandles = weave->nHandles();
       //  int edges = edgeSegsWeave.rows();
-        Eigen::MatrixXd renderPts(4 * nfaces * m, 3);
+        Eigen::MatrixXd renderPts(4 * nfaces * m + 2*nhandles, 3);
         renderPts.setZero();
         for (int i = 0; i < nfaces * m; i++)
         {
@@ -597,14 +602,23 @@ void WeaveHook::renderRenderGeometry(igl::opengl::glfw::Viewer &viewer)
             else 
             {
                 renderPts.row(2 * i + nfaces * m * 2 ) = edgePtsWeave.row(i + nfaces * m);
-                renderPts.row(2 * i + 1 + nfaces * m * 2 ) = edgePtsWeave.row(i + nfaces * m) + vectorScale*vec.transpose() + vectorScale*delta.transpose();
+                renderPts.row(2 * i + 1 + nfaces * m * 2 ) = edgePtsWeave.row(i + nfaces * m) + vectorScale*delta.transpose();
+                if (!showDelta)
+                    renderPts.row(2 * i + 1 + nfaces * m * 2 ) += vectorScale*vec.transpose();
             }
 
       //      renderPts.row(2 * i + edges/2) = edgePtsWeave.row(i);
       //      renderPts.row(2 * i + 1 + edges/2) = edgePtsWeave.row(i) + vectorScale*delta.transpose();
             // renderPts.row(2 * i + nfaces * m * 2 ) = edgePtsWeave.row(i + nfaces * m) + vectorScale*vec.transpose();
             // renderPts.row(2 * i + 1 + nfaces * m * 2 ) = edgePtsWeave.row(i + nfaces * m) + vectorScale*vec.transpose() + vectorScale*delta.transpose();
-    //        std::cout << "delta" << i << " " << delta.transpose() << " " << vec.transpose() << std::endl;
+      //      std::cout << "delta " << i << " " << delta.transpose() << " norm " << delta.norm() << std::endl << "     vec " << vec.transpose() << " norm " << vec.norm() << std::endl;
+        }
+        for (int i = 0; i < nhandles; i++)
+        {
+            Eigen::Vector3d vec = edgeVecsWeave.row(2*m*nfaces + i);
+            vec *= baseLength / vec.norm() * sqrt(3.0) / 6.0 * 0.75;
+            renderPts.row(4*m*nfaces + 2 * i) = edgePtsWeave.row(2*m*nfaces + i);
+            renderPts.row(4*m*nfaces + 2 * i + 1) = edgePtsWeave.row(2*m*nfaces + i) + vectorScale*vec.transpose();
         }
    //     if (!hideVectors)
         {
