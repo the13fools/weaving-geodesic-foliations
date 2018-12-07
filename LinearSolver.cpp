@@ -223,7 +223,7 @@ void LinearSolver::updatePrimalVars(const Weave &weave, SolverParams params, Eig
         }
     }
 
-    if ( params.softHandleConstraint ) 
+    if ( !params.softHandleConstraint ) 
     {
         for (int i = 0; i < nhandles; i++)
         {
@@ -237,7 +237,7 @@ void LinearSolver::updatePrimalVars(const Weave &weave, SolverParams params, Eig
             // }
             // if(!params.handleScale)
             //     scale = 3.;
-            std::cout << params.handleScale << " scale " << std::endl;
+       //     std::cout << params.handleScale << " scale " << std::endl;
             Eigen::Matrix<double, 3, 2> B_f = weave.fs->data().Bs[handles[i].face];
             Eigen::Vector3d ambient = B_f * handles[i].dir;
     //        primalVars.segment<2>(2 * (handles[i].face * m + handles[i].field ) ) = handles[i].dir / ambient.norm() * params.handleScale;
