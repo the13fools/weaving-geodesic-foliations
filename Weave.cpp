@@ -146,20 +146,20 @@ void Weave::createVisualizationEdges(Eigen::MatrixXd &edgePts, Eigen::MatrixXd &
             centroid += fs->data().V.row(fs->data().F(handles[i].face, j));
         centroid /= 3.0;
 
-//      Eigen::Vector3d white(1, 1, 1);
-        // edgePts.row(2*m*nfaces + i) = centroid;
-        // edgeVecs.row(2*m*nfaces + i) = fs->data().Bs[handles[i].face] * handles[i].dir;
-        // edgeSegs(2*m*nfaces + i, 0) = 2 * m*nfaces + 2 * i;
-        // edgeSegs(2*m*nfaces + i, 1) = 2 * m*nfaces + 2 * i + 1;
-        // colors.row(2*m*nfaces + i).setConstant(1.0);
+        Eigen::Vector3d white(1, 1, 1);
+        edgePts.row(2*m*nfaces + i) = centroid;
+        edgeVecs.row(2*m*nfaces + i) = fs->data().Bs[handles[i].face] * handles[i].dir;
+        edgeSegs(2*m*nfaces + i, 0) = 4 * m*nfaces + 2 * i;
+        edgeSegs(2*m*nfaces + i, 1) = 4 * m*nfaces + 2 * i + 1;
+        colors.row(2*m*nfaces + i).setConstant(1.0);
 
-        int face = handles[i].face;
-        int field = handles[i].field;
-        edgePts.row(m*face + field) = centroid;
-        edgeVecs.row(m*face + field) = fs->data().Bs[handles[i].face] * handles[i].dir;
-        edgeSegs(m*face + field, 0) = 2 * m*face + 2 * field;
-        edgeSegs(m*face + field, 1) = 2 * m*face + 2 * field + 1;
-        colors.row(m*face + field).setConstant(1.0);
+        // int face = handles[i].face;
+        // int field = handles[i].field;
+        // edgePts.row(m*face + field) = centroid;
+        // edgeVecs.row(m*face + field) = fs->data().Bs[handles[i].face] * handles[i].dir;
+        // edgeSegs(m*face + field, 0) = 2 * m*face + 2 * field;
+        // edgeSegs(m*face + field, 1) = 2 * m*face + 2 * field + 1;
+        // colors.row(m*face + field).setConstant(1.0);
     }
 }
 

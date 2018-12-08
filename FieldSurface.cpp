@@ -312,14 +312,23 @@ FieldSurface *FieldSurface::deserialize(std::istream &is)
     return ret;
 }
 
+double FieldSurface::getGeodesicEnergy()
+{
+    Eigen::VectorXd temp;
+    connectionEnergy(temp, 0.);
+//    std::cout << temp << std::endl;
+    return geodesicEnergy_;
+}
 
-void FieldSurface::connectionEnergy(Eigen::VectorXd &energies)
+void FieldSurface::connectionEnergy(Eigen::VectorXd &energies, double thresh)
 {
     energies.resize(nFaces());
     energies.setZero();
 
     int nedges = nEdges();
     int nfields = nFields();
+    geodesicEnergy_ = 0.;
+    double deltaNorm = 0.;
     for(int i=0; i<nedges; i++)
     {
         if(data().E(i,0) == -1 || data().E(i,1) == -1)
@@ -330,27 +339,47 @@ void FieldSurface::connectionEnergy(Eigen::VectorXd &energies)
         int opp = data().E(i,1);
         double opparea = faceArea(opp);
 
+        Eigen::Vector3d edgeVec = data().V.row(data().edgeVerts(i, 0)) - data().V.row(data().edgeVerts(i, 1));
+        edgeVec.normalize();
+
         for(int j=0; j<nfields; j++)
         {
             Eigen::Vector2d vec = v(face, j);
             Eigen::Vector2d oppvec(0,0);
             for(int k=0; k<nfields; k++)
-                oppvec += Ps_[i](j,k)*v(opp,k);
+                oppvec += Ps_[i](j,k)*(v(opp,k) + beta(opp,k));
             Eigen::Vector2d mappedvec = data().Ts.block<2,2>(2*i,0) * vec;
             // mappedvec and oppvec now both live on face opp.
             // compute the angle between them
 
-            Eigen::Vector3d v1 = data().Bs[opp]*mappedvec;
+            Eigen::Vector3d v1 = data().Bs[face]*(vec + beta(face,j));// data().Bs[opp]*mappedvec;
+            deltaNorm += ( data().Bs[face]*(beta(face,j)) ).norm();
+         //   v1.normalize();
             Eigen::Vector3d v2 = data().Bs[opp]*oppvec;
+         //   v2.normalize();
             Eigen::Vector3d n = faceNormal(opp);
+            double angle = v1.dot(edgeVec) - v2.dot(edgeVec);
+            if (fabs(angle) < thresh)
+                angle = 0.;
+            geodesicEnergy_ += fabs(angle);
+            if ( std::isnan(angle) )
+            {
+                std::cout << " v1 " << v1.transpose() << " v2 " << v2.transpose() <<  " edge " << edgeVec.transpose() << std::endl;
+        //        std::cout << " v1 " << v1.transpose() << " v2 " << v2.transpose() <<  " edge " << edgeVec.transpose() << std::endl;
+
+            }
+
+          //  angle = -sqrt(sqrt(angle*angle));
          //   double angle = 2.0 * atan2(v1.cross(v2).dot(n), v1.norm() * v2.norm() + v1.dot(v2));
-            double angle = acos(v1.normalized().dot(v2.normalized()));
+         //   double angle = acos(v1.normalized().dot(v2.normalized()));
             // energies[face] += facearea*fabs(angle);
             // energies[opp] += opparea*fabs(angle);
             energies[face] += fabs(angle);
             energies[opp] +=  fabs(angle);
         }
     }
+
+    std::cout << " delta norm " << deltaNorm << std::endl;
 }
 
 void FieldSurface::deleteVertex(int vid)

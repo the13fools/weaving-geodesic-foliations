@@ -373,7 +373,7 @@ void WeaveHook::setFaceColorsCover(igl::opengl::glfw::Viewer &viewer)
 
     if (cover_shading_state == CS_CONNECTION_ENERGY)
     {
-        cover->fs->connectionEnergy(Z);
+        cover->fs->connectionEnergy(Z, 0.);
     }
     
     if (cover_shading_state == CS_S_VAL)
@@ -459,7 +459,7 @@ void WeaveHook::setFaceColorsWeave(igl::opengl::glfw::Viewer &viewer)
 
     if (weave_shading_state == WS_CONNECTION_ENERGY)
     {
-        weave->fs->connectionEnergy(Z);
+        weave->fs->connectionEnergy(Z, params.curlreg); // TODO make real var
     }
 
     viewer.data().set_face_based(true);
@@ -623,7 +623,7 @@ void WeaveHook::renderRenderGeometry(igl::opengl::glfw::Viewer &viewer)
    //     if (!hideVectors)
         {
             viewer.data().set_edges(renderPts, edgeSegsWeave, edgeColorsWeave);
-     //       std::cout << renderPts.rows() << " " << edgeSegsWeave.rows() << " " << edgeColorsWeave.rows() << std::endl;
+   //         std::cout << renderPts.rows() << " " << edgeSegsWeave.rows() << " " << edgeColorsWeave.rows() << std::endl;
      //                   std::cout << renderPts << " " << edgeSegsWeave << " " << edgeColorsWeave << std::endl;
         }
         setFaceColorsWeave(viewer);
@@ -706,6 +706,7 @@ bool WeaveHook::simulateOneStep()
         oneStep(*weave, params);
         faceEnergies(*weave, params, tempFaceEnergies);
     }
+    std::cout << "Total Geodesic Energy" << weave->fs->getGeodesicEnergy() << std::endl;
 
     std::cout << "ran a step" << std::endl;
     return false;
