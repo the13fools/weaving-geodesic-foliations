@@ -336,7 +336,6 @@ void FieldSurface::connectionEnergy(Eigen::VectorXd &energies, double thresh, So
     {
         for (int e = 0; e < 3; e++)
         {
-            double vId = data().F(f, e);
             double sgn = 1.;
             int i = data().faceEdges(f, e);
 
@@ -359,16 +358,23 @@ void FieldSurface::connectionEnergy(Eigen::VectorXd &energies, double thresh, So
             assert(faceidx0 != -1);
             assert(faceidx1 != -1);
             if ( (faceidx0 + 1 ) % 3 != faceidx1 )
+            {  
+            //    std::cout << "sgn flip"<< f << std::endl;
                 sgn = -1.;
-       //     if ( ( data().F(f, (e + 1)%3 ) - vId ) * ( data().F(f, (e + 2)%3 ) - vId ) > 0. && ( data().F(f, (e + 2)%3 ) - vId ) > 0.)
-       //         sgn = -1.;
+            }
 
 
 
             int face = data().E(i,0);
-            double facearea = faceArea(face);
+       //     double facearea = faceArea(face);
             int opp = data().E(i,1);
-            double opparea = faceArea(opp);
+     //      double opparea = faceArea(opp);
+            if (f != face)
+            {
+                opp = face;
+                face = f;
+            }
+
 
             Eigen::Vector3d edgeVec = data().V.row(data().edgeVerts(i, 0)) - data().V.row(data().edgeVerts(i, 1));
             edgeVec.normalize();
@@ -380,7 +386,7 @@ void FieldSurface::connectionEnergy(Eigen::VectorXd &energies, double thresh, So
                 Eigen::Vector2d oppvec(0,0);
                 for(int k=0; k<nfields; k++)
                     oppvec += Ps_[i](j,k)*(vWeight * v(opp,k) + deltaWieght * beta(opp,k));
-                Eigen::Vector2d mappedvec = data().Ts.block<2,2>(2*i,0) * vec;
+   //             Eigen::Vector2d mappedvec = data().Ts.block<2,2>(2*i,0) * vec;
                 // mappedvec and oppvec now both live on face opp.
                 // compute the angle between them
 
@@ -396,10 +402,10 @@ void FieldSurface::connectionEnergy(Eigen::VectorXd &energies, double thresh, So
              //   v2.normalize();
                 Eigen::Vector3d n = faceNormal(opp);
                 double angle = v1.dot(edgeVec) - v2.dot(edgeVec);
-                if (angle < 0)
-                    angle = -1;
-                else 
-                    angle = 1;
+                // if (angle < 0)
+                //     angle = -1;
+                // else 
+                //     angle = 1;
 
                 if (fabs(angle) < thresh)
                     angle = 0.;
@@ -416,16 +422,35 @@ void FieldSurface::connectionEnergy(Eigen::VectorXd &energies, double thresh, So
              //   double angle = acos(v1.normalized().dot(v2.normalized()));
                 // energies[face] += facearea*fabs(angle);
                 // energies[opp] += opparea*fabs(angle);
-                energies[face] += angle;
-           //     energies[opp] +=  angle;
+                energies[f] += angle;
+            //    energies[face] += angle;
+            //    energies[opp] +=  angle;
             }
         }
     }
+    geodesicEnergy_ = 0;
+    Eigen::VectorXd smoothed_energies;
+    smoothed_energies.resize(nFaces());
+    smoothed_energies.setZero();
     for(int f=0; f<nfaces; f++)
     {
+        // for (int i = 0; i < 3; i++)
+        // {
+        //     smoothed_energies[f] += energies[data().faceNeighbors(f,i)];
+        // }
         // if (abs(energies[f]) < 3*nfields)
         //     energies[f] = 0;
+  //       std::cout << f << " " << energies[f] << std::endl;
+   //     energies[f] = abs(energies[f]);
+        if (params.vizShowCurlSign)
+            if (energies[f] < 0)
+                energies[f] = -1;
+            else 
+                energies[f] = 1;
+        geodesicEnergy_ += energies[f];
     }
+  //          energies = smoothed_energies;
+
  //   std::cout << " delta norm " << deltaNorm << std::endl;
 }
 

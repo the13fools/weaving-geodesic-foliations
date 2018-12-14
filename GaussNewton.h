@@ -16,6 +16,7 @@ struct SolverParams
     double vizVectorCurl; // in field surface, vizualization variable
     double vizCorrectionCurl; // in field surface, vizualization variable
     bool vizNormalizeVecs;
+    bool vizShowCurlSign; // round the viz to see the sign.
     bool disableCurlConstraint;
     Eigen::VectorXd edgeWeights;
 };

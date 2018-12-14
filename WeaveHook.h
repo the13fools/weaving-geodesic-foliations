@@ -61,6 +61,7 @@ public:
         params.vizVectorCurl = 1.; // in field surface, vizualization variable
         params.vizCorrectionCurl = 0. ; // in field surface, vizualization variable
         params.vizNormalizeVecs = false;
+        params.vizShowCurlSign = false;
 
      //   ls = new LinearSolver();
 

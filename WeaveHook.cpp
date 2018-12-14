@@ -50,6 +50,7 @@ void WeaveHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
             ImGui::InputDouble("vizVectorCurl", &params.vizVectorCurl);
             ImGui::InputDouble("vizCorrectionCurl", &params.vizCorrectionCurl);
             ImGui::Checkbox("Normalize Viz Vecs", &params.vizNormalizeVecs);
+            ImGui::Checkbox("Show Curl Sign", &params.vizShowCurlSign);
 
             if (ImGui::Button("Create Cover", ImVec2(-1, 0)))
                 augmentField();            
