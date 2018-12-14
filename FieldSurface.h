@@ -7,6 +7,8 @@
 #include <map>
 #include "Surface.h"
 
+#include "GaussNewton.h"
+
 /*
  * Surface on one of more families of vector fields live (with permutations mapping between the along edges).
  */
@@ -27,7 +29,7 @@ public:
     Eigen::Vector2d v(int face, int field) const;
     Eigen::Vector2d beta(int face, int field) const;
     double alpha(int face, int field) const;
-    double getGeodesicEnergy();
+    double getGeodesicEnergy(SolverParams params);
 
     const Eigen::MatrixXi Ps(int edge) const;
 
@@ -52,7 +54,7 @@ public:
     // compute an energy on each face that measures the failure of the vector fields on that face to parallel transport to the
     // equivalent vector on the neighboring faces, using the trivial connection between faces
     // each value will be in the range [0, 3*m*PI].
-    void connectionEnergy(Eigen::VectorXd &energies, double threshold);
+    void connectionEnergy(Eigen::VectorXd &energies, double threshold, SolverParams params);
 
 
     Eigen::VectorXd vectorFields;    // the vector fields, unrolled into a vector:

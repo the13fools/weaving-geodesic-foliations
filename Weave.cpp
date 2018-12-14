@@ -127,8 +127,8 @@ void Weave::createVisualizationEdges(Eigen::MatrixXd &edgePts, Eigen::MatrixXd &
             colors.row(m*i + j) = fcolors.row(j);
 
             edgePts.row(m*i + j + m*nfaces) = centroid;
-            edgeVecs.row(m*i + j + m*nfaces) = fs->data().Bs[i] * dual.segment<2>(m*i + j);
-       //     edgeVecs.row(m*i + j + m*nfaces) = fs->data().Bs[i] * fs->beta(i, j); // this is actually delta now...
+       //     edgeVecs.row(m*i + j + m*nfaces) = fs->data().Bs[i] * dual.segment<2>(m*i + j);
+            edgeVecs.row(m*i + j + m*nfaces) = fs->data().Bs[i] * fs->beta(i, j); // this is actually delta now...
       //      std::cout << edgeVecs.row(m*i + j + m*nfaces).norm() << std::endl;
             edgeSegs(m*i + j + m*nfaces, 0) = 2 * (m*i + j) + 2*m*nfaces;
             edgeSegs(m*i + j + m*nfaces, 1) = 2 * (m*i + j) + 1 + 2*m*nfaces;

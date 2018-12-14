@@ -19,6 +19,7 @@ void WeaveHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
     ImGui::Combo("GUI Mode", (int *)&gui_mode, cover ? "Weave\0Cover\0\0" : "Weave\0\0");
     ImGui::Combo("Solver Mode", (int *)&solver_mode, "Curl Free\0Dirchlet (Knoppel '13)\0\0");
     ImGui::Checkbox("Soft Handle Constraint", &params.softHandleConstraint);
+    ImGui::Checkbox("Disable Curl Constraint", &params.disableCurlConstraint);
     if (ImGui::Button("One Step", ImVec2(-1, 0)))
     {
         simulateOneStep();
@@ -44,7 +45,11 @@ void WeaveHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
         {
             ImGui::InputDouble("Compatilibity Lambda", &params.lambdacompat);
             ImGui::InputDouble("Tikhonov Reg", &params.lambdareg);
-            ImGui::InputDouble("V curl reg", &params.curlreg);
+            ImGui::InputDouble("Curl Viz Face threshold", &params.curlreg);
+
+            ImGui::InputDouble("vizVectorCurl", &params.vizVectorCurl);
+            ImGui::InputDouble("vizCorrectionCurl", &params.vizCorrectionCurl);
+            ImGui::Checkbox("Normalize Viz Vecs", &params.vizNormalizeVecs);
 
             if (ImGui::Button("Create Cover", ImVec2(-1, 0)))
                 augmentField();            
@@ -373,7 +378,7 @@ void WeaveHook::setFaceColorsCover(igl::opengl::glfw::Viewer &viewer)
 
     if (cover_shading_state == CS_CONNECTION_ENERGY)
     {
-        cover->fs->connectionEnergy(Z, 0.);
+        cover->fs->connectionEnergy(Z, 0., params);
     }
     
     if (cover_shading_state == CS_S_VAL)
@@ -459,7 +464,7 @@ void WeaveHook::setFaceColorsWeave(igl::opengl::glfw::Viewer &viewer)
 
     if (weave_shading_state == WS_CONNECTION_ENERGY)
     {
-        weave->fs->connectionEnergy(Z, params.curlreg); // TODO make real var
+        weave->fs->connectionEnergy(Z, params.curlreg, params); // TODO make real var
     }
 
     viewer.data().set_face_based(true);
@@ -599,7 +604,7 @@ void WeaveHook::renderRenderGeometry(igl::opengl::glfw::Viewer &viewer)
                 renderPts.row(2 * i) = edgePtsWeave.row(i);
                 renderPts.row(2 * i + 1) = edgePtsWeave.row(i) + vectorScale*vec.transpose();
             }
-            else 
+            if ( solver_mode == 0 )
             {
                 renderPts.row(2 * i + nfaces * m * 2 ) = edgePtsWeave.row(i + nfaces * m);
                 renderPts.row(2 * i + 1 + nfaces * m * 2 ) = edgePtsWeave.row(i + nfaces * m) + vectorScale*delta.transpose();
@@ -618,9 +623,9 @@ void WeaveHook::renderRenderGeometry(igl::opengl::glfw::Viewer &viewer)
             Eigen::Vector3d vec = edgeVecsWeave.row(2*m*nfaces + i);
             vec *= baseLength / vec.norm() * sqrt(3.0) / 6.0 * 0.75;
             renderPts.row(4*m*nfaces + 2 * i) = edgePtsWeave.row(2*m*nfaces + i);
-            renderPts.row(4*m*nfaces + 2 * i + 1) = edgePtsWeave.row(2*m*nfaces + i) + vectorScale*vec.transpose();
+            renderPts.row(4*m*nfaces + 2 * i + 1) = edgePtsWeave.row(2*m*nfaces + i) + 3.*vec.transpose();
         }
-   //     if (!hideVectors)
+        if (!hideVectors)
         {
             viewer.data().set_edges(renderPts, edgeSegsWeave, edgeColorsWeave);
    //         std::cout << renderPts.rows() << " " << edgeSegsWeave.rows() << " " << edgeColorsWeave.rows() << std::endl;
@@ -706,7 +711,7 @@ bool WeaveHook::simulateOneStep()
         oneStep(*weave, params);
         faceEnergies(*weave, params, tempFaceEnergies);
     }
-    std::cout << "Total Geodesic Energy" << weave->fs->getGeodesicEnergy() << std::endl;
+    std::cout << "Total Geodesic Energy" << weave->fs->getGeodesicEnergy(params) << std::endl;
 
     std::cout << "ran a step" << std::endl;
     return false;

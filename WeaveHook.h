@@ -56,6 +56,11 @@ public:
         params.lambdacompat = 100;
         params.lambdareg = 1e-3;
         params.softHandleConstraint = true;
+        params.disableCurlConstraint = false;
+
+        params.vizVectorCurl = 1.; // in field surface, vizualization variable
+        params.vizCorrectionCurl = 0. ; // in field surface, vizualization variable
+        params.vizNormalizeVecs = false;
 
      //   ls = new LinearSolver();
 

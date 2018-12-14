@@ -365,6 +365,11 @@ void LinearSolver::updateDualVars_new(const Weave &weave, SolverParams params, E
 
     curlOperator(weave, params, curlOp);
 
+    if (params.disableCurlConstraint)
+    {
+        curlOp.setZero();
+    }
+
     int matrixSize = dualMatrixSize(weave);
 
   // //  identityMatrix(2*nfaces*m, 2*nfaces*m + intedges*m, I);
@@ -401,9 +406,6 @@ void LinearSolver::updateDualVars_new(const Weave &weave, SolverParams params, E
     std::cout << rhs.size() << " rhs size " << std::endl;
 
 /////////////////////**********************************************************************************///////////////////////
-    Eigen::SparseMatrix<double> C;
-
-    curlOperator(weave, params, C);
 
     std::vector<Eigen::Triplet<double> > dualCoeffs;
 
@@ -415,7 +417,7 @@ void LinearSolver::updateDualVars_new(const Weave &weave, SolverParams params, E
         }
     }
 
-    Eigen::SparseMatrix<double> CP = (C*P);
+    Eigen::SparseMatrix<double> CP = (curlOp*P);
     for (int k=0; k<CP.outerSize(); ++k)
     {
         for (Eigen::SparseMatrix<double>::InnerIterator it(CP,k); it; ++it)
@@ -424,7 +426,7 @@ void LinearSolver::updateDualVars_new(const Weave &weave, SolverParams params, E
         }
     }
 
-    Eigen::SparseMatrix<double> CPT = Eigen::SparseMatrix<double>((C*P).transpose());
+    Eigen::SparseMatrix<double> CPT = Eigen::SparseMatrix<double>((curlOp*P).transpose());
     for (int k=0; k<CPT.outerSize(); ++k)
     {
         for (Eigen::SparseMatrix<double>::InnerIterator it(CPT,k); it; ++it)
