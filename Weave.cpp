@@ -17,6 +17,11 @@
 #include "Surface.h"
 #include "CoverMesh.h"
 
+#include <igl/writeOFF.h>
+#include <igl/rotate_vectors.h>
+#include <igl/local_basis.h>
+#include <igl/PI.h>
+
 Weave::Weave(const std::string &objname, int m)
 {
     Eigen::MatrixXd Vtmp;
@@ -31,9 +36,74 @@ Weave::Weave(const std::string &objname, int m)
         std::cerr << "Mesh must 3D" << std::endl;
         exit(-1);
     }
+    igl::readOFF("../meshes/anchor.off", Vtmp, Ftmp);
+    std::ifstream ifs("../meshes/anchor.ff");
+    Eigen::MatrixXd frames = deserializeFF(ifs);
+    m = 2;
+
     
     centerAndScale(Vtmp);
-    fs = new FieldSurface(Vtmp, Ftmp, m);       
+    fs = new FieldSurface(Vtmp, Ftmp, m); 
+
+    // Cross field
+    Eigen::MatrixXd X1,X2;
+    X1.resize(frames.rows()/2, 3);
+    for (int i = 0; i < frames.rows() / 2; i++)
+    {
+      X1.row(i) = frames.row(2*i);
+      X2.row(i) = frames.row(2*i + 1);
+    } 
+
+        // Find the orthogonal vector
+    Eigen::MatrixXd B1, B2, B3;
+    igl::local_basis(Vtmp, Ftmp, B1, B2, B3);
+    X2 = igl::rotate_vectors(X1, Eigen::VectorXd::Constant(1, igl::PI / 2), B1, B2);
+    X1 = igl::rotate_vectors(X2, Eigen::VectorXd::Constant(1, igl::PI / 2), B1, B2);
+
+
+
+
+    for (int i = 0; i < frames.rows() / 2; i++)
+    {
+      Eigen::Matrix2d BTB = fs->data().Bs[i].transpose() * fs->data().Bs[i];
+      fs->vectorFields.segment<2>(4*i) = BTB.inverse() * fs->data().Bs[i].transpose() * X1.row(i).transpose();
+      fs->vectorFields.segment<2>(4*i + 2) = BTB.inverse() * fs->data().Bs[i].transpose() * X2.row(i).transpose();
+      if (i % 100 == 0)
+      {
+      //  std::cout << i << "    \n" << basis << std::endl<< fs->vectorFields.segment<2>(4*i) << " bs "  << std::endl<< fs->data().Bs[i].transpose() << "  X1 "  << std::endl<<  X1.row(i).transpose() << std::endl;
+        std::cout << i << "    \n" << (X1.row(i).normalized()) << "\n back  "
+                       << " " << (fs->data().Bs[i] * fs->vectorFields.segment<2>(4*i)).normalized() << std::endl;
+
+        std::cout << fs->data().Bs[i].transpose() * fs->data().Bs[i] << std::endl;
+            std::cout << fs->data().Bs[i] * fs->data().Bs[i].transpose() << std::endl;
+      }
+    }
+    
+}
+
+Eigen::MatrixXd Weave::deserializeFF(std::istream &is)
+{
+    int rosy_count = 0;
+    int magic;
+    int nverts;
+
+    is >> magic;
+    is >> rosy_count;
+    nverts = magic;
+
+    std::cout << "rosy count " << rosy_count << "rows" << nverts << std::endl;
+    
+    Eigen::MatrixXd V(nverts, 3);
+    for (int i = 0; i < nverts; i++)
+    {
+        for (int j = 0; j < 3; j++)
+        {
+            double tmp;
+            is >> V(i, j);
+        }
+    }
+
+    return V;
 }
 
 Weave::Weave(Eigen::MatrixXd Vtmp, Eigen::MatrixXi Ftmp, int m)

@@ -51,6 +51,7 @@ public:
     void serialize(std::ostream &os);    
     void deserialize(std::istream &is);
     void deserializeOldRelaxFile(std::istream &is);
+    Eigen::MatrixXd deserializeFF(std::istream &is);
 
 private:
     // scale mesh to unit size

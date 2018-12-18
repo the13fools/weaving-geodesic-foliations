@@ -720,7 +720,8 @@ bool WeaveHook::simulateOneStep()
 
 void WeaveHook::reassignPermutations()
 {
-    int flipped = reassignCutPermutations(*weave);
+  //  int flipped = reassignCutPermutations(*weave);
+    int flipped = reassignAllPermutations(*weave);
     std::cout << flipped << " permutations changed" << std::endl;
     
     std::vector<int> topsingularities;
