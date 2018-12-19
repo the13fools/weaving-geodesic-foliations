@@ -62,9 +62,9 @@ public:
                                      // next 2m|F| entries: first beta vector on face 1, ...
                                      // next m|F| entries: first alpha on face 1, ...
     std::vector<Eigen::MatrixXi> Ps_; // for each edge i, maps indices from triangle E(i,1) to indices in triangle E(i,0), with sign. I.e. the vector on E(i,1) corresponding to vector j on E(i,0) is \sum_k Ps[i](j,k) v(E(i,1),k)
+    int nFields_;
 
 private:
-    int nFields_;
     double geodesicEnergy_;
     std::vector<bool> faceDeleted_;
 };

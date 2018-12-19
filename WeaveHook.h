@@ -48,7 +48,7 @@ public:
         weave_shading_state = WeaveShading_Enum::WS_NONE;
         cover_shading_state = CoverShading_Enum::CS_NONE;
         // meshName = "meshes/bunny_coarser.obj";
-        meshName = "meshes/tet.obj";
+        meshName = "../meshes/sphere_small_regular.obj";
         // vectorFieldName = "bunny_coarser_nosing";
         vectorFieldName = "tet.rlx";
         rodFilename = "example.rod";
@@ -56,7 +56,7 @@ public:
         params.lambdacompat = 100;
         params.lambdareg = 1e-3;
         params.softHandleConstraint = true;
-        params.disableCurlConstraint = false;
+        params.disableCurlConstraint = true;
 
         params.vizVectorCurl = 1.; // in field surface, vizualization variable
         params.vizCorrectionCurl = 0. ; // in field surface, vizualization variable
@@ -77,7 +77,7 @@ public:
 
         targetResolution = 1000;
     
-        fieldCount = 1;
+        fieldCount = 3;
         handleLocation = Eigen::VectorXi::Zero(2);
         handleParams = Eigen::VectorXd::Zero(3);
         handleParams(0) = 1;

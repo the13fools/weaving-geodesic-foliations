@@ -156,6 +156,8 @@ void Surface::buildGeometricStructures()
         Eigen::Vector3d n = (v1 - v0).cross(v2 - v0);
         n /= n.norm();
 
+    //    data_.Bs[i].col(1) = (v1 - v0).cross(n); // switch to orthogonal local coordinate system.
+
         Eigen::Matrix2d BTB = data_.Bs[i].transpose() * data_.Bs[i];
         Eigen::Matrix<double, 3, 2> ncrossB;
         ncrossB.col(0) = n.cross(v1 - v0);

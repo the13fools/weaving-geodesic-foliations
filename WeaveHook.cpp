@@ -11,6 +11,8 @@
 #include <igl/decimate.h>
 #include <igl/upsample.h>
 
+#include <igl/local_basis.h>
+
 using namespace std;
 
 void WeaveHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
@@ -688,18 +690,73 @@ bool WeaveHook::simulateOneStep()
 
     if ( solver_mode == Solver_Enum::CURLFREE )
     {
-        Eigen::VectorXd primal = weave->fs->vectorFields.segment(0, 2*nfaces*nfields);
-        Eigen::VectorXd dual = weave->fs->vectorFields.segment(2*nfaces*nfields, 2*nfaces*nfields);
+ //       Eigen::VectorXd primal = weave->fs->vectorFields.segment(0, 2*nfaces*nfields);
+ //       Eigen::VectorXd dual = weave->fs->vectorFields.segment(2*nfaces*nfields, 2*nfaces*nfields);
 
-     //   ls.buildDualMatrix(*weave, params, primal, dual);
-        
+     //   ls.buildDualMatrix(*weave, params, primal, dual); // add this precomputation...
+       
+
+        Eigen::MatrixXd B1, B2, B3;
+        igl::local_basis(weave->fs->data().V, weave->fs->data().F, B1, B2, B3); // cache this
+
+        weave->fs->nFields_ = 1; // HACK :(
+
+        // just work with representative vectors
+        Eigen::VectorXd primal = weave->fs->vectorFields.segment(0, 2*nfaces);
+        Eigen::VectorXd dual = weave->fs->vectorFields.segment(2*nfaces*nfields, 2*nfaces);
+
+        // rotate them to be representative vectors though.
+        for (int i = 0; i < nfaces; i++)
+        {
+            Eigen::MatrixXd B_f = weave->fs->data().Bs[i];
+            Eigen::Matrix2d BTB = B_f.transpose() * B_f;
+            Eigen::Vector3d ambient = B_f * weave->fs->vectorFields.segment<2>(6*i);
+      //      std::cout << ambient.norm() << " "; // should be 1.
+            ambient.normalize();
+
+            double angle = atan2(B2.row(i).dot(ambient), B1.row(i).dot(ambient));
+          //  angle *= 3;
+            Eigen::Vector3d rotated = cos(angle) * B1.row(i) + sin(angle) * B2.row(i);
+
+            primal.segment<2>(2*i) = BTB.inverse() * B_f.transpose() * rotated;
+      //      std::cout << (B_f * primal.segment<2>(2*i) ).norm() << " r ";
+        }
+
+  //      X2 = igl::rotate_vectors(X1, VectorXd::Constant(1, igl::PI / 2), B1, B2);
+
         for (int i = 0; i < 1; i++)
         {            
             ls.updateDualVars_new(*weave, params, primal, dual);
             ls.updatePrimalVars(*weave, params, primal, dual);
         }
-        weave->fs->vectorFields.segment(0, 2*nfaces*nfields) = primal;
-        weave->fs->vectorFields.segment(2*nfaces*nfields, 2*nfaces*nfields) = dual;
+
+        weave->fs->nFields_ = nfields; // UNDO HACK !!!
+
+        const double PI = 3.1415926535898;
+        for (int i = 0; i < nfaces; i++)
+        {
+            Eigen::MatrixXd B_f = weave->fs->data().Bs[i];
+            Eigen::Matrix2d BTB = B_f.transpose() * B_f;
+            Eigen::Vector3d ambient = B_f * primal.segment<2>(2*i);
+         //   std::cout << ambient.norm() << " back "; // should be 1.
+            ambient.normalize();
+
+            double angle = atan2(B2.row(i).dot(ambient), B1.row(i).dot(ambient));
+         //   angle *= 1./3.;
+            for (int j = 0; j < 3; j++)
+            {
+                double newAngle = angle + 2*PI / 3. * j;
+                Eigen::Vector3d rotated = cos(newAngle) * B1.row(i) + sin(newAngle) * B2.row(i);
+       //         std::cout << rotated.norm() << " rb ";
+                weave->fs->vectorFields.segment<2>(6 * i + 2 * j) = BTB.inverse() * B_f.transpose() * rotated;
+            }
+        }
+
+
+  //      weave->fs->vectorFields.segment(0, 2*nfaces*nfields) = primal;
+  //      weave->fs->vectorFields.segment(2*nfaces*nfields, 2*nfaces*nfields) = dual;
+
+
  //       std::cout << primal.transpose()<< std::endl << primal.norm() << std::endl<< std::endl;
   //      std::cout << dual.transpose() << std::endl <<dual.norm() << std::endl<< std::endl;
         std::cout << "primal norm " << primal.norm() << " dual norm " <<dual.norm() <<  std::endl;
@@ -720,7 +777,9 @@ bool WeaveHook::simulateOneStep()
 
 void WeaveHook::reassignPermutations()
 {
-    int flipped = reassignCutPermutations(*weave);
+   // int flipped = reassignCutPermutations(*weave);
+    int flipped = reassignAllPermutations(*weave);
+
     std::cout << flipped << " permutations changed" << std::endl;
     
     std::vector<int> topsingularities;
@@ -753,7 +812,7 @@ void WeaveHook::reassignPermutations()
         }
         if (!id)
         {
-            nonIdentityEdges.push_back(i);
+  //          nonIdentityEdges.push_back(i);  TODO: Fix viz bug!
         }
     }
     int ncuts = nonIdentityEdges.size();

@@ -135,7 +135,7 @@ void reassignOnePermutation(Weave &weave, int edge, Eigen::MatrixXi &P)
     }
 }
 
-int reassignPermutations(Weave &weave)
+int reassignAllPermutations(Weave &weave)
 {
     int nedges = weave.fs->nEdges();
     int count = 0;
