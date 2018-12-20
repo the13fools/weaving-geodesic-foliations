@@ -715,7 +715,7 @@ bool WeaveHook::simulateOneStep()
             ambient.normalize();
 
             double angle = atan2(B2.row(i).dot(ambient), B1.row(i).dot(ambient));
-          //  angle *= 3;
+            angle *= 3;
             Eigen::Vector3d rotated = cos(angle) * B1.row(i) + sin(angle) * B2.row(i);
 
             primal.segment<2>(2*i) = BTB.inverse() * B_f.transpose() * rotated;
@@ -742,7 +742,7 @@ bool WeaveHook::simulateOneStep()
             ambient.normalize();
 
             double angle = atan2(B2.row(i).dot(ambient), B1.row(i).dot(ambient));
-         //   angle *= 1./3.;
+            angle *= 1./3.;
             for (int j = 0; j < 3; j++)
             {
                 double newAngle = angle + 2*PI / 3. * j;

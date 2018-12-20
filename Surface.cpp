@@ -3,6 +3,8 @@
 #include <queue>
 #include <Eigen/Dense>
 
+#include <iostream>
+
 Surface::Surface(const Eigen::MatrixXd &V, const Eigen::MatrixXi &F)
 {
     data_.V = V;
@@ -171,6 +173,7 @@ void Surface::buildGeometricStructures()
     int nedges = nEdges();
     data_.cDiffs.resize(2 * nedges, 2);
     data_.Ts.resize(2 * nedges, 4);
+    data_.Ts_rosy.resize(2 * nedges, 4);
     for (int edgeidx = 0; edgeidx < nedges; edgeidx++)
     {        
         //collect neighboring face indices
@@ -246,6 +249,42 @@ void Surface::buildGeometricStructures()
         beta2 = t2.dot(e2);
         newe2 = alpha2*commone + beta2*t1;
         data_.Ts.block<2, 1>(2 * edgeidx, 3) = BTB1.inverse() * data_.Bs[face1].transpose() * newe2;
+
+
+        Eigen::Vector2d vec(1, 0); 
+        // use the computed transition matricies to compute the tranition angle in local coordinates
+        Eigen::Vector3d basis1 = data_.V.row(data_.F(face1, 1)) - data_.V.row(data_.F(face1, 0));
+        Eigen::Vector3d basis2 = data_.V.row(data_.F(face2, 1)) - data_.V.row(data_.F(face2, 0));
+        Eigen::Vector3d b1_f2 =  data_.Bs[face2] * data_.Ts.block<2, 2>(2 * edgeidx, 0) * vec;
+        Eigen::Vector3d b2_f1 =  data_.Bs[face1] * data_.Ts.block<2, 2>(2 * edgeidx, 2) * vec;
+        basis1.normalize();
+        basis2.normalize();
+        b1_f2.normalize();
+        b2_f1.normalize();
+
+        // https://math.stackexchange.com/a/2672702
+        Eigen::Matrix3d identity;
+        identity.setIdentity();
+        Eigen::Vector3d mid1 = basis1 + b2_f1;
+        Eigen::Vector3d mid2 = basis2 + b1_f2;
+
+        // note the index change because we apply the rotation on the target face
+        Eigen::Matrix3d R1 = 2 * (mid2 * mid2.transpose()) / (mid2.transpose() * mid2) - identity;
+        Eigen::Matrix3d R2 = 2 * (mid1 * mid1.transpose()) / (mid1.transpose() * mid1) - identity;
+
+        data_.Ts_rosy.block<2, 2>(2 * edgeidx, 0) = BTB2.inverse() * data_.Bs[face2].transpose() * R1 * data_.Bs[face2];
+        data_.Ts_rosy.block<2, 2>(2 * edgeidx, 2) = BTB1.inverse() * data_.Bs[face1].transpose() * R2 * data_.Bs[face1];
+         
+
+   std::cout <<  BTB2.inverse() * data_.Bs[face2].transpose() * R1 * data_.Bs[face2] * data_.Ts.block<2, 2>(2 * edgeidx, 0) * vec<< std::endl;
+
+   //     std::cout << (data_.Ts_rosy.block<2, 2>(2 * edgeidx, 0) * data_.Ts.block<2, 2>(2 * edgeidx, 0) * vec).dot(vec) << " ";
+   //     std::cout << (data_.Ts.block<2, 2>(2 * edgeidx, 2) * vec).dot(vec) << std::endl << std::endl;
+
+
+
+
+
     }
 }
 

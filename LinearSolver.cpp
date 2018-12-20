@@ -643,6 +643,7 @@ void LinearSolver::differentialOperator(const Weave &weave, SolverParams params,
                     vpermut += permut(i, field) * weave.fs->v(g, field);
                 }
                 Eigen::Matrix2d Tgf = weave.fs->data().Ts.block<2, 2>(2 * e, 2 - 2 * side);
+                Eigen::Matrix2d Tgf_rosy = weave.fs->data().Ts_rosy.block<2, 2>(2 * e, 2 - 2 * side);
 
                 for (int coeff = 0; coeff < 2; coeff++)
                 {
@@ -655,7 +656,7 @@ void LinearSolver::differentialOperator(const Weave &weave, SolverParams params,
                     }
                     for (int field = 0; field < m; field++)
                     {
-                        dE = -permut(i, field) * Tgf.transpose() * innervec;
+                        dE = -permut(i, field) * Tgf_rosy * (Tgf).transpose() * innervec;
                         for (int k = 0; k < 2; k++)
                         {
                             coeffs.push_back(Eigen::Triplet<double>(term, weave.fs->vidx(g, field) + k, dE[k]));
