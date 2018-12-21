@@ -262,23 +262,37 @@ void Surface::buildGeometricStructures()
         b1_f2.normalize();
         b2_f1.normalize();
 
-        // https://math.stackexchange.com/a/2672702
-        Eigen::Matrix3d identity;
-        identity.setIdentity();
-        Eigen::Vector3d mid1 = basis1 + b2_f1;
-        Eigen::Vector3d mid2 = basis2 + b1_f2;
+        Eigen::Matrix3d source1;
+        source1.col(0) = b1_f2;
+        source1.col(1) = n2.cross(b1_f2);
+        source1.col(2) = n2;
+
+        Eigen::Matrix3d target1;
+        target1.col(0) = basis2;
+        target1.col(1) = n2.cross(basis2);
+        target1.col(2) = n2;
+
+        Eigen::Matrix3d source2;
+        source2.col(0) = b2_f1;
+        source2.col(1) = n1.cross(b2_f1);
+        source2.col(2) = n1;
+
+        Eigen::Matrix3d target2;
+        target2.col(0) = basis1;
+        target2.col(1) = n1.cross(basis1);
+        target2.col(2) = n1;
 
         // note the index change because we apply the rotation on the target face
-        Eigen::Matrix3d R1 = 2 * (mid2 * mid2.transpose()) / (mid2.transpose() * mid2) - identity;
-        Eigen::Matrix3d R2 = 2 * (mid1 * mid1.transpose()) / (mid1.transpose() * mid1) - identity;
+        Eigen::Matrix3d R1 = target1 * source1.inverse();
+        Eigen::Matrix3d R2 = target2 * source2.inverse() ;
 
         data_.Ts_rosy.block<2, 2>(2 * edgeidx, 0) = BTB2.inverse() * data_.Bs[face2].transpose() * R1 * data_.Bs[face2];
         data_.Ts_rosy.block<2, 2>(2 * edgeidx, 2) = BTB1.inverse() * data_.Bs[face1].transpose() * R2 * data_.Bs[face1];
          
+   //     std::cout << BTB2.inverse() * data_.Bs[face2].transpose() * R1.inverse() * data_.Bs[face2] * BTB2.inverse() * data_.Bs[face2].transpose() * R1 * data_.Bs[face2] << std::endl;
+        // std::cout <<  BTB2.inverse() * data_.Bs[face2].transpose() * R1 * data_.Bs[face2] * data_.Ts.block<2, 2>(2 * edgeidx, 0) * vec<< std::endl;
 
-   std::cout <<  BTB2.inverse() * data_.Bs[face2].transpose() * R1 * data_.Bs[face2] * data_.Ts.block<2, 2>(2 * edgeidx, 0) * vec<< std::endl;
-
-   //     std::cout << (data_.Ts_rosy.block<2, 2>(2 * edgeidx, 0) * data_.Ts.block<2, 2>(2 * edgeidx, 0) * vec).dot(vec) << " ";
+        std::cout << (data_.Ts_rosy.block<2, 2>(2 * edgeidx, 0) * data_.Ts.block<2, 2>(2 * edgeidx, 0) * vec).dot(vec) << " ";
    //     std::cout << (data_.Ts.block<2, 2>(2 * edgeidx, 2) * vec).dot(vec) << std::endl << std::endl;
 
 

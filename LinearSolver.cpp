@@ -644,7 +644,7 @@ void LinearSolver::differentialOperator(const Weave &weave, SolverParams params,
                 }
                 Eigen::Matrix2d Tgf = weave.fs->data().Ts.block<2, 2>(2 * e, 2 - 2 * side);
                 Eigen::Matrix2d Tgf_rosy = weave.fs->data().Ts_rosy.block<2, 2>(2 * e, 2 - 2 * side);
-
+                Tgf_rosy = Tgf_rosy * Tgf_rosy; // depends on degree! 
                 for (int coeff = 0; coeff < 2; coeff++)
                 {
                     Eigen::Vector2d innervec(0, 0);
