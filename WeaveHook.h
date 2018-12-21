@@ -4,6 +4,7 @@
 #include "PhysicsHook.h"
 #include "Weave.h"
 #include "GaussNewton.h"
+#include "LinearSolver.h"
 #include "Traces.h"
 #include <string>
 #include "Surface.h"
@@ -36,12 +37,18 @@ enum GUIMode_Enum {
     COVER
 };
 
+enum Solver_Enum {
+    CURLFREE = 0,
+    SMOOTH
+};
+
 class WeaveHook : public PhysicsHook
 {
 public:
     WeaveHook() : PhysicsHook(), weave(NULL), cover(NULL), vectorScale(1.0), normalizeVectors(true)
     {
         gui_mode = GUIMode_Enum::WEAVE;
+        solver_mode = Solver_Enum::CURLFREE;
         weave_shading_state = WeaveShading_Enum::WS_NONE;
         cover_shading_state = CoverShading_Enum::CS_NONE;
         // meshName = "meshes/bunny_coarser.obj";
@@ -52,6 +59,15 @@ public:
         exportPrefix = "export/example";
         params.lambdacompat = 100;
         params.lambdareg = 1e-3;
+        params.softHandleConstraint = true;
+        params.disableCurlConstraint = false;
+
+        params.vizVectorCurl = 1.; // in field surface, vizualization variable
+        params.vizCorrectionCurl = 0. ; // in field surface, vizualization variable
+        params.vizNormalizeVecs = false;
+        params.vizShowCurlSign = false;
+
+     //   ls = new LinearSolver();
 
         traceIdx = 0;
         traceSign = 1;
@@ -59,19 +75,18 @@ public:
         traceFaceId = 0;
         
         hideVectors = false;
+        showDelta = true;
         showSingularities = false;
         wireframe = false;
 
-        targetResolution = 5000;
+        targetResolution = 1000;
     
-        handleLocation = 0;
-        handleParams = Eigen::VectorXd::Zero(6);
-        handleParams(0) = 0;
+        fieldCount = 1;
+        handleLocation = Eigen::VectorXi::Zero(2);
+        handleParams = Eigen::VectorXd::Zero(3);
+        handleParams(0) = 1;
         handleParams(1) = 1;
         handleParams(2) = 1;
-        handleParams(3) = 0;
-        handleParams(4) = 1;
-        handleParams(5) = -1;
 
         showCoverCuts = true;
         numISOLines = 0;
@@ -103,6 +118,8 @@ public:
     void resetCutSelection();
     void addCut();
     void resample();
+    void addHandle();
+    void removeHandle();
     void removeSingularities();
     void removePrevCut(); 
     void clearTraces();
@@ -141,8 +158,12 @@ private:
     double vectorScale;
     double baseLength;
 
+    int fieldCount;
+
     Eigen::VectorXd handleParams;
-    int handleLocation;
+    Eigen::VectorXi handleLocation;
+
+    LinearSolver ls;
 
     Eigen::MatrixXd curFaceEnergies;
     Eigen::MatrixXd tempFaceEnergies;
@@ -159,13 +180,14 @@ private:
     std::vector<Eigen::Vector3d> renderSelectedVertices; // teal selected vertex spheres
     bool normalizeVectors;
     bool hideVectors;
+    bool showDelta;
     bool showCoverCuts;
     bool wireframe;
 
     Eigen::MatrixXd renderQCover;
     Eigen::MatrixXi renderFCover;
     
-
+    Solver_Enum solver_mode;
     GUIMode_Enum gui_mode;
     WeaveShading_Enum weave_shading_state;
     CoverShading_Enum cover_shading_state;

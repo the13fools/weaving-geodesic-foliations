@@ -312,43 +312,216 @@ FieldSurface *FieldSurface::deserialize(std::istream &is)
     return ret;
 }
 
+double FieldSurface::getGeodesicEnergy(SolverParams params)
+{
+    Eigen::VectorXd temp;
+    connectionEnergy(temp, 0., params);
+//    std::cout << temp << std::endl;
+    return geodesicEnergy_;
+}
 
-void FieldSurface::connectionEnergy(Eigen::VectorXd &energies)
+void FieldSurface::connectionEnergy(Eigen::VectorXd &energies, double thresh, SolverParams params)
 {
     energies.resize(nFaces());
     energies.setZero();
 
     int nedges = nEdges();
+    int nfaces = nFaces();
     int nfields = nFields();
-    for(int i=0; i<nedges; i++)
+    geodesicEnergy_ = 0.;
+    double deltaNorm = 0.;
+    double vWeight = params.vizVectorCurl;
+    double deltaWieght = params.vizCorrectionCurl;
+    for(int f=0; f<nfaces; f++)
     {
-        if(data().E(i,0) == -1 || data().E(i,1) == -1)
-            continue;
-
-        int face = data().E(i,0);
-        double facearea = faceArea(face);
-        int opp = data().E(i,1);
-        double opparea = faceArea(opp);
-
-        for(int j=0; j<nfields; j++)
+        for (int e = 0; e < 3; e++)
         {
-            Eigen::Vector2d vec = v(face, j);
-            Eigen::Vector2d oppvec(0,0);
-            for(int k=0; k<nfields; k++)
-                oppvec += Ps_[i](j,k)*v(opp,k);
-            Eigen::Vector2d mappedvec = data().Ts.block<2,2>(2*i,0) * vec;
-            // mappedvec and oppvec now both live on face opp.
-            // compute the angle between them
+            double sgn = 1.;
+            int i = data().faceEdges(f, e);
 
-            Eigen::Vector3d v1 = data().Bs[opp]*mappedvec;
-            Eigen::Vector3d v2 = data().Bs[opp]*oppvec;
-            Eigen::Vector3d n = faceNormal(opp);
-            double angle = 2.0 * atan2(v1.cross(v2).dot(n), v1.norm() * v2.norm() + v1.dot(v2));
-            energies[face] += facearea*fabs(angle);
-            energies[opp] += opparea*fabs(angle);
+            int faceidx0 = -1;
+            int faceidx1 = -1;
+
+            if(data().E(i,0) == -1 || data().E(i,1) == -1)
+                continue;
+            for (int iter = 0; iter < 3; iter++)
+            {
+                if (data().F(f,iter) == data().edgeVerts(i, 0))
+                {
+                    faceidx0 = iter;
+                }
+                if (data().F(f,iter) == data().edgeVerts(i, 1))
+                {
+                    faceidx1 = iter;
+                }
+            }
+            assert(faceidx0 != -1);
+            assert(faceidx1 != -1);
+            if ( (faceidx0 + 1 ) % 3 != faceidx1 )
+            {  
+            //    std::cout << "sgn flip"<< f << std::endl;
+                sgn = -1.;
+            }
+
+
+
+            int face = data().E(i,0);
+       //     double facearea = faceArea(face);
+            int opp = data().E(i,1);
+     //      double opparea = faceArea(opp);
+            if (f != face)
+            {
+                opp = face;
+                face = f;
+            }
+
+
+            Eigen::Vector3d edgeVec = data().V.row(data().edgeVerts(i, 0)) - data().V.row(data().edgeVerts(i, 1));
+            edgeVec.normalize();
+            edgeVec = sgn * edgeVec;
+
+            for(int j=0; j<nfields; j++)
+            {
+                Eigen::Vector2d vec = v(face, j);
+                Eigen::Vector2d oppvec(0,0);
+                for(int k=0; k<nfields; k++)
+                    oppvec += Ps_[i](j,k)*(vWeight * v(opp,k) + deltaWieght * beta(opp,k));
+   //             Eigen::Vector2d mappedvec = data().Ts.block<2,2>(2*i,0) * vec;
+                // mappedvec and oppvec now both live on face opp.
+                // compute the angle between them
+
+                Eigen::Vector3d v1 = data().Bs[face]*(vWeight * vec + deltaWieght * beta(face,j));// data().Bs[opp]*mappedvec;
+                deltaNorm += ( data().Bs[face]*(beta(face,j)) ).norm();
+             //   v1.normalize();
+                Eigen::Vector3d v2 = data().Bs[opp]*oppvec;
+                if (params.vizNormalizeVecs)
+                {
+                    v1.normalize();
+                    v2.normalize();
+                }
+             //   v2.normalize();
+                Eigen::Vector3d n = faceNormal(opp);
+                double angle = v1.dot(edgeVec) - v2.dot(edgeVec);
+                // if (angle < 0)
+                //     angle = -1;
+                // else 
+                //     angle = 1;
+
+                if (fabs(angle) < thresh)
+                    angle = 0.;
+                geodesicEnergy_ += angle;
+                if ( std::isnan(angle) )
+                {
+                    std::cout << " v1 " << v1.transpose() << " v2 " << v2.transpose() <<  " edge " << edgeVec.transpose() << std::endl;
+            //        std::cout << " v1 " << v1.transpose() << " v2 " << v2.transpose() <<  " edge " << edgeVec.transpose() << std::endl;
+
+                }
+
+              //  angle = -sqrt(sqrt(angle*angle));
+             //   double angle = 2.0 * atan2(v1.cross(v2).dot(n), v1.norm() * v2.norm() + v1.dot(v2));
+             //   double angle = acos(v1.normalized().dot(v2.normalized()));
+                // energies[face] += facearea*fabs(angle);
+                // energies[opp] += opparea*fabs(angle);
+                energies[f] += angle;
+            //    energies[face] += angle;
+            //    energies[opp] +=  angle;
+            }
         }
     }
+    geodesicEnergy_ = 0;
+    Eigen::VectorXd smoothed_energies;
+    smoothed_energies.resize(nFaces());
+    smoothed_energies.setZero();
+    for(int f=0; f<nfaces; f++)
+    {
+        // for (int i = 0; i < 3; i++)
+        // {
+        //     smoothed_energies[f] += energies[data().faceNeighbors(f,i)];
+        // }
+        // if (abs(energies[f]) < 3*nfields)
+        //     energies[f] = 0;
+  //       std::cout << f << " " << energies[f] << std::endl;
+   //     energies[f] = abs(energies[f]);
+        if (params.vizShowCurlSign)
+            if (energies[f] < 0)
+                energies[f] = -1;
+            else 
+                energies[f] = 1;
+        geodesicEnergy_ += energies[f];
+    }
+  //          energies = smoothed_energies;
+
+ //   std::cout << " delta norm " << deltaNorm << std::endl;
 }
+
+// void FieldSurface::connectionEnergy(Eigen::VectorXd &energies, double thresh, SolverParams params)
+// {
+//     energies.resize(nFaces());
+//     energies.setZero();
+
+//     int nedges = nEdges();
+//     int nfields = nFields();
+//     geodesicEnergy_ = 0.;
+//     double deltaNorm = 0.;
+//     double vWeight = params.vizVectorCurl;
+//     double deltaWieght = params.vizCorrectionCurl;
+//     for(int i=0; i<nedges; i++)
+//     {
+//         if(data().E(i,0) == -1 || data().E(i,1) == -1)
+//             continue;
+
+//         int face = data().E(i,0);
+//         double facearea = faceArea(face);
+//         int opp = data().E(i,1);
+//         double opparea = faceArea(opp);
+
+//         Eigen::Vector3d edgeVec = data().V.row(data().edgeVerts(i, 0)) - data().V.row(data().edgeVerts(i, 1));
+//         edgeVec.normalize();
+
+//         for(int j=0; j<nfields; j++)
+//         {
+//             Eigen::Vector2d vec = v(face, j);
+//             Eigen::Vector2d oppvec(0,0);
+//             for(int k=0; k<nfields; k++)
+//                 oppvec += Ps_[i](j,k)*(vWeight * v(opp,k) + deltaWieght * beta(opp,k));
+//             Eigen::Vector2d mappedvec = data().Ts.block<2,2>(2*i,0) * vec;
+//             // mappedvec and oppvec now both live on face opp.
+//             // compute the angle between them
+
+//             Eigen::Vector3d v1 = data().Bs[face]*(vWeight * vec + deltaWieght * beta(face,j));// data().Bs[opp]*mappedvec;
+//             deltaNorm += ( data().Bs[face]*(beta(face,j)) ).norm();
+//          //   v1.normalize();
+//             Eigen::Vector3d v2 = data().Bs[opp]*oppvec;
+//             if (params.vizNormalizeVecs)
+//             {
+//                 v1.normalize();
+//                 v2.normalize();
+//             }
+//          //   v2.normalize();
+//             Eigen::Vector3d n = faceNormal(opp);
+//             double angle = v1.dot(edgeVec) - v2.dot(edgeVec);
+//             if (fabs(angle) < thresh)
+//                 angle = 0.;
+//             geodesicEnergy_ += fabs(angle);
+//             if ( std::isnan(angle) )
+//             {
+//                 std::cout << " v1 " << v1.transpose() << " v2 " << v2.transpose() <<  " edge " << edgeVec.transpose() << std::endl;
+//         //        std::cout << " v1 " << v1.transpose() << " v2 " << v2.transpose() <<  " edge " << edgeVec.transpose() << std::endl;
+
+//             }
+
+//           //  angle = -sqrt(sqrt(angle*angle));
+//          //   double angle = 2.0 * atan2(v1.cross(v2).dot(n), v1.norm() * v2.norm() + v1.dot(v2));
+//          //   double angle = acos(v1.normalized().dot(v2.normalized()));
+//             // energies[face] += facearea*fabs(angle);
+//             // energies[opp] += opparea*fabs(angle);
+//             energies[face] += fabs(angle);
+//             energies[opp] +=  fabs(angle);
+//         }
+//     }
+
+//  //   std::cout << " delta norm " << deltaNorm << std::endl;
+// }
 
 void FieldSurface::deleteVertex(int vid)
 {

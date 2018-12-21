@@ -1,5 +1,6 @@
 #include "WeaveHook.h"
 #include "GaussNewton.h"
+#include "LinearSolver.h"
 #include <iostream>
 #include "Permutations.h"
 #include <igl/opengl/glfw/imgui/ImGuiHelpers.h>
@@ -16,6 +17,14 @@ void WeaveHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
 {
     ImGui::InputText("Mesh", meshName);
     ImGui::Combo("GUI Mode", (int *)&gui_mode, cover ? "Weave\0Cover\0\0" : "Weave\0\0");
+    ImGui::Combo("Solver Mode", (int *)&solver_mode, "Curl Free\0Dirchlet (Knoppel '13)\0\0");
+    ImGui::Checkbox("Soft Handle Constraint", &params.softHandleConstraint);
+    ImGui::Checkbox("Disable Curl Constraint", &params.disableCurlConstraint);
+    if (ImGui::Button("One Step", ImVec2(-1, 0)))
+    {
+        simulateOneStep();
+        updateRenderGeometry();
+    }
 
     if (gui_mode == GUIMode_Enum::WEAVE)
     {
@@ -24,7 +33,9 @@ void WeaveHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
             ImGui::InputDouble("Vector Scale", &vectorScale);
             ImGui::Checkbox("Normalize Vectors", &normalizeVectors);
             ImGui::Checkbox("Hide Vectors", &hideVectors);
+            ImGui::Checkbox("Show Delta", &showDelta);
             ImGui::Checkbox("Wireframe", &wireframe);
+            ImGui::InputDouble("Handle Scale", &params.handleScale);
             ImGui::Combo("Shading", (int *)&weave_shading_state, "None\0F1 Energy\0F2 Energy\0F3 Energy\0Total Energy\0Connection\0\0");
             if (ImGui::Button("Normalize Fields", ImVec2(-1, 0)))
                 normalizeFields();
@@ -34,7 +45,12 @@ void WeaveHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
         {
             ImGui::InputDouble("Compatilibity Lambda", &params.lambdacompat);
             ImGui::InputDouble("Tikhonov Reg", &params.lambdareg);
-            ImGui::InputDouble("V curl reg", &params.curlreg);
+            ImGui::InputDouble("Curl Viz Face threshold", &params.curlreg);
+
+            ImGui::InputDouble("vizVectorCurl", &params.vizVectorCurl);
+            ImGui::InputDouble("vizCorrectionCurl", &params.vizCorrectionCurl);
+            ImGui::Checkbox("Normalize Viz Vecs", &params.vizNormalizeVecs);
+            ImGui::Checkbox("Show Curl Sign", &params.vizShowCurlSign);
 
             if (ImGui::Button("Create Cover", ImVec2(-1, 0)))
                 augmentField();            
@@ -63,6 +79,7 @@ void WeaveHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
         if (ImGui::CollapsingHeader("Misc", ImGuiTreeNodeFlags_DefaultOpen))
         {
             ImGui::InputInt("Target # faces", &targetResolution, 0, 0);
+            ImGui::InputInt("Num Fields", &fieldCount, 0, 0);
             if (ImGui::Button("Resample Mesh", ImVec2(-1, 0)))
                 resample();
             ImGui::InputInt("Num Isolines", &numISOLines);
@@ -80,13 +97,16 @@ void WeaveHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
                 ImGuiWindowFlags_NoSavedSettings
             );
 
-            ImGui::InputInt("Face Location", &handleLocation, 0, 0);
+            ImGui::InputInt("Handle Face", &handleLocation[0], 0, 0);
+            ImGui::InputInt("Handle Field", &handleLocation[1], 0, 0);
             ImGui::InputDouble("P0", &handleParams[0]);
             ImGui::InputDouble("P1", &handleParams[1]);
             ImGui::InputDouble("P2", &handleParams[2]);
-            ImGui::InputDouble("P3", &handleParams[3]);
-            ImGui::InputDouble("P4", &handleParams[4]);
-            ImGui::InputDouble("P5", &handleParams[5]);
+
+            if (ImGui::Button("Add Handle", ImVec2(-1, 0)))
+                addHandle();
+            if (ImGui::Button("Remove Handle", ImVec2(-1, 0)))
+                removeHandle();
 
             ImGui::End();
 
@@ -221,25 +241,31 @@ bool WeaveHook::mouseClicked(igl::opengl::glfw::Viewer &viewer, int button)
     return false;
 }
 
+// TODO add handle reset functionality...
+
 void WeaveHook::clear()
 {
     if (cover)
         delete cover;
     cover = NULL;
     gui_mode = GUIMode_Enum::WEAVE;
-    Handle h;
-    h.face = 0;
-    h.dir << 1, 0;
-    h.field = 2;
-    weave->addHandle(h);
-    h.face = 0;
-    h.dir << 0, 1;
-    h.field = 1;
-    weave->addHandle(h);
-    h.face = 0;
-    h.dir << 1, -1;
-    h.field = 0;
-    weave->addHandle(h);
+    ls.clearHandles();
+    
+    for (int i = 0; i < fieldCount; i++)
+    {
+        Handle h;
+        h.face = 0;
+        Eigen::Vector3d handleVec(sin( ( 2 * 3.1415 * i) / fieldCount), cos( ( 2 * 3.1415 * i) / fieldCount), 0);
+        
+        Eigen::Matrix<double, 3, 2> B = weave->fs->data().Bs[h.face];
+        Eigen::Matrix<double, 2, 3> toBarys = (B.transpose()*B).inverse() * B.transpose();
+
+        h.dir = toBarys * handleVec;
+        h.field = i;
+        ls.addHandle(h);
+    }
+    weave->handles = ls.handles;
+
     curFaceEnergies = Eigen::MatrixXd::Zero(3, 3);
     selectedVertices.clear();
     renderSelectedVertices.clear();
@@ -263,7 +289,7 @@ void WeaveHook::initSimulation()
 {
     if (weave)
         delete weave;
-    weave = new Weave(meshName, 3);    
+    weave = new Weave(meshName, fieldCount);    
     clear();    
 }
 
@@ -286,10 +312,54 @@ void WeaveHook::resample()
     
     delete weave;
     
-    weave = new Weave(V, F, 3);    
+    weave = new Weave(V, F, fieldCount); 
+    std::cout << fieldCount << std::endl;   
     clear();  
 
     // Hacky... 
+    updateRenderGeometry();
+}
+
+void WeaveHook::addHandle()
+{
+    Handle h;
+    h.face = handleLocation[0];
+    h.face = h.face < weave->fs->nFaces() ? h.face : weave->fs->nFaces() - 1;
+
+    Eigen::Vector3d handleVec(handleParams[0], handleParams[1], handleParams[2]);
+    handleVec.normalize();
+    
+    Eigen::Matrix<double, 3, 2> B = weave->fs->data().Bs[h.face];
+    Eigen::Matrix<double, 2, 3> toBarys = (B.transpose()*B).inverse() * B.transpose();
+
+    h.dir = toBarys * handleVec;
+    h.field = handleLocation[1];
+    h.field = h.field < weave->fs->nFields() ? h.field : weave->fs->nFields() - 1;
+    std::cout << "Just added a handle to face: " << h.face << " field: " << h.field << " projected vector " << (weave->fs->data().Bs[h.face] * h.dir).transpose() << std::endl;
+
+    bool toAdd = true;
+    for (int i = 0; i < ls.handles.size(); i++)
+    {
+        if (ls.handles[i].face == h.face && ls.handles[i].field == h.field)
+        {
+            ls.handles[i].dir = h.dir;
+            toAdd = false;
+        }
+    }
+    if (toAdd)
+        ls.addHandle(h);
+
+    weave->handles = ls.handles;
+    updateRenderGeometry();
+}
+
+void WeaveHook::removeHandle()
+{
+    if (ls.handles.size() > 0)
+        ls.handles.pop_back();
+    weave->handles = ls.handles;
+    std::cout << " There are now " << ls.handles.size() << " handles " << std::endl;
+    weave->handles = ls.handles;
     updateRenderGeometry();
 }
 
@@ -317,7 +387,7 @@ void WeaveHook::setFaceColorsCover(igl::opengl::glfw::Viewer &viewer)
 
     if (cover_shading_state == CS_CONNECTION_ENERGY)
     {
-        cover->fs->connectionEnergy(Z);
+        cover->fs->connectionEnergy(Z, 0., params);
     }
        
     Eigen::MatrixXd faceColors(cover->fs->nFaces(), 3);
@@ -369,7 +439,7 @@ void WeaveHook::setFaceColorsWeave(igl::opengl::glfw::Viewer &viewer)
     // if ( curFaceEnergies.rows() != faces && shading_state != NONE) { return ; }
     // cout << "fuck" << endl;
 
-    igl::ColorMapType viz_color = igl::COLOR_MAP_TYPE_MAGMA;
+    igl::ColorMapType viz_color = igl::COLOR_MAP_TYPE_PARULA;
 
     Eigen::VectorXd Z(faces);    
 
@@ -398,7 +468,7 @@ void WeaveHook::setFaceColorsWeave(igl::opengl::glfw::Viewer &viewer)
 
     if (weave_shading_state == WS_CONNECTION_ENERGY)
     {
-        weave->fs->connectionEnergy(Z);
+        weave->fs->connectionEnergy(Z, params.curlreg, params); // TODO make real var
     }
 
     viewer.data().set_face_based(true);
@@ -514,22 +584,56 @@ void WeaveHook::renderRenderGeometry(igl::opengl::glfw::Viewer &viewer)
     if (gui_mode == GUIMode_Enum::WEAVE)
     {
         viewer.data().set_mesh(renderQWeave, renderFWeave);
-        int edges = edgeSegsWeave.rows();
-        Eigen::MatrixXd renderPts(2 * edges, 3);
-        for (int i = 0; i < edges; i++)
+        int nfaces = weave->fs->nFaces();
+        int m = weave->fs->nFields();
+        int nhandles = weave->nHandles();
+      //  int edges = edgeSegsWeave.rows();
+        Eigen::MatrixXd renderPts(4 * nfaces * m + 2*nhandles, 3);
+        renderPts.setZero();
+        for (int i = 0; i < nfaces * m; i++)
         {
             Eigen::Vector3d vec = edgeVecsWeave.row(i);
+            Eigen::Vector3d delta = edgeVecsWeave.row(i + nfaces * m);
             if (normalizeVectors)
             {
                 if (vec.norm() != 0.0)
+                {
                     vec *= baseLength / vec.norm() * sqrt(3.0) / 6.0 * 0.75;
+                    delta *= baseLength / delta.norm() * sqrt(3.0) / 6.0 * 0.75;
+                }
             }
-            renderPts.row(2 * i) = edgePtsWeave.row(i) - vectorScale*vec.transpose();
-            renderPts.row(2 * i + 1) = edgePtsWeave.row(i) + vectorScale*vec.transpose();
+        //    renderPts.row(2 * i) = edgePtsWeave.row(i) - vectorScale*vec.transpose();
+            if (!hideVectors)
+            {
+                renderPts.row(2 * i) = edgePtsWeave.row(i);
+                renderPts.row(2 * i + 1) = edgePtsWeave.row(i) + vectorScale*vec.transpose();
+            }
+            if ( solver_mode == 0 )
+            {
+                renderPts.row(2 * i + nfaces * m * 2 ) = edgePtsWeave.row(i + nfaces * m);
+                renderPts.row(2 * i + 1 + nfaces * m * 2 ) = edgePtsWeave.row(i + nfaces * m) + vectorScale*delta.transpose();
+                if (!showDelta)
+                    renderPts.row(2 * i + 1 + nfaces * m * 2 ) += vectorScale*vec.transpose();
+            }
+
+      //      renderPts.row(2 * i + edges/2) = edgePtsWeave.row(i);
+      //      renderPts.row(2 * i + 1 + edges/2) = edgePtsWeave.row(i) + vectorScale*delta.transpose();
+            // renderPts.row(2 * i + nfaces * m * 2 ) = edgePtsWeave.row(i + nfaces * m) + vectorScale*vec.transpose();
+            // renderPts.row(2 * i + 1 + nfaces * m * 2 ) = edgePtsWeave.row(i + nfaces * m) + vectorScale*vec.transpose() + vectorScale*delta.transpose();
+      //      std::cout << "delta " << i << " " << delta.transpose() << " norm " << delta.norm() << std::endl << "     vec " << vec.transpose() << " norm " << vec.norm() << std::endl;
+        }
+        for (int i = 0; i < nhandles; i++)
+        {
+            Eigen::Vector3d vec = edgeVecsWeave.row(2*m*nfaces + i);
+            vec *= baseLength / vec.norm() * sqrt(3.0) / 6.0 * 0.75;
+            renderPts.row(4*m*nfaces + 2 * i) = edgePtsWeave.row(2*m*nfaces + i);
+            renderPts.row(4*m*nfaces + 2 * i + 1) = edgePtsWeave.row(2*m*nfaces + i) + 3.*vec.transpose();
         }
         if (!hideVectors)
         {
             viewer.data().set_edges(renderPts, edgeSegsWeave, edgeColorsWeave);
+   //         std::cout << renderPts.rows() << " " << edgeSegsWeave.rows() << " " << edgeColorsWeave.rows() << std::endl;
+     //                   std::cout << renderPts << " " << edgeSegsWeave << " " << edgeColorsWeave << std::endl;
         }
         setFaceColorsWeave(viewer);
         if(showTraces)
@@ -581,8 +685,39 @@ bool WeaveHook::simulateOneStep()
             params.edgeWeights[weave->cuts[i].path[j].first] = 0.0;
         }
     }
-    oneStep(*weave, params);
-    faceEnergies(*weave, params, tempFaceEnergies);
+
+    int nfaces = weave->fs->data().F.rows();
+    int nfields = weave->fs->nFields();
+
+    if ( solver_mode == Solver_Enum::CURLFREE )
+    {
+        Eigen::VectorXd primal = weave->fs->vectorFields.segment(0, 2*nfaces*nfields);
+        Eigen::VectorXd dual = weave->fs->vectorFields.segment(2*nfaces*nfields, 2*nfaces*nfields);
+
+     //   ls.buildDualMatrix(*weave, params, primal, dual);
+        
+        for (int i = 0; i < 1; i++)
+        {            
+            ls.updateDualVars_new(*weave, params, primal, dual);
+            ls.updatePrimalVars(*weave, params, primal, dual);
+        }
+        weave->fs->vectorFields.segment(0, 2*nfaces*nfields) = primal;
+        weave->fs->vectorFields.segment(2*nfaces*nfields, 2*nfaces*nfields) = dual;
+ //       std::cout << primal.transpose()<< std::endl << primal.norm() << std::endl<< std::endl;
+  //      std::cout << dual.transpose() << std::endl <<dual.norm() << std::endl<< std::endl;
+        std::cout << "primal norm " << primal.norm() << " dual norm " <<dual.norm() <<  std::endl;
+    }
+    else 
+    {
+        Eigen::VectorXd curField = weave->fs->vectorFields.segment(0, 2*nfaces*nfields);
+        weave->fs->vectorFields.setZero();
+        weave->fs->vectorFields.segment(0, 2*nfaces*nfields) = curField;
+        oneStep(*weave, params);
+        faceEnergies(*weave, params, tempFaceEnergies);
+    }
+    std::cout << "Total Geodesic Energy" << weave->fs->getGeodesicEnergy(params) << std::endl;
+
+    std::cout << "ran a step" << std::endl;
     return false;
 }
 
@@ -790,17 +925,8 @@ void WeaveHook::updateRenderGeometry()
     baseLength = weave->fs->data().averageEdgeLength;
     curFaceEnergies = tempFaceEnergies;
 
-    if (weave->handles.size() < 3)
-        weave->handles.resize(3);
-    weave->handles[0].face = handleLocation;
-    weave->handles[0].dir(0) = handleParams(0);
-    weave->handles[0].dir(1) = handleParams(1);
-    weave->handles[1].face = handleLocation;
-    weave->handles[1].dir(0) = handleParams(2);
-    weave->handles[1].dir(1) = handleParams(3);
-    weave->handles[2].face = handleLocation;
-    weave->handles[2].dir(0) = handleParams(4);
-    weave->handles[2].dir(1) = handleParams(5);
+    // TODO: refactor, just used for rendering 
+    weave->handles = ls.handles;
 
     int tracesegs = 0;
     for (int i = 0; i < traces.nTraces(); i++)
