@@ -20,9 +20,13 @@ enum WeaveShading_Enum {
     WS_CONNECTION_ENERGY
 };
 
+enum FieldIntegration_Enum {
+    FI_OURS = 0, // local+global s rescaling
+    FI_BOMMES    // anisotropic mixed-integer
+};
+
 enum CoverShading_Enum {
     CS_NONE = 0,
-    CS_S_VAL,
     FUN_VAL,
     CS_CONNECTION_ENERGY
 };
@@ -72,6 +76,8 @@ public:
         showCoverCuts = true;
         numISOLines = 0;
         
+        field_integration_method = FI_OURS;
+        bommesAniso = 1.0;
         initSReg = 1e-4;
         globalSScale = 1.0;
 
@@ -92,8 +98,6 @@ public:
     void deserializeVectorField();    
     void deserializeVectorFieldOld();
     void augmentField();
-    void initializeS();
-    void initializeSAlt();
     void computeFunc();
     void drawISOLines();
     void resetCutSelection();
@@ -206,7 +210,11 @@ private:
     Eigen::MatrixXd rattracestarts;
     Eigen::MatrixXd rattraceends;
     Eigen::MatrixXd ratcollisions;
+
+    FieldIntegration_Enum field_integration_method;
+
     int numISOLines;
+    double bommesAniso;
     double initSReg;
     double globalSScale;
 };

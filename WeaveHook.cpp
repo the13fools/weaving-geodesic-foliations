@@ -3,10 +3,10 @@
 #include <iostream>
 #include "Permutations.h"
 #include <igl/opengl/glfw/imgui/ImGuiHelpers.h>
-#include "ImGuiDouble.h"
 #include "Surface.h"
 #include "CoverMesh.h"
-
+#include "OurFieldIntegration.h"
+#include "BommesFieldIntegration.h"
 #include <igl/decimate.h>
 #include <igl/upsample.h>
 
@@ -21,7 +21,7 @@ void WeaveHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
     {
         if (ImGui::CollapsingHeader("Visualization (Weave)", ImGuiTreeNodeFlags_DefaultOpen))
         {
-            ImGui::InputDoubleScientific("Vector Scale", &vectorScale);
+            ImGui::InputDouble("Vector Scale", &vectorScale);
             ImGui::Checkbox("Normalize Vectors", &normalizeVectors);
             ImGui::Checkbox("Hide Vectors", &hideVectors);
             ImGui::Checkbox("Wireframe", &wireframe);
@@ -32,9 +32,9 @@ void WeaveHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
         }
         if (ImGui::CollapsingHeader("Solver Parameters", ImGuiTreeNodeFlags_DefaultOpen))
         {
-            ImGui::InputDoubleScientific("Compatilibity Lambda", &params.lambdacompat);
-            ImGui::InputDoubleScientific("Tikhonov Reg", &params.lambdareg);
-            ImGui::InputDoubleScientific("V curl reg", &params.curlreg);
+            ImGui::InputDouble("Compatilibity Lambda", &params.lambdacompat);
+            ImGui::InputDouble("Tikhonov Reg", &params.lambdareg);
+            ImGui::InputDouble("V curl reg", &params.curlreg);
 
             if (ImGui::Button("Create Cover", ImVec2(-1, 0)))
                 augmentField();            
@@ -81,12 +81,12 @@ void WeaveHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
             );
 
             ImGui::InputInt("Face Location", &handleLocation, 0, 0);
-            ImGui::InputDoubleScientific("P0", &handleParams[0]);
-            ImGui::InputDoubleScientific("P1", &handleParams[1]);
-            ImGui::InputDoubleScientific("P2", &handleParams[2]);
-            ImGui::InputDoubleScientific("P3", &handleParams[3]);
-            ImGui::InputDoubleScientific("P4", &handleParams[4]);
-            ImGui::InputDoubleScientific("P5", &handleParams[5]);
+            ImGui::InputDouble("P0", &handleParams[0]);
+            ImGui::InputDouble("P1", &handleParams[1]);
+            ImGui::InputDouble("P2", &handleParams[2]);
+            ImGui::InputDouble("P3", &handleParams[3]);
+            ImGui::InputDouble("P4", &handleParams[4]);
+            ImGui::InputDouble("P5", &handleParams[5]);
 
             ImGui::End();
 
@@ -126,10 +126,10 @@ void WeaveHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
             if (ImGui::CollapsingHeader("Rods", ImGuiTreeNodeFlags_DefaultOpen))
             {
                 ImGui::Checkbox("Show Rod Segments", &showRatTraces);
-                ImGui::InputDoubleScientific("Extend Traces By", &extendTrace);
-                ImGui::InputDoubleScientific("Segment Lenght", &segLen);
-                ImGui::InputDoubleScientific("Max Curvature", &maxCurvature);
-                ImGui::InputDoubleScientific("Min Rod Length", &minRodLen);
+                ImGui::InputDouble("Extend Traces By", &extendTrace);
+                ImGui::InputDouble("Segment Lenght", &segLen);
+                ImGui::InputDouble("Max Curvature", &maxCurvature);
+                ImGui::InputDouble("Min Rod Length", &minRodLen);
                 if (ImGui::Button("Generate From Traces", ImVec2(-1, 0)))
                 {
                     rationalizeTraces();
@@ -147,18 +147,26 @@ void WeaveHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
     {
         if (ImGui::CollapsingHeader("Visualization (Cover)", ImGuiTreeNodeFlags_DefaultOpen))
         {
-            ImGui::InputDoubleScientific("Vector Scale", &vectorScale);
+            ImGui::InputDouble("Vector Scale", &vectorScale);
             ImGui::Checkbox("Hide Vectors", &hideVectors);
-            ImGui::Combo("Shading", (int *)&cover_shading_state, "None\0S Value\0Theta Value\0Connection\0\0");
+            ImGui::Combo("Shading", (int *)&cover_shading_state, "None\0Theta Value\0Connection\0\0");
             ImGui::Checkbox("Show Cuts", &showCoverCuts);
         }
 
         if (ImGui::CollapsingHeader("Cover Controls", ImGuiTreeNodeFlags_DefaultOpen))
         {
-            ImGui::InputDoubleScientific("Regularization", &initSReg);
-            if (ImGui::Button("Initialize S", ImVec2(-1,0)))
-                initializeS();
-            ImGui::InputDoubleScientific("Global Rescaling", &globalSScale);
+            ImGui::Combo("Integration Method", (int *)&field_integration_method, "Ours\0Bommes\0\0");
+            if (field_integration_method == FI_OURS)
+            {
+                ImGui::InputDouble("Regularization", &initSReg);
+                ImGui::InputDouble("Global Rescaling", &globalSScale);
+            }
+            else if (field_integration_method == FI_BOMMES)
+            {
+                ImGui::InputDouble("Anisotropy", &bommesAniso);
+                ImGui::InputDouble("Regularization", &initSReg);
+                ImGui::InputDouble("Global Rescaling", &globalSScale);
+            }
             if (ImGui::Button("Compute Function Value", ImVec2(-1, 0)))
                 computeFunc();
             ImGui::InputInt("Num Isolines", &numISOLines);
@@ -182,7 +190,7 @@ bool WeaveHook::mouseClicked(igl::opengl::glfw::Viewer &viewer, int button)
     // Cast a ray in the view direction starting from the mouse position
     double x = viewer.current_mouse_x;
     double y = viewer.core.viewport(3) - viewer.current_mouse_y;
-    if (igl::unproject_onto_mesh(Eigen::Vector2f(x, y), viewer.core.view * viewer.core.model,
+    if (igl::unproject_onto_mesh(Eigen::Vector2f(x, y), viewer.core.view,
         viewer.core.proj, viewer.core.viewport, this->weave->fs->data().V, this->weave->fs->data().F, fid, bc))
     {
         std::cout << fid << " - clicked on vertex #\n"; 
@@ -311,12 +319,7 @@ void WeaveHook::setFaceColorsCover(igl::opengl::glfw::Viewer &viewer)
     {
         cover->fs->connectionEnergy(Z);
     }
-    
-    if (cover_shading_state == CS_S_VAL)
-    {
-        Z = cover->s;
-    }
-
+       
     Eigen::MatrixXd faceColors(cover->fs->nFaces(), 3);
     Eigen::MatrixXd vertColors(nsplitverts, 3);
 
@@ -668,8 +671,21 @@ void WeaveHook::augmentField()
 
 void WeaveHook::computeFunc()
 {
-    if(cover)
-        cover->computeFunc(globalSScale);
+    if (cover)
+    {
+        FieldIntegration *method;
+        if (field_integration_method == FI_OURS)
+            method = new OurFieldIntegration(initSReg, globalSScale);
+        else if (field_integration_method == FI_BOMMES)
+            method = new BommesFieldIntegration(bommesAniso, initSReg, globalSScale);
+        else
+        {
+            assert(!"Unknown integration method");
+            return;
+        }
+        cover->integrateField(method);
+        delete method;
+    }
     updateRenderGeometry();
 }
 
@@ -689,8 +705,13 @@ void WeaveHook::drawISOLines()
 
 void WeaveHook::deserializeVectorField()
 {
-    clear();
     std::ifstream ifs(vectorFieldName, ios::binary);
+    if (!ifs)
+    {
+        std::cerr << "Cannot open vector field file: " << vectorFieldName << std::endl;
+        return;
+    }
+    clear();    
     weave->deserialize(ifs);
     updateRenderGeometry();
 }
@@ -894,12 +915,6 @@ void WeaveHook::updateRenderGeometry()
     }
 }
 
-void WeaveHook::initializeS()
-{
-    if(cover) cover->initializeS(initSReg);
-    updateRenderGeometry();
-}
-
 void WeaveHook::saveRods()
 {
     traces.exportRodFile(rodFilename.c_str());
@@ -930,11 +945,11 @@ void WeaveHook::exportForRendering()
     }
     for(int i=0; i<2*nfields; i++)
     {
-        std::stringstream ss;
+        /*std::stringstream ss;
         ss << exportPrefix << "_s_" << i << ".csv";
         std::ofstream sfs(ss.str().c_str());
         for(int j=0; j<nfaces; j++)
-            sfs << cover->s[i*nfaces + j] << ",\t 0,\t0" << std::endl;
+            sfs << cover->s[i*nfaces + j] << ",\t 0,\t0" << std::endl;*/
             
         std::stringstream ss2;
         ss2 << exportPrefix << "_theta_" << i << ".csv";

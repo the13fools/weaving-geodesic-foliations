@@ -2,7 +2,6 @@
 #include "Weave.h"
 #include <iostream>
 #include <fstream>
-#include <Eigen/CholmodSupport>
 #include "Surface.h"
 #include <igl/cotmatrix.h>
 
@@ -388,7 +387,7 @@ void oneStep(Weave &weave, SolverParams params)
     optMat += J.transpose() * M * J;
     std::cout << "Done, " << optMat.nonZeros() << " nonzeros" << std::endl;
     optMat.makeCompressed();
-    Eigen::CholmodSimplicialLDLT<Eigen::SparseMatrix<double> > solver;
+    Eigen::SimplicialLDLT<Eigen::SparseMatrix<double> > solver;
     std::cout << "Analyzing" << std::endl;
     solver.analyzePattern(optMat);
     Eigen::VectorXd rhs = J.transpose() * M * r;

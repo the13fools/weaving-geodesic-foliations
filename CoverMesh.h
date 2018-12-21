@@ -10,7 +10,7 @@ class FieldSurface;
 class Weave;
 class Surface;
 class TraceSet;
-
+class FieldIntegration;
 
 struct CoverData
 {
@@ -31,14 +31,12 @@ public:
 
     FieldSurface *fs;
     Eigen::VectorXd theta;
-    Eigen::VectorXd s;
-
+    
     void createVisualization(Eigen::MatrixXd &V, Eigen::MatrixXi &F, Eigen::MatrixXd &edgePts, Eigen::MatrixXd &edgeVecs, Eigen::MatrixXi &edgeSegs, Eigen::MatrixXd &colors, 
         Eigen::MatrixXd &cutPts1, Eigen::MatrixXd &cutPts2, Eigen::MatrixXd &cutColors);
 
-    void computeFunc(double globalScale);
+    void integrateField(FieldIntegration *method);
     double renderScale() {return renderScale_;}
-    void initializeS(double reg);
     const Surface &splitMesh() const;
     
     // maps indices of vertices on the visualization mesh to corresponding "parent" vertices on the cover mesh

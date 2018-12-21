@@ -519,24 +519,25 @@ std::vector<Eigen::MatrixXd> Weave::_augmentPs() const
     int nCover = fs->nFields() * 2;
     int nfaces = fs->nFaces();
     int nverts = fs->nVerts();
+    int nfields = fs->nFields();
     std::vector<Eigen::MatrixXd> perms;
     Eigen::MatrixXd perm;
     for (int e = 0; e < fs->nEdges(); e++)
     {
         perm = Eigen::MatrixXd::Zero(nCover, nCover);
-        for (int j = 0; j < fs->nFields(); j++) 
+        for (int j = 0; j < nfields; j++) 
         {
-            for (int k = 0; k < fs->nFields(); k++)
+            for (int k = 0; k < nfields; k++)
             {
                 if( fs->Ps(e)(j, k) == 1 )
                 {
                     perm(j,k) = 1;
-                    perm(j+3, k+3) = 1;
+                    perm(j+nfields, k+nfields) = 1;
                 }
                 if( fs->Ps(e)(j, k) == -1 )
                 {
-                    perm(j,k+3) = 1;
-                    perm(j+3, k) = 1;
+                    perm(j,k+nfields) = 1;
+                    perm(j+nfields, k) = 1;
                 }
             }
         }
