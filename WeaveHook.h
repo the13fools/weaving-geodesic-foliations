@@ -74,8 +74,7 @@ public:
         traceSteps = 100;
         traceFaceId = 0;
         
-        hideVectors = false;
-        showDelta = true;
+        vectorVisMode = VMM_VFANDDELTA;
         showSingularities = false;
         wireframe = false;
 
@@ -102,6 +101,8 @@ public:
         segLen = 0.02;
         maxCurvature = 0.5;
         minRodLen = 1.0;
+
+        hideCoverVectors = false;
     }
 
     virtual void drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu);
@@ -114,6 +115,7 @@ public:
     void deserializeVectorFieldOld();
     void augmentField();
     void computeFunc();
+    void roundCovers();
     void drawISOLines();
     void resetCutSelection();
     void addCut();
@@ -156,10 +158,7 @@ private:
     std::vector<std::pair<int, int > > selectedVertices; // (face, vert) pairs
     
     double vectorScale;
-    double baseLength;
-
-    int fieldCount;
-
+    
     Eigen::VectorXd handleParams;
     Eigen::VectorXi handleLocation;
 
@@ -170,17 +169,14 @@ private:
     Eigen::MatrixXd renderQWeave;
     Eigen::MatrixXi renderFWeave;
     Eigen::MatrixXd edgePtsWeave;
-    Eigen::MatrixXd edgeVecsWeave;
     Eigen::MatrixXi edgeSegsWeave;
     Eigen::MatrixXd edgeColorsWeave;    
     Eigen::MatrixXd edgePtsCover;
-    Eigen::MatrixXd edgeVecsCover;
     Eigen::MatrixXi edgeSegsCover;
     Eigen::MatrixXd edgeColorsCover;    
     std::vector<Eigen::Vector3d> renderSelectedVertices; // teal selected vertex spheres
+    VectorVisualizationMode vectorVisMode;
     bool normalizeVectors;
-    bool hideVectors;
-    bool showDelta;
     bool showCoverCuts;
     bool wireframe;
 
@@ -239,6 +235,9 @@ private:
     double bommesAniso;
     double initSReg;
     double globalSScale;
+
+    int fieldCount;
+    bool hideCoverVectors;
 };
 
 #endif

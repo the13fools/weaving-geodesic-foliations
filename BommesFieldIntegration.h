@@ -16,13 +16,6 @@ public:
     virtual void integrateOneComponent(const Surface &surf, const Eigen::MatrixXd &v, Eigen::VectorXd &theta);
 
 private:
-    void ComisoWrapper(const Eigen::SparseMatrix<double> &constraints,
-        const Eigen::SparseMatrix<double> &A,
-        Eigen::VectorXd &result,
-        const Eigen::VectorXd &rhs,
-        const Eigen::VectorXi &toRound,
-        double reg);
-
     double aniso_;
     double smoothreg_;
     double globalScale_;

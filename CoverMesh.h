@@ -32,10 +32,14 @@ public:
     FieldSurface *fs;
     Eigen::VectorXd theta;
     
-    void createVisualization(Eigen::MatrixXd &V, Eigen::MatrixXi &F, Eigen::MatrixXd &edgePts, Eigen::MatrixXd &edgeVecs, Eigen::MatrixXi &edgeSegs, Eigen::MatrixXd &colors, 
-        Eigen::MatrixXd &cutPts1, Eigen::MatrixXd &cutPts2, Eigen::MatrixXd &cutColors);
+    void createVisualization(Eigen::MatrixXd &V, Eigen::MatrixXi &F, 
+        Eigen::MatrixXd &edgePts, Eigen::MatrixXi &edgeSegs, Eigen::MatrixXd &colors, 
+        Eigen::MatrixXd &cutPts1, Eigen::MatrixXd &cutPts2, Eigen::MatrixXd &cutColors,
+        bool hideVectors,
+        double vectorScale);
 
     void integrateField(FieldIntegration *method);
+    void roundAntipodalCovers(int numISOLines);
     double renderScale() {return renderScale_;}
     const Surface &splitMesh() const;
     

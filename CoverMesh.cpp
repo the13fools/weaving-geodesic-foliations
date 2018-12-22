@@ -13,6 +13,8 @@
 #include "Traces.h"
 #include "igl/massmatrix.h"
 #include "FieldIntegration.h"
+#include "igl/cotmatrix.h"
+#include "CoMISoWrapper.h"
 
 # define M_PI           3.14159265358979323846
 
@@ -210,8 +212,10 @@ void  CoverMesh::recomputeIsolines(int numISOLines, std::vector<Trace> &isotrace
     std::cout << "Extracted " << isotraces.size() << " isolines" << std::endl;
 }
 
-void CoverMesh::createVisualization(Eigen::MatrixXd &V, Eigen::MatrixXi &F, Eigen::MatrixXd &edgePts, Eigen::MatrixXd &edgeVecs, Eigen::MatrixXi &edgeSegs, Eigen::MatrixXd &colors, 
-    Eigen::MatrixXd &cutPts1, Eigen::MatrixXd &cutPts2, Eigen::MatrixXd &cutColors)
+void CoverMesh::createVisualization(Eigen::MatrixXd &V, Eigen::MatrixXi &F, 
+    Eigen::MatrixXd &edgePts, Eigen::MatrixXi &edgeSegs, Eigen::MatrixXd &colors, 
+    Eigen::MatrixXd &cutPts1, Eigen::MatrixXd &cutPts2, Eigen::MatrixXd &cutColors,
+    bool hideVectors, double vectorLength)
 {
     int splitFace = data_.splitMesh->nFaces();
     int origverts = parent_.fs->nVerts();
@@ -219,28 +223,38 @@ void CoverMesh::createVisualization(Eigen::MatrixXd &V, Eigen::MatrixXi &F, Eige
     V = data_.splitMesh->data().V;
     F = data_.splitMesh->data().F;
     
-    edgePts.resize(splitFace, 3);
-    edgeVecs.resize(splitFace, 3);
-    edgeVecs.setZero();
-    edgeSegs.resize(splitFace, 2);
-    colors.resize(splitFace , 3);
-
-    for(int c=0; c<ncovers_; c++)
+    if (hideVectors)
     {
-        for (int i = 0; i < origfaces; i++)
-        {
-            Eigen::Vector3d centroid;
-            centroid.setZero();
-            for (int j = 0; j < 3; j++)
-                centroid += renderScale_ * parent_.fs->data().V.row(parent_.fs->data().F(i, j));
-            centroid /= 3.0;
-            centroid += data_.splitOffsets[c];
+        edgePts.resize(0, 3);
+        edgeSegs.resize(0, 3);
+        colors.resize(0, 3);
+    }
+    else
+    {
+        edgePts.resize(2 * splitFace, 3);
+        edgePts.setZero();
+        edgeSegs.resize(splitFace, 2);
+        colors.resize(splitFace, 3);
 
-            edgePts.row(c*origfaces + i) = centroid;
-            edgeVecs.row(c*origfaces + i) = parent_.fs->data().Bs[i] * fs->v(c*origfaces + i, 0);
-            edgeSegs(c*origfaces + i, 0) = 2 * (c*origfaces + i);
-            edgeSegs(c*origfaces + i, 1) = 2 * (c*origfaces + i) + 1;
-            colors.row(c*origfaces + i) = Eigen::Vector3d(0,0,0).transpose();
+        for (int c = 0; c < ncovers_; c++)
+        {
+            for (int i = 0; i < origfaces; i++)
+            {
+                Eigen::Vector3d centroid;
+                centroid.setZero();
+                for (int j = 0; j < 3; j++)
+                    centroid += renderScale_ * parent_.fs->data().V.row(parent_.fs->data().F(i, j));
+                centroid /= 3.0;
+                centroid += data_.splitOffsets[c];
+
+                edgePts.row(2 * c*origfaces + 2 * i) = centroid.transpose();
+                Eigen::Vector3d vec = parent_.fs->data().Bs[i] * fs->v(c*origfaces + i, 0);
+                vec *= vectorLength * renderScale_ * fs->data().averageEdgeLength / vec.norm() * sqrt(3.0) / 6.0 * 0.75;
+                edgePts.row(2 * c * origfaces + 2 * i + 1) = (centroid + vec).transpose();
+                edgeSegs(c*origfaces + i, 0) = 2 * (c*origfaces + i);
+                edgeSegs(c*origfaces + i, 1) = 2 * (c*origfaces + i) + 1;
+                colors.row(c*origfaces + i) = Eigen::Vector3d(0, 0, 0).transpose();
+            }
         }
     }
 
@@ -287,6 +301,105 @@ void CoverMesh::createVisualization(Eigen::MatrixXd &V, Eigen::MatrixXi &F, Eige
 int CoverMesh::visMeshToCoverMesh(int vertid)
 {
     return data_.splitToCoverVerts[vertid];
+}
+
+void CoverMesh::roundAntipodalCovers(int numISOLines)
+{
+    // create a mesh without deleted faces
+    int undeletedFaces = fs->numUndeletedFaces();
+    Eigen::MatrixXi undelF(undeletedFaces, 3);
+    Eigen::VectorXi undelFaceMap(undeletedFaces);
+    int fid=0;
+    int globalfaces = fs->nFaces();
+    for(int i=0; i<globalfaces; i++)
+    {
+        if(!fs->isFaceDeleted(i))
+        {
+            undelFaceMap[fid] = i;
+            undelF.row(fid) = fs->data().F.row(i);
+            fid++;
+        }        
+    }
+
+    Eigen::MatrixXd prunedV;
+    Eigen::MatrixXi prunedF;
+    Eigen::VectorXi I;
+    igl::remove_unreferenced(fs->data().V, undelF, prunedV, prunedF, I);
+
+    Eigen::SparseMatrix<double> L;
+    igl::cotmatrix(prunedV, prunedF, L);
+    
+    int nfields = ncovers_ / 2;
+    int origverts = parent_.fs->nVerts();
+    int newverts = prunedV.rows();
+    Eigen::VectorXd newtheta(newverts);
+    for (int i = 0; i < fs->nVerts(); i++)
+    {
+        if (I[i] != -1)
+        {
+            newtheta[I[i]] = theta[i];
+        }
+    }
+
+    double phase = 2.0 * M_PI / numISOLines;
+    double offset = M_PI / numISOLines;
+
+    std::vector<Eigen::Triplet<double> > Ccoeffs;
+    int row = 0;
+    for (int i = 0; i < origverts; i++)
+    {
+        for (int j = 0; j < nfields; j++)
+        {
+            int v1 = j * origverts + i;
+            int v2 = (j + nfields)*origverts + i;
+            int covv1 = data_.splitToCoverVerts[v1];
+            int covv2 = data_.splitToCoverVerts[v2];
+            if (I[covv1] != -1 && I[covv2] != -1)
+            {
+                double thetadiff = newtheta[I[covv1]] - newtheta[I[covv2]];
+                Ccoeffs.push_back(Eigen::Triplet<double>(row, I[covv1], 1.0));
+                Ccoeffs.push_back(Eigen::Triplet<double>(row, I[covv2], -1.0));
+                Ccoeffs.push_back(Eigen::Triplet<double>(row, newverts + j * newverts + i, phase));
+                Ccoeffs.push_back(Eigen::Triplet<double>(row, newverts + nfields * newverts, offset + thetadiff));
+            }
+        }
+        row++;
+    }
+    Eigen::SparseMatrix<double> C(row, newverts + nfields * newverts + 1);
+    C.setFromTriplets(Ccoeffs.begin(), Ccoeffs.end());
+
+    std::vector<Eigen::Triplet<double> > Acoeffs;
+    for (int k = 0; k < L.outerSize(); ++k)
+    {
+        for (Eigen::SparseMatrix<double>::InnerIterator it(L, k); it; ++it)
+        {
+            Acoeffs.push_back(Eigen::Triplet<double>(it.row(), it.col(), -it.value()));
+        }
+    }
+    for (int i = 0; i < newverts + nfields*newverts; i++)
+        Acoeffs.push_back(Eigen::Triplet<double>(i, i, 1e-6));
+    Eigen::SparseMatrix<double> A(newverts + nfields*newverts, newverts + nfields*newverts);
+    A.setFromTriplets(Acoeffs.begin(), Acoeffs.end());
+
+    Eigen::VectorXd rhs(newverts + nfields*newverts);
+    rhs.setZero();
+
+    Eigen::VectorXd result;
+
+    Eigen::VectorXi toRound(nfields*newverts);
+    for (int i = 0; i < nfields*newverts; i++)
+        toRound[i] = newverts + i;
+
+    ComisoWrapper(C, A, result, rhs, toRound, 0.0);
+    std::cout << "Residual: " << (A*result - rhs).norm() << std::endl;
+    for (int i = 0; i < fs->nVerts(); i++)
+    {
+        if (I[i] != -1)
+        {
+            theta[i] += result[I[i]];
+            theta[i] = std::remainder(theta[i], 2.0*M_PI);
+        }
+    }
 }
 
 void CoverMesh::integrateField(FieldIntegration *method)

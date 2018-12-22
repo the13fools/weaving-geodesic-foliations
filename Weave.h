@@ -6,6 +6,15 @@
 #include <vector>
 #include "FieldSurface.h"
 
+enum VectorVisualizationMode
+{
+    VMM_NOTHING,
+    VMM_VF,
+    VMM_VFANDDELTA,
+    VMM_VFPLUSDELTA
+};
+
+
 // handles on the mesh
 struct Handle
 {
@@ -43,7 +52,16 @@ public:
 
     
     bool fixFields;  // Do not allow vectors to change in optimization.  
-    void createVisualizationEdges(Eigen::MatrixXd &edgePts, Eigen::MatrixXd &edgeVecs, Eigen::MatrixXi &edgeSegs, Eigen::MatrixXd &colors);
+
+    void createVisualizationEdges(
+        Eigen::MatrixXd &edgePts, 
+        Eigen::MatrixXi &edgeSegs, 
+        Eigen::MatrixXd &colors,
+        VectorVisualizationMode mode,
+        bool normalizeVectors,
+        double baseVectorLength // ignored if normalizeVectors=true
+    );
+
     void createVisualizationCuts(Eigen::MatrixXd &cutPts1, Eigen::MatrixXd &cutPts2);
     
     CoverMesh *createCover() const;
