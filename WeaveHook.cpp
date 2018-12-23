@@ -827,11 +827,33 @@ void WeaveHook::augmentField()
         traces.purgeTraces(cover->fs);
         delete cover;
     }
-    
+
     weave->fs->undeleteAllFaces();
-    removeSingularities();
     
-    cover = weave->createCover();    
+    if (isRoSy)
+    {
+        Weave *splitWeave = weave->splitFromRosy();
+        std::vector<int> topsingularities;
+        std::vector<std::pair<int, int> > geosingularities;
+        findSingularVertices(*splitWeave, topsingularities, geosingularities);
+
+        std::vector<int> todelete = topsingularities;
+        for (int i = 0; i < geosingularities.size(); i++)
+            todelete.push_back(geosingularities[i].first);
+
+        for(int i : todelete)
+        {
+            splitWeave->fs->deleteVertex(i);
+        }
+        cover = splitWeave->createCover();
+        delete splitWeave;
+    }
+    else
+    {
+        removeSingularities();
+
+        cover = weave->createCover();
+    }
     updateRenderGeometry();
     gui_mode = GUIMode_Enum::COVER;
 }

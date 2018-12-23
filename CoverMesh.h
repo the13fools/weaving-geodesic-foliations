@@ -26,8 +26,11 @@ struct CoverData
 class CoverMesh
 {
 public:
-    CoverMesh(const Weave &parent, const Eigen::MatrixXd &V, const Eigen::MatrixXi &F, const Eigen::VectorXi &oldToNewVertMap, const Eigen::MatrixXd &field, int ncovers);
+    CoverMesh(const Surface &originalSurf, const Eigen::MatrixXd &V, const Eigen::MatrixXi &F, const Eigen::VectorXi &oldToNewVertMap, const Eigen::MatrixXd &field, int ncovers);
     ~CoverMesh();
+
+    CoverMesh(const CoverMesh &) = delete;
+    CoverMesh &operator=(const CoverMesh &) = delete;
 
     FieldSurface *fs;
     Eigen::VectorXd theta;
@@ -62,7 +65,7 @@ private:
 
     CoverData data_;
     int ncovers_;
-    const Weave &parent_;
+    Surface *originalSurf_;
     double renderScale_;    
     // edges along which the multiple cover is cut to create a topological disk
     std::vector<int> slicedEdges;

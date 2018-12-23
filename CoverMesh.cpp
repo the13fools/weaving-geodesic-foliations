@@ -20,9 +20,9 @@
 
 using namespace std;
 
-CoverMesh::CoverMesh(const Weave &parent, const Eigen::MatrixXd &V, const Eigen::MatrixXi &F, const Eigen::VectorXi &oldToNewVertMap, const Eigen::MatrixXd &field, int ncovers)
- : parent_(parent)
+CoverMesh::CoverMesh(const Surface &originalSurf, const Eigen::MatrixXd &V, const Eigen::MatrixXi &F, const Eigen::VectorXi &oldToNewVertMap, const Eigen::MatrixXd &field, int ncovers)
 {
+    originalSurf_ = new Surface(originalSurf);
     fs = new FieldSurface(V, F, 1);
     int nfaces = F.rows();
     ncovers_ = ncovers;
@@ -44,6 +44,7 @@ CoverMesh::~CoverMesh()
     delete fs;
     if (data_.splitMesh)
         delete data_.splitMesh;
+    delete originalSurf_;
 }
 
 double CoverMesh::barycentric(double val1, double val2, double target)
@@ -218,8 +219,8 @@ void CoverMesh::createVisualization(Eigen::MatrixXd &V, Eigen::MatrixXi &F,
     bool hideVectors, double vectorLength)
 {
     int splitFace = data_.splitMesh->nFaces();
-    int origverts = parent_.fs->nVerts();
-    int origfaces = parent_.fs->nFaces();
+    int origverts = originalSurf_->nVerts();
+    int origfaces = originalSurf_->nFaces();
     V = data_.splitMesh->data().V;
     F = data_.splitMesh->data().F;
     
@@ -243,12 +244,12 @@ void CoverMesh::createVisualization(Eigen::MatrixXd &V, Eigen::MatrixXi &F,
                 Eigen::Vector3d centroid;
                 centroid.setZero();
                 for (int j = 0; j < 3; j++)
-                    centroid += renderScale_ * parent_.fs->data().V.row(parent_.fs->data().F(i, j));
+                    centroid += renderScale_ * originalSurf_->data().V.row(originalSurf_->data().F(i, j));
                 centroid /= 3.0;
                 centroid += data_.splitOffsets[c];
 
                 edgePts.row(2 * c*origfaces + 2 * i) = centroid.transpose();
-                Eigen::Vector3d vec = parent_.fs->data().Bs[i] * fs->v(c*origfaces + i, 0);
+                Eigen::Vector3d vec = originalSurf_->data().Bs[i] * fs->v(c*origfaces + i, 0);
                 vec *= vectorLength * renderScale_ * fs->data().averageEdgeLength / vec.norm() * sqrt(3.0) / 6.0 * 0.75;
                 edgePts.row(2 * c * origfaces + 2 * i + 1) = (centroid + vec).transpose();
                 edgeSegs(c*origfaces + i, 0) = 2 * (c*origfaces + i);
@@ -330,7 +331,7 @@ void CoverMesh::roundAntipodalCovers(int numISOLines)
     igl::cotmatrix(prunedV, prunedF, L);
     
     int nfields = ncovers_ / 2;
-    int origverts = parent_.fs->nVerts();
+    int origverts = originalSurf_->nVerts();
     int newverts = prunedV.rows();
     
     double phase = 2.0 * M_PI / double(numISOLines);
@@ -507,8 +508,8 @@ void CoverMesh::initializeSplitMesh(const Eigen::VectorXi &oldToNewVertMap)
         data_.splitOffsets.push_back(Eigen::Vector3d(dx, dy, 0.0));
     }
 
-    int origverts = parent_.fs->nVerts();
-    int origfaces = parent_.fs->nFaces();
+    int origverts = originalSurf_->nVerts();
+    int origfaces = originalSurf_->nFaces();
     int newverts = ncovers_*origverts;
     int newfaces = ncovers_*origfaces;
     Eigen::MatrixXd V(newverts, 3);
@@ -518,13 +519,13 @@ void CoverMesh::initializeSplitMesh(const Eigen::VectorXi &oldToNewVertMap)
     {
         for (int j = 0; j < origverts; j++)
         {
-            V.row(i*origverts + j) = data_.splitOffsets[i].transpose() + renderScale_ * parent_.fs->data().V.row(j);
+            V.row(i*origverts + j) = data_.splitOffsets[i].transpose() + renderScale_ * originalSurf_->data().V.row(j);
         }
         for (int j = 0; j < origfaces; j++)
         {
             for (int k = 0; k < 3; k++)
             {
-                F(i*origfaces + j, k) = i*origverts + parent_.fs->data().F(j, k);
+                F(i*origfaces + j, k) = i*origverts + originalSurf_->data().F(j, k);
             }
         }
     }

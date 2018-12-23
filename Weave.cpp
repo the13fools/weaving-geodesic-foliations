@@ -18,6 +18,7 @@
 #include "CoverMesh.h"
 #include "RoSyUtils.h"
 #include <Eigen/Geometry>
+#include "Permutations.h"
 
 Weave::Weave(const std::string &objname, int m)
 {
@@ -615,7 +616,7 @@ CoverMesh *Weave::createCover() const
         }
     }*/
 
-    CoverMesh *ret = new CoverMesh(*this, VAug, FAug, oldId2NewId, flattenedField, nCover); 
+    CoverMesh *ret = new CoverMesh(*this->fs, VAug, FAug, oldId2NewId, flattenedField, nCover); 
     // transfer deleted faces
     for(int i=0; i<nfaces; i++)
     {
@@ -708,4 +709,28 @@ void Weave::convertToRoSy()
         int vidx = fs->vidx(i, 0);
         fs->vectorFields.segment<2>(vidx) = newvec;
     }
+}
+
+Weave *Weave::splitFromRosy()
+{
+    if (fs->nFields() != 1)
+        return NULL;
+
+    Weave *result = new Weave(fs->data().V, fs->data().F, 3);
+    // set vector fields
+    int nfaces = fs->nFaces();
+    for (int i = 0; i < nfaces; i++)
+    {
+        Eigen::Vector2d rv[3];
+        repVecToRoSy(*fs, i, fs->v(i, 0), rv[0], rv[1], rv[2]);
+        for (int j = 0; j < 3; j++)
+        {
+            int vidx = result->fs->vidx(i, j);
+            result->fs->vectorFields.segment<2>(vidx) = rv[j];
+        }
+    }
+
+    reassignAllPermutations(*result);
+
+    return result;
 }

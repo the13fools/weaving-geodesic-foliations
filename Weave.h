@@ -87,6 +87,7 @@ public:
     void deserializeOldRelaxFile(std::istream &is);
 
     void convertToRoSy();
+    Weave *splitFromRosy();
 
 private:
     // scale mesh to unit size
