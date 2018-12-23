@@ -85,26 +85,30 @@ void Weave::centerAndScale(Eigen::MatrixXd &V)
     }
 }
 
-void Weave::createVisualizationEdges(Eigen::MatrixXd &edgePts, Eigen::MatrixXd &edgeVecs, Eigen::MatrixXi &edgeSegs, Eigen::MatrixXd &colors)
+void Weave::createVisualizationEdges(
+    Eigen::MatrixXd &edgePts, 
+    Eigen::MatrixXi &edgeSegs, 
+    Eigen::MatrixXd &colors,
+    VectorVisualizationMode mode,
+    bool normalizeVectors,
+    double baseVectorLength) // ignored if normalizeVectors=true
 {
     int nfaces = fs->nFaces();
     int m = fs->nFields();
     int nhandles = nHandles();
-    // edgePts.resize(m*nfaces + nhandles, 3);
-    // edgeVecs.resize(m*nfaces + nhandles, 3);
-    // edgeVecs.setZero();
-    // edgeSegs.resize(m*nfaces + nhandles, 2);
-    // colors.resize(m*nfaces + nhandles, 3);
-    edgePts.resize(m*nfaces * 2 + nhandles, 3);
+    int vecsperface = 0;
+    if (mode == VMM_VF || mode == VMM_VFPLUSDELTA)
+        vecsperface = 1;
+    else if (mode == VMM_VFANDDELTA)
+        vecsperface = 2;
+    edgePts.resize(2 * m * nfaces * vecsperface + 2 * nhandles, 3);
     edgePts.setZero();
-    edgeVecs.resize(m*nfaces * 2 + nhandles, 3);
-    edgeVecs.setZero();
-    edgeSegs.resize(m*nfaces * 2 + nhandles, 2);
+    edgeSegs.resize(m*nfaces * vecsperface + nhandles, 2);
     edgeSegs.setZero();
-    colors.resize(m*nfaces * 2 + nhandles, 3);
+    colors.resize(m*nfaces * vecsperface + nhandles, 3);
 
     Eigen::Vector3d deltacolor = Eigen::Vector3d(1,0,0);
-    Eigen::VectorXd dual = fs->vectorFields.segment(2*nfaces*m, 2*nfaces*m);
+    //Eigen::VectorXd dual = fs->vectorFields.segment(2*nfaces*m, 2*nfaces*m);
     
     Eigen::MatrixXd fcolors(m, 3);
     for (int i = 0; i < m; i++)
@@ -120,23 +124,46 @@ void Weave::createVisualizationEdges(Eigen::MatrixXd &edgePts, Eigen::MatrixXd &
 
         for (int j = 0; j < m; j++)
         {
-            edgePts.row(m*i + j) = centroid;
-            edgeVecs.row(m*i + j) = fs->data().Bs[i] * fs->v(i, j);
-            edgeSegs(m*i + j, 0) = 2 * (m*i + j);
-            edgeSegs(m*i + j, 1) = 2 * (m*i + j) + 1;
-            colors.row(m*i + j) = fcolors.row(j);
+            // regular vector field
+            if (mode == VMM_VF || mode == VMM_VFANDDELTA || mode == VMM_VFPLUSDELTA)
+            {
+                Eigen::Vector3d vec = fs->data().Bs[i] * fs->v(i, j);
+                if(mode == VMM_VFPLUSDELTA)
+                    vec += fs->data().Bs[i] * fs->beta(i, j); // this is actually delta now...
+                if (normalizeVectors)
+                    vec.normalize();
+                else
+                {
+                    vec *= baseVectorLength;
+                }
+                vec *= fs->data().averageEdgeLength * sqrt(3.0) / 6.0 * 0.75;
 
-            edgePts.row(m*i + j + m*nfaces) = centroid;
-       //     edgeVecs.row(m*i + j + m*nfaces) = fs->data().Bs[i] * dual.segment<2>(m*i + j);
-            edgeVecs.row(m*i + j + m*nfaces) = fs->data().Bs[i] * fs->beta(i, j); // this is actually delta now...
-      //      std::cout << edgeVecs.row(m*i + j + m*nfaces).norm() << std::endl;
-            edgeSegs(m*i + j + m*nfaces, 0) = 2 * (m*i + j) + 2*m*nfaces;
-            edgeSegs(m*i + j + m*nfaces, 1) = 2 * (m*i + j) + 1 + 2*m*nfaces;
-            colors.row(m*i + j + m*nfaces) = deltacolor;
+                edgePts.row(2 * m * i + 2 * j) = centroid.transpose();
+                edgePts.row(2 * m * i + 2 * j + 1) = (centroid + vec).transpose();
+                edgeSegs(m*i + j, 0) = 2 * (m*i + j);
+                edgeSegs(m*i + j, 1) = 2 * (m*i + j) + 1;
+                colors.row(m*i + j) = fcolors.row(j);
+            }
+            if (mode == VMM_VFANDDELTA)
+            {
+                // include delta vectors
+                Eigen::Vector3d delta = fs->data().Bs[i] * fs->beta(i, j); // this is actually delta now...
+                if (normalizeVectors)
+                    delta.normalize();
+                else
+                {
+                    delta *= baseVectorLength;
+                }
+                delta *= fs->data().averageEdgeLength * sqrt(3.0) / 6.0 * 0.75;
+
+                edgePts.row(2 * m * nfaces + 2 * m*i + 2 * j) = centroid.transpose();
+                edgePts.row(2 * m * nfaces + 2 * m*i + 2 * j + 1) = (centroid + delta).transpose();
+                edgeSegs(m*nfaces + m * i + j, 0) = 2 * (m*i + j) + 2 * m*nfaces;
+                edgeSegs(m*nfaces + m * i + j, 1) = 2 * (m*i + j) + 1 + 2 * m*nfaces;
+                colors.row(m*i + j + m * nfaces) = deltacolor;
+            }
         }
     }
-
- //   std::cout <<  "edgeVecs" << edgeVecs << std::endl;
 
     for (int i = 0; i < nhandles; i++)
     {
@@ -146,20 +173,14 @@ void Weave::createVisualizationEdges(Eigen::MatrixXd &edgePts, Eigen::MatrixXd &
             centroid += fs->data().V.row(fs->data().F(handles[i].face, j));
         centroid /= 3.0;
 
+        Eigen::Vector3d dir = fs->data().Bs[handles[i].face] * handles[i].dir;
+        dir *= fs->data().averageEdgeLength * sqrt(3.0) / 6.0 * 0.75  / dir.norm();
         Eigen::Vector3d white(1, 1, 1);
-        edgePts.row(2*m*nfaces + i) = centroid;
-        edgeVecs.row(2*m*nfaces + i) = fs->data().Bs[handles[i].face] * handles[i].dir;
-        edgeSegs(2*m*nfaces + i, 0) = 4 * m*nfaces + 2 * i;
-        edgeSegs(2*m*nfaces + i, 1) = 4 * m*nfaces + 2 * i + 1;
-        colors.row(2*m*nfaces + i).setConstant(1.0);
-
-        // int face = handles[i].face;
-        // int field = handles[i].field;
-        // edgePts.row(m*face + field) = centroid;
-        // edgeVecs.row(m*face + field) = fs->data().Bs[handles[i].face] * handles[i].dir;
-        // edgeSegs(m*face + field, 0) = 2 * m*face + 2 * field;
-        // edgeSegs(m*face + field, 1) = 2 * m*face + 2 * field + 1;
-        // colors.row(m*face + field).setConstant(1.0);
+        edgePts.row(2 * m*nfaces*vecsperface + 2 * i) = centroid.transpose();
+        edgePts.row(2 * m*nfaces*vecsperface + 2 * i + 1) = (centroid+dir).transpose();
+        edgeSegs(m*nfaces*vecsperface + i, 0) = 2 * m*nfaces *vecsperface + 2 * i;
+        edgeSegs(m*nfaces*vecsperface + i, 1) = 2 * m*nfaces *vecsperface + 2 * i + 1;
+        colors.row(m*nfaces*vecsperface + i).setConstant(1.0);        
     }
 }
 
@@ -547,24 +568,25 @@ std::vector<Eigen::MatrixXd> Weave::_augmentPs() const
     int nCover = fs->nFields() * 2;
     int nfaces = fs->nFaces();
     int nverts = fs->nVerts();
+    int nfields = fs->nFields();
     std::vector<Eigen::MatrixXd> perms;
     Eigen::MatrixXd perm;
     for (int e = 0; e < fs->nEdges(); e++)
     {
         perm = Eigen::MatrixXd::Zero(nCover, nCover);
-        for (int j = 0; j < fs->nFields(); j++) 
+        for (int j = 0; j < nfields; j++) 
         {
-            for (int k = 0; k < fs->nFields(); k++)
+            for (int k = 0; k < nfields; k++)
             {
                 if( fs->Ps(e)(j, k) == 1 )
                 {
                     perm(j,k) = 1;
-                    perm(j+fs->nFields(), k+fs->nFields()) = 1;
+                    perm(j+nfields, k+nfields) = 1;
                 }
                 if( fs->Ps(e)(j, k) == -1 )
                 {
-                    perm(j,k+fs->nFields()) = 1;
-                    perm(j+fs->nFields(), k) = 1;
+                    perm(j,k+nfields) = 1;
+                    perm(j+nfields, k) = 1;
                 }
             }
         }

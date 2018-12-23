@@ -4,7 +4,6 @@
 #include <set>
 #include <cassert>
 #include <Eigen/Geometry>
-#include <Eigen/SPQRSupport>
 #include <iostream>
 
 #include "GaussNewton.h"
@@ -462,7 +461,7 @@ void LinearSolver::updateDualVars_new(const Weave &weave, SolverParams params, E
     std::cout << matrixSize << " matrix size " << std::endl;
  //   std::cout << params.softHandleConstraint << " soft constraint " << std::endl;
 
-    Eigen::SPQR<Eigen::SparseMatrix<double> > solver(dualMat);
+    Eigen::SparseQR<Eigen::SparseMatrix<double>, Eigen::COLAMDOrdering<int> > solver(dualMat);
 
 /////////////////////**********************************************************************************///////////////////////
 

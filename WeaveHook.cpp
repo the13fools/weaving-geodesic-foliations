@@ -4,10 +4,10 @@
 #include <iostream>
 #include "Permutations.h"
 #include <igl/opengl/glfw/imgui/ImGuiHelpers.h>
-//#include "ImGuiDouble.h"
 #include "Surface.h"
 #include "CoverMesh.h"
-
+#include "OurFieldIntegration.h"
+#include "BommesFieldIntegration.h"
 #include <igl/decimate.h>
 #include <igl/upsample.h>
 
@@ -32,16 +32,19 @@ void WeaveHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
     {
         if (ImGui::CollapsingHeader("Visualization (Weave)", ImGuiTreeNodeFlags_DefaultOpen))
         {
-            ImGui::InputDouble("Vector Scale", &vectorScale);
-            ImGui::Checkbox("Normalize Vectors", &normalizeVectors);
-            ImGui::Checkbox("Hide Vectors", &hideVectors);
-            ImGui::Checkbox("Show Delta", &showDelta);
+            bool needsrender = false;
+            needsrender |= ImGui::Combo("Show", (int *)&vectorVisMode, "Nothing\0V\0V and delta\0V + delta\0\0");
+            needsrender |= ImGui::InputDouble("Vector Scale", &vectorScale);
+            needsrender |= ImGui::Checkbox("Normalize Vectors", &normalizeVectors);
             ImGui::Checkbox("Wireframe", &wireframe);
             ImGui::InputDouble("Handle Scale", &params.handleScale);
             ImGui::Combo("Shading", (int *)&weave_shading_state, "None\0F1 Energy\0F2 Energy\0F3 Energy\0Total Energy\0Connection\0\0");
             if (ImGui::Button("Normalize Fields", ImVec2(-1, 0)))
                 normalizeFields();
             ImGui::Checkbox("Fix Fields", &weave->fixFields);
+
+            if (needsrender)
+                updateRenderGeometry();
         }
         if (ImGui::CollapsingHeader("Solver Parameters", ImGuiTreeNodeFlags_DefaultOpen))
         {
@@ -169,21 +172,35 @@ void WeaveHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
     {
         if (ImGui::CollapsingHeader("Visualization (Cover)", ImGuiTreeNodeFlags_DefaultOpen))
         {
-            ImGui::InputDouble("Vector Scale", &vectorScale);
-            ImGui::Checkbox("Hide Vectors", &hideVectors);
-            ImGui::Combo("Shading", (int *)&cover_shading_state, "None\0S Value\0Theta Value\0Connection\0\0");
+            bool needsrender = false;
+            needsrender |= ImGui::InputDouble("Vector Scale", &vectorScale);
+            needsrender |= ImGui::Checkbox("Hide Vectors", &hideCoverVectors);
+            ImGui::Combo("Shading", (int *)&cover_shading_state, "None\0Theta Value\0Connection\0\0");
             ImGui::Checkbox("Show Cuts", &showCoverCuts);
+
+            if (needsrender)
+                updateRenderGeometry();
         }
 
         if (ImGui::CollapsingHeader("Cover Controls", ImGuiTreeNodeFlags_DefaultOpen))
         {
-            ImGui::InputDouble("Regularization", &initSReg);
-            if (ImGui::Button("Initialize S", ImVec2(-1,0)))
-                initializeS();
-            ImGui::InputDouble("Global Rescaling", &globalSScale);
+            ImGui::Combo("Integration Method", (int *)&field_integration_method, "Ours\0Bommes\0\0");
+            if (field_integration_method == FI_OURS)
+            {
+                ImGui::InputDouble("Regularization", &initSReg);
+                ImGui::InputDouble("Global Rescaling", &globalSScale);
+            }
+            else if (field_integration_method == FI_BOMMES)
+            {
+                ImGui::InputDouble("Anisotropy", &bommesAniso);
+                ImGui::InputDouble("Regularization", &initSReg);
+                ImGui::InputDouble("Global Rescaling", &globalSScale);
+            }
             if (ImGui::Button("Compute Function Value", ImVec2(-1, 0)))
                 computeFunc();
             ImGui::InputInt("Num Isolines", &numISOLines);
+            if (ImGui::Button("Round Antipodal Covers", ImVec2(-1, 0)))
+                roundCovers();
             if (ImGui::Button("Draw Isolines", ImVec2(-1, 0)))
                 drawISOLines();
             ImGui::InputText("Export Prefix", exportPrefix);
@@ -383,12 +400,7 @@ void WeaveHook::setFaceColorsCover(igl::opengl::glfw::Viewer &viewer)
     {
         cover->fs->connectionEnergy(Z, 0., params);
     }
-    
-    if (cover_shading_state == CS_S_VAL)
-    {
-        Z = cover->s;
-    }
-
+       
     Eigen::MatrixXd faceColors(cover->fs->nFaces(), 3);
     Eigen::MatrixXd vertColors(nsplitverts, 3);
 
@@ -583,57 +595,7 @@ void WeaveHook::renderRenderGeometry(igl::opengl::glfw::Viewer &viewer)
     if (gui_mode == GUIMode_Enum::WEAVE)
     {
         viewer.data().set_mesh(renderQWeave, renderFWeave);
-        int nfaces = weave->fs->nFaces();
-        int m = weave->fs->nFields();
-        int nhandles = weave->nHandles();
-      //  int edges = edgeSegsWeave.rows();
-        Eigen::MatrixXd renderPts(4 * nfaces * m + 2*nhandles, 3);
-        renderPts.setZero();
-        for (int i = 0; i < nfaces * m; i++)
-        {
-            Eigen::Vector3d vec = edgeVecsWeave.row(i);
-            Eigen::Vector3d delta = edgeVecsWeave.row(i + nfaces * m);
-            if (normalizeVectors)
-            {
-                if (vec.norm() != 0.0)
-                {
-                    vec *= baseLength / vec.norm() * sqrt(3.0) / 6.0 * 0.75;
-                    delta *= baseLength / delta.norm() * sqrt(3.0) / 6.0 * 0.75;
-                }
-            }
-        //    renderPts.row(2 * i) = edgePtsWeave.row(i) - vectorScale*vec.transpose();
-            if (!hideVectors)
-            {
-                renderPts.row(2 * i) = edgePtsWeave.row(i);
-                renderPts.row(2 * i + 1) = edgePtsWeave.row(i) + vectorScale*vec.transpose();
-            }
-            if ( solver_mode == 0 )
-            {
-                renderPts.row(2 * i + nfaces * m * 2 ) = edgePtsWeave.row(i + nfaces * m);
-                renderPts.row(2 * i + 1 + nfaces * m * 2 ) = edgePtsWeave.row(i + nfaces * m) + vectorScale*delta.transpose();
-                if (!showDelta)
-                    renderPts.row(2 * i + 1 + nfaces * m * 2 ) += vectorScale*vec.transpose();
-            }
-
-      //      renderPts.row(2 * i + edges/2) = edgePtsWeave.row(i);
-      //      renderPts.row(2 * i + 1 + edges/2) = edgePtsWeave.row(i) + vectorScale*delta.transpose();
-            // renderPts.row(2 * i + nfaces * m * 2 ) = edgePtsWeave.row(i + nfaces * m) + vectorScale*vec.transpose();
-            // renderPts.row(2 * i + 1 + nfaces * m * 2 ) = edgePtsWeave.row(i + nfaces * m) + vectorScale*vec.transpose() + vectorScale*delta.transpose();
-      //      std::cout << "delta " << i << " " << delta.transpose() << " norm " << delta.norm() << std::endl << "     vec " << vec.transpose() << " norm " << vec.norm() << std::endl;
-        }
-        for (int i = 0; i < nhandles; i++)
-        {
-            Eigen::Vector3d vec = edgeVecsWeave.row(2*m*nfaces + i);
-            vec *= baseLength / vec.norm() * sqrt(3.0) / 6.0 * 0.75;
-            renderPts.row(4*m*nfaces + 2 * i) = edgePtsWeave.row(2*m*nfaces + i);
-            renderPts.row(4*m*nfaces + 2 * i + 1) = edgePtsWeave.row(2*m*nfaces + i) + 3.*vec.transpose();
-        }
-        if (!hideVectors)
-        {
-            viewer.data().set_edges(renderPts, edgeSegsWeave, edgeColorsWeave);
-   //         std::cout << renderPts.rows() << " " << edgeSegsWeave.rows() << " " << edgeColorsWeave.rows() << std::endl;
-     //                   std::cout << renderPts << " " << edgeSegsWeave << " " << edgeColorsWeave << std::endl;
-        }
+        viewer.data().set_edges(edgePtsWeave, edgeSegsWeave, edgeColorsWeave);
         setFaceColorsWeave(viewer);
         if(showTraces)
             viewer.data().add_edges( tracestarts, traceends, tracecolors );
@@ -651,20 +613,7 @@ void WeaveHook::renderRenderGeometry(igl::opengl::glfw::Viewer &viewer)
     else if (gui_mode == GUIMode_Enum::COVER)
     {
         viewer.data().set_mesh(renderQCover, renderFCover);        
-        int edges = edgeSegsCover.rows();
-        Eigen::MatrixXd renderPts(2 * edges, 3);
-        for (int i = 0; i < edges; i++)
-        {
-            Eigen::Vector3d vec = edgeVecsCover.row(i);
-            if (vec.norm() != 0.0)
-                vec *= cover->renderScale() * baseLength / vec.norm() * sqrt(3.0) / 6.0 * 0.75;
-            renderPts.row(2 * i) = edgePtsCover.row(i) - vectorScale*vec.transpose();
-            renderPts.row(2 * i + 1) = edgePtsCover.row(i) + vectorScale*vec.transpose();
-        }
-        if (!hideVectors)
-        {
-            viewer.data().set_edges(renderPts, edgeSegsCover, edgeColorsCover);
-        }
+        viewer.data().set_edges(edgePtsCover, edgeSegsCover, edgeColorsCover);
         setFaceColorsCover(viewer);
         if(showCoverCuts)
             drawCuts(viewer);
@@ -866,9 +815,30 @@ void WeaveHook::augmentField()
 
 void WeaveHook::computeFunc()
 {
-    if(cover)
-        cover->computeFunc(globalSScale);
+    if (cover)
+    {
+        FieldIntegration *method;
+        if (field_integration_method == FI_OURS)
+            method = new OurFieldIntegration(initSReg, globalSScale);
+        else if (field_integration_method == FI_BOMMES)
+            method = new BommesFieldIntegration(bommesAniso, initSReg, globalSScale);
+        else
+        {
+            assert(!"Unknown integration method");
+            return;
+        }
+        cover->integrateField(method);
+        delete method;
+    }
     updateRenderGeometry();
+}
+
+void WeaveHook::roundCovers()
+{
+    if (cover && numISOLines > 0)
+    {
+        cover->roundAntipodalCovers(numISOLines);
+    }
 }
 
 void WeaveHook::drawISOLines()
@@ -887,8 +857,13 @@ void WeaveHook::drawISOLines()
 
 void WeaveHook::deserializeVectorField()
 {
-    clear();
     std::ifstream ifs(vectorFieldName, ios::binary);
+    if (!ifs)
+    {
+        std::cerr << "Cannot open vector field file: " << vectorFieldName << std::endl;
+        return;
+    }
+    clear();    
     weave->deserialize(ifs);
     updateRenderGeometry();
 }
@@ -962,9 +937,9 @@ void WeaveHook::updateRenderGeometry()
 {
     renderQWeave = weave->fs->data().V;
     renderFWeave = weave->fs->data().F;
-    weave->createVisualizationEdges(edgePtsWeave, edgeVecsWeave, edgeSegsWeave, edgeColorsWeave);
+    weave->createVisualizationEdges(edgePtsWeave, edgeSegsWeave, edgeColorsWeave, 
+        vectorVisMode, normalizeVectors, vectorScale);
     weave->createVisualizationCuts(cutPos1Weave, cutPos2Weave);
-    baseLength = weave->fs->data().averageEdgeLength;
     curFaceEnergies = tempFaceEnergies;
 
     // TODO: refactor, just used for rendering 
@@ -1038,8 +1013,9 @@ void WeaveHook::updateRenderGeometry()
 
     if (cover)
     {
-        cover->createVisualization(renderQCover, renderFCover, edgePtsCover, edgeVecsCover, edgeSegsCover, edgeColorsCover,
-            cutPos1Cover, cutPos2Cover, cutColorsCover);
+        cover->createVisualization(renderQCover, renderFCover, edgePtsCover, edgeSegsCover, edgeColorsCover,
+            cutPos1Cover, cutPos2Cover, cutColorsCover,
+            hideCoverVectors, vectorScale);
 
         int totsegs = 0;
         int ntraces = traces.nTraces();
@@ -1072,7 +1048,6 @@ void WeaveHook::updateRenderGeometry()
         renderQCover.resize(0, 3);
         renderFCover.resize(0, 3);
         edgePtsCover.resize(0, 3);
-        edgeVecsCover.resize(0, 3);
         edgeSegsCover.resize(0, 2);
         edgeColorsCover.resize(0, 3);
         cutPos1Cover.resize(0, 3);
@@ -1081,12 +1056,6 @@ void WeaveHook::updateRenderGeometry()
         pathstarts.resize(0, 3);
         pathends.resize(0, 3);
     }
-}
-
-void WeaveHook::initializeS()
-{
-    if(cover) cover->initializeS(initSReg);
-    updateRenderGeometry();
 }
 
 void WeaveHook::saveRods()
@@ -1119,11 +1088,11 @@ void WeaveHook::exportForRendering()
     }
     for(int i=0; i<2*nfields; i++)
     {
-        std::stringstream ss;
+        /*std::stringstream ss;
         ss << exportPrefix << "_s_" << i << ".csv";
         std::ofstream sfs(ss.str().c_str());
         for(int j=0; j<nfaces; j++)
-            sfs << cover->s[i*nfaces + j] << ",\t 0,\t0" << std::endl;
+            sfs << cover->s[i*nfaces + j] << ",\t 0,\t0" << std::endl;*/
             
         std::stringstream ss2;
         ss2 << exportPrefix << "_theta_" << i << ".csv";

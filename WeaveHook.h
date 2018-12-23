@@ -21,9 +21,13 @@ enum WeaveShading_Enum {
     WS_CONNECTION_ENERGY
 };
 
+enum FieldIntegration_Enum {
+    FI_OURS = 0, // local+global s rescaling
+    FI_BOMMES    // anisotropic mixed-integer
+};
+
 enum CoverShading_Enum {
     CS_NONE = 0,
-    CS_S_VAL,
     FUN_VAL,
     CS_CONNECTION_ENERGY
 };
@@ -71,8 +75,7 @@ public:
         traceSteps = 100;
         traceFaceId = 0;
         
-        hideVectors = false;
-        showDelta = true;
+        vectorVisMode = VMM_VFANDDELTA;
         showSingularities = false;
         wireframe = false;
 
@@ -88,6 +91,8 @@ public:
         showCoverCuts = true;
         numISOLines = 0;
         
+        field_integration_method = FI_OURS;
+        bommesAniso = 1.0;
         initSReg = 1e-4;
         globalSScale = 1.0;
 
@@ -97,6 +102,8 @@ public:
         segLen = 0.02;
         maxCurvature = 0.5;
         minRodLen = 1.0;
+
+        hideCoverVectors = false;
     }
 
     virtual void drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu);
@@ -108,9 +115,8 @@ public:
     void deserializeVectorField();    
     void deserializeVectorFieldOld();
     void augmentField();
-    void initializeS();
-    void initializeSAlt();
     void computeFunc();
+    void roundCovers();
     void drawISOLines();
     void resetCutSelection();
     void addCut();
@@ -153,10 +159,7 @@ private:
     std::vector<std::pair<int, int > > selectedVertices; // (face, vert) pairs
     
     double vectorScale;
-    double baseLength;
-
-    int fieldCount;
-
+    
     Eigen::VectorXd handleParams;
     Eigen::VectorXi handleLocation;
 
@@ -167,17 +170,14 @@ private:
     Eigen::MatrixXd renderQWeave;
     Eigen::MatrixXi renderFWeave;
     Eigen::MatrixXd edgePtsWeave;
-    Eigen::MatrixXd edgeVecsWeave;
     Eigen::MatrixXi edgeSegsWeave;
     Eigen::MatrixXd edgeColorsWeave;    
     Eigen::MatrixXd edgePtsCover;
-    Eigen::MatrixXd edgeVecsCover;
     Eigen::MatrixXi edgeSegsCover;
     Eigen::MatrixXd edgeColorsCover;    
     std::vector<Eigen::Vector3d> renderSelectedVertices; // teal selected vertex spheres
+    VectorVisualizationMode vectorVisMode;
     bool normalizeVectors;
-    bool hideVectors;
-    bool showDelta;
     bool showCoverCuts;
     bool wireframe;
 
@@ -229,9 +229,16 @@ private:
     Eigen::MatrixXd rattracestarts;
     Eigen::MatrixXd rattraceends;
     Eigen::MatrixXd ratcollisions;
+
+    FieldIntegration_Enum field_integration_method;
+
     int numISOLines;
+    double bommesAniso;
     double initSReg;
     double globalSScale;
+
+    int fieldCount;
+    bool hideCoverVectors;
 };
 
 #endif

@@ -2,7 +2,6 @@
 #include "Weave.h"
 #include <iostream>
 #include <fstream>
-// #include <Eigen/CholmodSupport>
 
 using namespace Eigen;
 

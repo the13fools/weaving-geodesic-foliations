@@ -4,7 +4,6 @@
 #include <Eigen/Core>
 #include <vector>
 #include <Eigen/Sparse>
-#include <Eigen/SPQRSupport>
 
 class Weave;
 struct SolverParams;
@@ -47,7 +46,7 @@ public:
      std::vector<Handle> handles;
 
 private:
-    Eigen::SPQR<Eigen::SparseMatrix<double> > * dualSolver;
+    Eigen::SparseQR<Eigen::SparseMatrix<double>, Eigen::COLAMDOrdering<int> > * dualSolver;
 
     // Eigen::MatrixXd V;
     // Eigen::MatrixXi F;

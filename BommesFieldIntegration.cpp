@@ -1,16 +1,15 @@
-#include <igl/opengl/glfw/Viewer.h>
-#include <igl/boundary_loop.h>
+#include "BommesFieldIntegration.h"
+#include <iostream>
+#include <vector>
 #include <map>
+#include <set>
 #include <deque>
-#include <igl/cotmatrix.h>
-#include <igl/slice.h>
-#include <igl/boundary_facets.h>
-#include <igl/unique.h>
-#include <igl/slice_into.h>
-#include <igl/setdiff.h>
 #include <igl/remove_unreferenced.h>
+#include <igl/cotmatrix.h>
+#include <igl/writeOBJ.h>
+#include "CoMISoWrapper.h"
 
-void findCuts(const Eigen::MatrixXd &V, const Eigen::MatrixXi &F,
+static void findCuts(const Eigen::MatrixXd &V, const Eigen::MatrixXi &F,
     std::vector<std::vector<int> > &cuts)
 {
     cuts.clear();
@@ -23,7 +22,7 @@ void findCuts(const Eigen::MatrixXd &V, const Eigen::MatrixXi &F,
 
     std::map<std::pair<int, int>, std::vector<int> > edges;
     // build edges
-    
+
     for (int i = 0; i < nfaces; i++)
     {
         for (int j = 0; j < 3; j++)
@@ -73,13 +72,13 @@ void findCuts(const Eigen::MatrixXd &V, const Eigen::MatrixXi &F,
             faceEdges(i, j) = edgeidx[e];
         }
     }
-    
+
     bool *deleted = new bool[nfaces];
     for (int i = 0; i < nfaces; i++)
         deleted[i] = false;
 
     std::set<int> deletededges;
-    
+
     // loop over faces
     for (int face = 0; face < nfaces; face++)
     {
@@ -149,7 +148,7 @@ void findCuts(const Eigen::MatrixXd &V, const Eigen::MatrixXi &F,
         spinevertedges[edgeVerts(i, 0)].push_back(i);
         spinevertedges[edgeVerts(i, 1)].push_back(i);
     }
-    
+
     std::deque<int> vertsProcess;
     std::map<int, int> spinevertnbs;
     for (auto it : spinevertedges)
@@ -193,7 +192,7 @@ void findCuts(const Eigen::MatrixXd &V, const Eigen::MatrixXi &F,
         loopvertedges[edgeVerts(e, 0)].push_back(e);
         loopvertedges[edgeVerts(e, 1)].push_back(e);
     }
-    
+
     std::set<int> usededges;
     for (int e : loopedges)
     {
@@ -264,6 +263,11 @@ void findCuts(const Eigen::MatrixXd &V, const Eigen::MatrixXi &F,
                 // we've hit a dead end. reverse and try the other direction
                 std::reverse(cycleverts.begin(), cycleverts.end());
                 std::reverse(cycleedges.begin(), cycleedges.end());
+                cycleidx.clear();
+                for (int i = 0; i < cycleverts.size(); i++)
+                {
+                    cycleidx[cycleverts[i]] = i;
+                }
                 curvert = cycleverts.back();
                 cure = cycleedges.back();
                 while (curvert != -1 && !foundcycle)
@@ -331,7 +335,8 @@ void findCuts(const Eigen::MatrixXd &V, const Eigen::MatrixXi &F,
     }
 }
 
-void cutMesh(const Eigen::MatrixXd &V, const Eigen::MatrixXi &F,
+
+static void cutMesh(const Eigen::MatrixXd &V, const Eigen::MatrixXi &F,
     // list of cuts, each of which is a list (in order) of vertex indices of one cut.
     // Cuts can be closed loops (in which case the last vertex index should equal the
     // first) or open (in which case the two endpoint vertices should be distinct).
@@ -418,7 +423,7 @@ void cutMesh(const Eigen::MatrixXd &V, const Eigen::MatrixXi &F,
 
     // have we visited this face yet?
     bool *visited = new bool[F.rows()];
-    
+
     // edges that form part of a cut
     std::set<edge> forbidden;
     for (int i = 0; i < ncuts; i++)
@@ -434,7 +439,7 @@ void cutMesh(const Eigen::MatrixXd &V, const Eigen::MatrixXi &F,
     // connected components of faces adjacent to the cuts
     std::vector<std::vector<std::vector<int> > > components;
     components.resize(ncuts);
-    
+
     // for each cut
     for (int cut = 0; cut < ncuts; cut++)
     {
@@ -572,7 +577,7 @@ void cutMesh(const Eigen::MatrixXd &V, const Eigen::MatrixXi &F,
     {
         augV.row(i) = V.row(i);
     }
-    
+
     // create new faces
     Eigen::MatrixXi augF = F;
 
@@ -624,10 +629,193 @@ void cutMesh(const Eigen::MatrixXd &V, const Eigen::MatrixXi &F,
     }
 
     assert(idx == augV.rows());
-    
+
     // some duplicated vertices will not have been used
     Eigen::MatrixXi I;
     igl::remove_unreferenced(augV, augF, newV, newF, I);
     delete[] visited;
 }
 
+void BommesFieldIntegration::integrateOneComponent(const Surface &surf, const Eigen::MatrixXd &v, Eigen::VectorXd &theta)
+{
+    int nverts = surf.nVerts();
+    theta.resize(nverts);
+    theta.setZero();
+    std::vector<std::vector<int> > cuts;
+    findCuts(surf.data().V, surf.data().F, cuts);
+    std::cout << "Used " << cuts.size() << " cuts" << std::endl;
+
+    std::map<std::pair<int, int>, int> cutpairs;
+
+    // convert cuts to edge indices
+    for (int i = 0; i < cuts.size(); i++)
+    {        
+        int len = cuts[i].size();
+        for (int j = 0; j < len - 1; j++)
+        {
+            cutpairs[std::pair<int, int>(cuts[i][j], cuts[i][j + 1])] = i;
+        }
+    }
+
+    Eigen::MatrixXd newV;
+    Eigen::MatrixXi newF;
+
+    cutMesh(surf.data().V, surf.data().F, cuts, newV, newF);
+    
+    Surface s(newV, newF);
+    int newverts = s.nVerts();
+    int intdofs = cuts.size();
+
+    std::vector<Eigen::Triplet<double> > Ccoeffs;
+    int row = 0;
+    for (int i = 0; i < surf.nEdges(); i++)
+    {
+        int f1 = surf.data().E(i, 0);
+        int f2 = surf.data().E(i, 1);
+        if (f1 == -1 || f2 == -1)
+            continue;
+        int v1 = surf.data().edgeVerts(i, 0);
+        int v2 = surf.data().edgeVerts(i, 1);
+        double sign = 1.0;
+        auto it = cutpairs.find(std::pair<int, int>(v1, v2));
+        if (it == cutpairs.end())
+        {
+            it = cutpairs.find(std::pair<int, int>(v2, v1));
+            sign = -1.0;
+        }
+        if (it == cutpairs.end())
+            continue;
+
+        int newv1 = -1;
+        int newv2 = -1;
+        int neww1 = -1;
+        int neww2 = -1;
+        for (int j = 0; j < 3; j++)
+        {
+            if (surf.data().F(f1, j) == v1)
+                newv1 = newF(f1, j);
+            if (surf.data().F(f2, j) == v1)
+                newv2 = newF(f2, j);
+            if (surf.data().F(f1, j) == v2)
+                neww1 = newF(f1, j);
+            if (surf.data().F(f2, j) == v2)
+                neww2 = newF(f2, j);
+        }
+
+        Ccoeffs.push_back(Eigen::Triplet<double>(row, newv1, sign));
+        Ccoeffs.push_back(Eigen::Triplet<double>(row, newv2, -sign));
+        Ccoeffs.push_back(Eigen::Triplet<double>(row, newverts + it->second, 1.0));
+        Ccoeffs.push_back(Eigen::Triplet<double>(row + 1, neww1, sign));
+        Ccoeffs.push_back(Eigen::Triplet<double>(row + 1, neww2, -sign));
+        Ccoeffs.push_back(Eigen::Triplet<double>(row + 1, newverts + it->second, 1.0));
+        row += 2;
+    }
+    Eigen::SparseMatrix<double> C(row, newverts + intdofs + 1);
+    C.setFromTriplets(Ccoeffs.begin(), Ccoeffs.end());
+    //igl::writeOBJ("test.obj", newV, newF);
+
+    std::vector<Eigen::Triplet<double> > Acoeffs;
+    int nfaces = s.nFaces();
+    for (int i = 0; i < nfaces; i++)
+    {
+        for (int j = 0; j < 3; j++)
+        {
+            Acoeffs.push_back(Eigen::Triplet<double>(3 * i + j, s.data().F(i, j), 1.0));
+        }
+    }
+    Eigen::SparseMatrix<double> A(3 * nfaces, newverts + intdofs);
+    A.setFromTriplets(Acoeffs.begin(), Acoeffs.end());
+
+    std::vector<Eigen::Triplet<double> > Dcoeffs;
+    for (int i = 0; i < nfaces; i++)
+    {
+        Dcoeffs.push_back(Eigen::Triplet<double>(2 * i, 3 * i + 1, 1.0));
+        Dcoeffs.push_back(Eigen::Triplet<double>(2 * i, 3 * i, -1.0));
+        Dcoeffs.push_back(Eigen::Triplet<double>(2 * i + 1, 3 * i + 2, 1.0));
+        Dcoeffs.push_back(Eigen::Triplet<double>(2 * i + 1, 3 * i, -1.0));
+    }
+    Eigen::SparseMatrix<double> D(2 * nfaces, 3 * nfaces);
+    D.setFromTriplets(Dcoeffs.begin(), Dcoeffs.end());
+
+    std::vector<Eigen::Triplet<double> > Mcoeffs;
+    double totarea = 0;
+    for (int i = 0; i < nfaces; i++)
+    {
+        Eigen::Matrix<double, 3, 2> B = s.data().Bs[i];
+        Eigen::Vector3d vec = B*v.row(i).transpose();
+        vec.normalize();
+        Eigen::Vector3d n = s.faceNormal(i);
+        double area = s.faceArea(i);
+        totarea += area;
+        Eigen::Vector3d vecperp = n.cross(vec);
+        Eigen::Matrix3d metric = vec * vec.transpose() + aniso_*vecperp * vecperp.transpose();
+        Eigen::Matrix2d BTB = area * B.transpose()*metric *B;
+        for (int j = 0; j < 2; j++)
+            for (int k = 0; k < 2; k++)
+            {
+                Mcoeffs.push_back(Eigen::Triplet<double>(2 * i + j, 2 * i + k, BTB(j, k)));
+            }
+    }
+    Eigen::SparseMatrix<double> M(2 * nfaces, 2 * nfaces);
+    M.setFromTriplets(Mcoeffs.begin(), Mcoeffs.end());
+    Eigen::VectorXd projvf(2 * nfaces);
+    double scale = surf.data().averageEdgeLength * globalScale_;
+    for (int i = 0; i < nfaces; i++)
+    {
+        Eigen::Vector3d vec = surf.data().Bs[i] * v.row(i).transpose();
+        double fac = scale / vec.norm();
+        projvf.segment<2>(2 * i) = fac * surf.data().Js.block<2,2>(2*i,0) * v.row(i).transpose();
+    }
+
+    Eigen::VectorXd rhs = A.transpose() * D.transpose() * M * projvf;
+    Eigen::SparseMatrix<double> Mat = A.transpose()  * D.transpose() * M * D * A;
+
+    Eigen::SparseMatrix<double> L;
+    igl::cotmatrix(s.data().V, s.data().F, L);
+    std::vector<Eigen::Triplet<double> > Laugcoeffs;
+    for (int k = 0; k < L.outerSize(); ++k)
+    {
+        for (Eigen::SparseMatrix<double>::InnerIterator it(L, k); it; ++it)
+        {
+            Laugcoeffs.push_back(Eigen::Triplet<double>(it.row(), it.col(), -smoothreg_ * totarea * it.value()));
+        }
+    }
+    
+    for (int i = 0; i < intdofs; i++)
+    {
+        Laugcoeffs.push_back(Eigen::Triplet<double>(newverts + i, newverts + i, 1e-6));
+    }
+
+    Eigen::SparseMatrix<double> Laug(newverts + intdofs, newverts + intdofs);
+    Laug.setFromTriplets(Laugcoeffs.begin(), Laugcoeffs.end());
+    Mat += Laug;
+
+    Eigen::VectorXd result;
+    Eigen::VectorXi toRound(intdofs);
+    for (int i = 0; i < intdofs; i++)
+    {
+        toRound[i] = newverts + i;
+    }
+    ComisoWrapper(C, Mat, result, rhs, toRound, 1e-6);
+    std::cout << "residual: " << (Mat*result - rhs).norm() << std::endl;
+
+    Eigen::SimplicialLDLT<Eigen::SparseMatrix<double> > solver(Mat);
+    Eigen::VectorXd unconstr = solver.solve(rhs);
+    //result = unconstr;
+    for (int i = 0; i < nfaces; i++)
+    {
+        for (int j = 0; j < 3; j++)
+        {
+            double intpart;
+            double fracpart = std::modf(result[newF(i, j)], &intpart);
+            if (fracpart < 0)
+                fracpart = 1 + fracpart;
+            fracpart -= 0.5;
+            theta[surf.data().F(i, j)] = 2.0 * M_PI * fracpart;
+        }
+    }
+    std::cout << "Integer vars: ";
+    std::cout << result.segment(newverts, intdofs).transpose() << std::endl;
+
+    //std::cout << result << std::endl;
+}
