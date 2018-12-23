@@ -277,9 +277,6 @@ void WeaveHook::clear()
     pathends.resize(0,3);
 
     traces.clear();
-
-    // run one step? 
-    oneStep(*weave, params);
 }
 
 void WeaveHook::initSimulation()
