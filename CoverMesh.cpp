@@ -332,17 +332,12 @@ void CoverMesh::roundAntipodalCovers(int numISOLines)
     int nfields = ncovers_ / 2;
     int origverts = parent_.fs->nVerts();
     int newverts = prunedV.rows();
-    Eigen::VectorXd newtheta(newverts);
-    for (int i = 0; i < fs->nVerts(); i++)
-    {
-        if (I[i] != -1)
-        {
-            newtheta[I[i]] = theta[i];
-        }
-    }
-
-    double phase = 2.0 * M_PI / numISOLines;
+    
+    double phase = 2.0 * M_PI / double(numISOLines);
     double offset = M_PI / numISOLines;
+
+    Eigen::VectorXd result(newverts + nfields * origverts);
+    result.setZero();
 
     std::vector<Eigen::Triplet<double> > Ccoeffs;
     int row = 0;
@@ -356,16 +351,16 @@ void CoverMesh::roundAntipodalCovers(int numISOLines)
             int covv2 = data_.splitToCoverVerts[v2];
             if (I[covv1] != -1 && I[covv2] != -1)
             {
-                double thetadiff = newtheta[I[covv1]] - newtheta[I[covv2]];
+                double thetadiff = theta[covv1] + theta[covv2];
                 Ccoeffs.push_back(Eigen::Triplet<double>(row, I[covv1], 1.0));
-                Ccoeffs.push_back(Eigen::Triplet<double>(row, I[covv2], -1.0));
-                Ccoeffs.push_back(Eigen::Triplet<double>(row, newverts + j * newverts + i, phase));
-                Ccoeffs.push_back(Eigen::Triplet<double>(row, newverts + nfields * newverts, offset + thetadiff));
+                Ccoeffs.push_back(Eigen::Triplet<double>(row, I[covv2], 1.0));
+                Ccoeffs.push_back(Eigen::Triplet<double>(row, newverts + j * origverts + i, phase));
+                Ccoeffs.push_back(Eigen::Triplet<double>(row, newverts + nfields * origverts, offset + thetadiff));
+                row++;
             }
         }
-        row++;
     }
-    Eigen::SparseMatrix<double> C(row, newverts + nfields * newverts + 1);
+    Eigen::SparseMatrix<double> C(row, newverts + nfields * origverts + 1);
     C.setFromTriplets(Ccoeffs.begin(), Ccoeffs.end());
 
     std::vector<Eigen::Triplet<double> > Acoeffs;
@@ -376,22 +371,24 @@ void CoverMesh::roundAntipodalCovers(int numISOLines)
             Acoeffs.push_back(Eigen::Triplet<double>(it.row(), it.col(), -it.value()));
         }
     }
-    for (int i = 0; i < newverts + nfields*newverts; i++)
-        Acoeffs.push_back(Eigen::Triplet<double>(i, i, 1e-6));
-    Eigen::SparseMatrix<double> A(newverts + nfields*newverts, newverts + nfields*newverts);
+    for (int i = 0; i < newverts + nfields*origverts; i++)
+        Acoeffs.push_back(Eigen::Triplet<double>(i, i, 1e-4));
+    Eigen::SparseMatrix<double> A(newverts + nfields*origverts, newverts + nfields*origverts);
     A.setFromTriplets(Acoeffs.begin(), Acoeffs.end());
 
-    Eigen::VectorXd rhs(newverts + nfields*newverts);
+    Eigen::VectorXd rhs(newverts + nfields*origverts);
     rhs.setZero();
 
-    Eigen::VectorXd result;
-
-    Eigen::VectorXi toRound(nfields*newverts);
-    for (int i = 0; i < nfields*newverts; i++)
+    Eigen::VectorXi toRound(nfields*origverts);
+    for (int i = 0; i < nfields*origverts; i++)
         toRound[i] = newverts + i;
 
-    ComisoWrapper(C, A, result, rhs, toRound, 0.0);
+    ComisoWrapper(C, A, result, rhs, toRound, 1e-6);
     std::cout << "Residual: " << (A*result - rhs).norm() << std::endl;
+    Eigen::VectorXd ctest(newverts + nfields * origverts + 1);
+    ctest.segment(0, newverts + nfields * origverts) = result;
+    ctest[newverts + nfields * origverts] = 1.0;
+    std::cout << "Constraint residual: " << (C*ctest).norm() << std::endl;
     for (int i = 0; i < fs->nVerts(); i++)
     {
         if (I[i] != -1)

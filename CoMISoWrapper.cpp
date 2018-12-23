@@ -47,8 +47,6 @@ void ComisoWrapper(const Eigen::SparseMatrix<double> &constraints,
     {
         assert(toRoundv[i] >= 0 && toRoundv[i] < n);
     }
-    solver.misolver().set_cg_error(1e-6);
-    solver.misolver().set_local_error(1e-6);
     solver.solve(Cgmm, Agmm, X, rhsv, toRoundv, reg, false, false);
     result.resize(n);
     for (int i = 0; i < n; i++)

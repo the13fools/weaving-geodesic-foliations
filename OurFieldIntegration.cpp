@@ -196,6 +196,11 @@ void OurFieldIntegration::initializeS(const Surface &surf, const Eigen::MatrixXd
 
     double s_scale = 3.1415 / surf.data().averageEdgeLength / maxS;
     s *= s_scale;
+
+    // fix s sign
+    double totals = s.sum();
+    if (totals < 0)
+        s *= -1.0;
 }
 
 void OurFieldIntegration::globalSThetaSolve(const Surface &surf, const Eigen::MatrixXd &v, Eigen::VectorXd &s, Eigen::VectorXd &theta)
