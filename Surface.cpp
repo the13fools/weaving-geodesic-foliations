@@ -290,23 +290,9 @@ void Surface::buildGeometricStructures()
 
         data_.Ts_rosy.block<2, 2>(2 * edgeidx, 0) = BTB2.inverse() * data_.Bs[face2].transpose() * R1 * data_.Bs[face2];
         data_.Ts_rosy.block<2, 2>(2 * edgeidx, 2) = BTB1.inverse() * data_.Bs[face1].transpose() * R2 * data_.Bs[face1];
-         
-   //     std::cout << BTB2.inverse() * data_.Bs[face2].transpose() * R1.inverse() * data_.Bs[face2] * BTB2.inverse() * data_.Bs[face2].transpose() * R1 * data_.Bs[face2] << std::endl;
-        // std::cout <<  BTB2.inverse() * data_.Bs[face2].transpose() * R1 * data_.Bs[face2] * data_.Ts.block<2, 2>(2 * edgeidx, 0) * vec<< std::endl;
-         double rescale1 = (data_.Bs[face2] * data_.Ts_rosy.block<2, 2>(2 * edgeidx, 0) * data_.Ts.block<2, 2>(2 * edgeidx, 0) * vec).norm();
-         data_.Ts_rosy.block<2, 2>(2 * edgeidx, 0) /= rescale1;
-         double rescale2 = (data_.Bs[face1] * data_.Ts_rosy.block<2, 2>(2 * edgeidx, 2) * data_.Ts.block<2, 2>(2 * edgeidx, 2) * vec).norm();
-         data_.Ts_rosy.block<2, 2>(2 * edgeidx, 2) /= rescale2;
 
-         std::cout << rescale2 << " " << rescale1;
-     //   std::cout << blah << " ";
-     //     std::cout << (R2 * BTB2.inverse() * data_.Bs[face2].transpose() * data_.Ts.block<2, 2>(2 * edgeidx, 0) * vec).dot(basis1) << " ";
-    
-    //    std::cout << (data_.Bs[face1] * data_.Ts.block<2, 2>(2 * edgeidx, 2) * data_.Js.block<2, 2>(2 * face2, 0) * vec).dot(data_.Bs[face1] * data_.Ts.block<2, 2>(2 * edgeidx, 2) * vec) << " ";
-     //  std::cout << (data_.Bs[face1] * data_.Ts_rosy.block<2, 2>(2 * edgeidx, 2) * data_.Ts.block<2, 2>(2 * edgeidx, 2) * data_.Js.block<2, 2>(2 * face2, 0) * vec).dot( (data_.Bs[face1] * data_.Ts_rosy.block<2, 2>(2 * edgeidx, 2) * data_.Ts.block<2, 2>(2 * edgeidx, 2) * vec) ) << " ";
-  //         std::cout << (data_.Bs[face2] * data_.Ts_rosy.block<2, 2>(2 * edgeidx, 0) * data_.Ts.block<2, 2>(2 * edgeidx, 0) * data_.Js.block<2, 2>(2 * face1, 0) * vec).dot( (data_.Bs[face2] * data_.Ts_rosy.block<2, 2>(2 * edgeidx, 0) * data_.Ts.block<2, 2>(2 * edgeidx, 0) * vec) ) << " ";
-     //      std::cout << (data_.Bs[face2] * data_.Ts_rosy.block<2, 2>(2 * edgeidx, 0) * data_.Ts.block<2, 2>(2 * edgeidx, 0) * data_.Js.block<2, 2>(2 * face1, 0) * vec).norm() << " " << ( (data_.Bs[face2] * data_.Ts_rosy.block<2, 2>(2 * edgeidx, 0) * data_.Ts.block<2, 2>(2 * edgeidx, 0) * vec) ).norm() << " ";
-    //    std::cout << (data_.Ts.block<2, 2>(2 * edgeidx, 2) * vec).dot(vec) << std::endl << std::endl;
+       
+   //     std::cout << (data_.Bs[face2] * data_.Ts_rosy.block<2, 2>(2 * edgeidx, 0) * data_.Ts.block<2, 2>(2 * edgeidx, 0) * vec).normalized().dot(basis2) << " ";
 
     }
     std::cout << std::endl;

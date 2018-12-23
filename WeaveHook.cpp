@@ -748,11 +748,11 @@ bool WeaveHook::simulateOneStep()
             angle *= 1./3.;
             for (int j = 0; j < 3; j++)
             {
-                double newAngle = angle;//+ 2*PI / 3. * j;
-                if (j == 1)
-                    newAngle = 0.;
-                if (j == 2)
-                    newAngle *= 3;
+                double newAngle = angle + 2*PI / 3. * j;
+                // if (j == 1)
+                //     newAngle = 0.;
+                // if (j == 2)
+                //     newAngle *= 3;
                 Eigen::Vector3d rotated = cos(newAngle) * B1.row(i) + sin(newAngle) * B2.row(i);
        //         std::cout << rotated.norm() << " rb ";
                 weave->fs->vectorFields.segment<2>(6 * i + 2 * j) = BTB.inverse() * B_f.transpose() * rotated;
