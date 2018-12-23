@@ -26,7 +26,7 @@ public:
     int alphaidx(int face, int field) const;
     
     // accessors into vectorFields
-    Eigen::Vector2d v(int face, int field) const;
+    Eigen::Vector2d v(int face, int field) const;    
     Eigen::Vector2d beta(int face, int field) const;
     double alpha(int face, int field) const;
     double getGeodesicEnergy(SolverParams params);

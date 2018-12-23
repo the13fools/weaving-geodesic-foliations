@@ -14,6 +14,13 @@ enum VectorVisualizationMode
     VMM_VFPLUSDELTA
 };
 
+enum RoSyVisualizationMode
+{
+    RVM_NOTHING,
+    RVM_ROSY,
+    RVM_REPVEC
+};
+
 
 // handles on the mesh
 struct Handle
@@ -62,6 +69,15 @@ public:
         double baseVectorLength // ignored if normalizeVectors=true
     );
 
+    void createVisualizationEdges(
+        Eigen::MatrixXd &edgePts, 
+        Eigen::MatrixXi &edgeSegs, 
+        Eigen::MatrixXd &colors,
+        RoSyVisualizationMode mode,
+        bool normalizeVectors,
+        double baseVectorLength // ignored if normalizeVectors=true
+    );
+
     void createVisualizationCuts(Eigen::MatrixXd &cutPts1, Eigen::MatrixXd &cutPts2);
     
     CoverMesh *createCover() const;
@@ -69,6 +85,8 @@ public:
     void serialize(std::ostream &os);    
     void deserialize(std::istream &is);
     void deserializeOldRelaxFile(std::istream &is);
+
+    void convertToRoSy();
 
 private:
     // scale mesh to unit size

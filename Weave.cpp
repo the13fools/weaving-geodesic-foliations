@@ -16,6 +16,8 @@
 #include <igl/writeOBJ.h>
 #include "Surface.h"
 #include "CoverMesh.h"
+#include "RoSyUtils.h"
+#include <Eigen/Geometry>
 
 Weave::Weave(const std::string &objname, int m)
 {
@@ -181,6 +183,99 @@ void Weave::createVisualizationEdges(
         edgeSegs(m*nfaces*vecsperface + i, 0) = 2 * m*nfaces *vecsperface + 2 * i;
         edgeSegs(m*nfaces*vecsperface + i, 1) = 2 * m*nfaces *vecsperface + 2 * i + 1;
         colors.row(m*nfaces*vecsperface + i).setConstant(1.0);        
+    }
+}
+
+void Weave::createVisualizationEdges(
+    Eigen::MatrixXd &edgePts, 
+    Eigen::MatrixXi &edgeSegs, 
+    Eigen::MatrixXd &colors,
+    RoSyVisualizationMode mode,
+    bool normalizeVectors,
+    double baseVectorLength) // ignored if normalizeVectors=true
+{
+    int nfaces = fs->nFaces();
+    int nhandles = nHandles();
+    int vecsperface = 0;
+    if (mode == RVM_REPVEC)
+        vecsperface = 1;
+    else if (mode == RVM_ROSY)
+        vecsperface = 3;
+    edgePts.resize(2 * nfaces * vecsperface + 2 * nhandles, 3);
+    edgePts.setZero();
+    edgeSegs.resize(nfaces * vecsperface + nhandles, 2);
+    edgeSegs.setZero();
+    colors.resize(nfaces * vecsperface + nhandles, 3);
+
+    Eigen::Vector3d fcolor(0,0,0);
+    
+    for (int i = 0; i < nfaces; i++)
+    {
+        Eigen::Vector3d centroid;
+        centroid.setZero();
+        for (int j = 0; j < 3; j++)
+            centroid += fs->data().V.row(fs->data().F(i, j));
+        centroid /= 3.0;
+
+        // regular vector field
+        if (mode == RVM_REPVEC)
+        {
+            Eigen::Vector3d vec = fs->data().Bs[i] * fs->v(i, 0);
+            if (normalizeVectors)
+                vec.normalize();
+            else
+            {
+                vec *= baseVectorLength;
+            }
+            vec *= fs->data().averageEdgeLength * sqrt(3.0) / 6.0 * 0.75;
+
+            edgePts.row(2 * i) = centroid.transpose();
+            edgePts.row(2 * i + 1) = (centroid + vec).transpose();
+            edgeSegs(i, 0) = 2 * i;
+            edgeSegs(i, 1) = 2 * i + 1;
+            colors.row(i) = fcolor;
+        }
+        if (mode == RVM_ROSY)
+        {
+            Eigen::Vector2d vecs[3];
+            repVecToRoSy(*fs, i, fs->v(i, 0), vecs[0], vecs[1], vecs[2]);
+            for (int j = 0; j < 3; j++)
+            {
+                Eigen::Vector3d extv = fs->data().Bs[i] * vecs[j];
+
+                if (normalizeVectors)
+                    extv.normalize();
+                else
+                {
+                    extv *= baseVectorLength;
+                }
+                extv *= fs->data().averageEdgeLength * sqrt(3.0) / 6.0 * 0.75;
+
+                edgePts.row(2 * 3 * i + 2 * j) = centroid.transpose();
+                edgePts.row(2 * 3 * i + 2 * j + 1) = (centroid + extv).transpose();
+                edgeSegs(3 * i + j, 0) = 2 * (3 * i + j);
+                edgeSegs(3 * i + j, 1) = 2 * (3 * i + j) + 1;
+                colors.row(3 * i + j) = fcolor;
+            }
+        }
+    }
+
+    for (int i = 0; i < nhandles; i++)
+    {
+        Eigen::Vector3d centroid;
+        centroid.setZero();
+        for (int j = 0; j < 3; j++)
+            centroid += fs->data().V.row(fs->data().F(handles[i].face, j));
+        centroid /= 3.0;
+
+        Eigen::Vector3d dir = fs->data().Bs[handles[i].face] * handles[i].dir;
+        dir *= fs->data().averageEdgeLength * sqrt(3.0) / 6.0 * 0.75  / dir.norm();
+        Eigen::Vector3d white(1, 1, 1);
+        edgePts.row(2 * nfaces*vecsperface + 2 * i) = centroid.transpose();
+        edgePts.row(2 * nfaces*vecsperface + 2 * i + 1) = (centroid+dir).transpose();
+        edgeSegs(nfaces*vecsperface + i, 0) = 2 * nfaces *vecsperface + 2 * i;
+        edgeSegs(nfaces*vecsperface + i, 1) = 2 * nfaces *vecsperface + 2 * i + 1;
+        colors.row(nfaces*vecsperface + i).setConstant(1.0);        
     }
 }
 
@@ -593,4 +688,24 @@ std::vector<Eigen::MatrixXd> Weave::_augmentPs() const
         perms.push_back(perm);
     }
     return perms;
+}
+
+void Weave::convertToRoSy()
+{
+    assert(fs->nFields() == 1);        
+
+    int nfaces = fs->nFaces();
+    for (int i = 0; i < nfaces; i++)
+    {
+        Eigen::Vector2d srcvec = fs->v(i, 0);
+        double theta = vectorAngle(*fs, i, srcvec);
+        theta *= 3.0;
+
+        Eigen::Matrix3d rot = Eigen::AngleAxisd(theta, fs->faceNormal(i)).toRotationMatrix();
+        Eigen::Matrix<double, 3, 2> B = fs->data().Bs[i];
+        Eigen::Vector3d newvecext = rot * B.col(0);
+        Eigen::Vector2d newvec = (B.transpose()*B).inverse() * B.transpose() * newvecext;
+        int vidx = fs->vidx(i, 0);
+        fs->vectorFields.segment<2>(vidx) = newvec;
+    }
 }

@@ -19,6 +19,25 @@ void WeaveHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
 {
     ImGui::InputText("Mesh", meshName);
     ImGui::Combo("GUI Mode", (int *)&gui_mode, cover ? "Weave\0Cover\0\0" : "Weave\0\0");
+    int nf = (weave ? weave->fs->nFields() : 0);
+    ImGui::Text("Number of fields: %d", nf);
+    if (isRoSy)
+    {
+        ImGui::Text("Is RoSy");
+    }
+    else
+    {
+        if (nf == 1)
+        {
+            if (ImGui::Button("Convert to RoSy", ImVec2(-1, 0)))
+                convertToRoSy();
+        }
+        else
+        {
+            ImGui::Text("Not RoSy");
+        }
+    }
+
     ImGui::Combo("Solver Mode", (int *)&solver_mode, "Curl Free\0Dirchlet (Knoppel '13)\0\0");
     ImGui::Checkbox("Soft Handle Constraint", &params.softHandleConstraint);
     ImGui::Checkbox("Disable Curl Constraint", &params.disableCurlConstraint);
@@ -33,7 +52,14 @@ void WeaveHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
         if (ImGui::CollapsingHeader("Visualization (Weave)", ImGuiTreeNodeFlags_DefaultOpen))
         {
             bool needsrender = false;
-            needsrender |= ImGui::Combo("Show", (int *)&vectorVisMode, "Nothing\0V\0V and delta\0V + delta\0\0");
+            if (isRoSy)
+            {
+                needsrender |= ImGui::Combo("Show", (int *)&rosyVisMode, "Nothing\0RoSy\0Rep. vector\0\0");
+            }
+            else
+            {
+                needsrender |= ImGui::Combo("Show", (int *)&vectorVisMode, "Nothing\0V\0V and delta\0V + delta\0\0");
+            }
             needsrender |= ImGui::InputDouble("Vector Scale", &vectorScale);
             needsrender |= ImGui::Checkbox("Normalize Vectors", &normalizeVectors);
             ImGui::Checkbox("Wireframe", &wireframe);
@@ -294,6 +320,8 @@ void WeaveHook::clear()
     pathends.resize(0,3);
 
     traces.clear();
+
+    isRoSy = false;
 }
 
 void WeaveHook::initSimulation()
@@ -792,12 +820,6 @@ void WeaveHook::normalizeFields()
     updateRenderGeometry();
 }
 
-void WeaveHook::serializeVectorField()
-{
-    std::ofstream ofs(vectorFieldName, ios::binary);
-    weave->serialize(ofs);
-}
-
 void WeaveHook::augmentField()
 {
     if (cover)
@@ -805,6 +827,7 @@ void WeaveHook::augmentField()
         traces.purgeTraces(cover->fs);
         delete cover;
     }
+    
     weave->fs->undeleteAllFaces();
     removeSingularities();
     
@@ -855,6 +878,19 @@ void WeaveHook::drawISOLines()
     updateRenderGeometry();
 }
 
+static const int magic = 0x4242;
+
+void WeaveHook::serializeVectorField()
+{
+    int currentRLXVersion = 1;
+    std::ofstream ofs(vectorFieldName, ios::binary);
+    ofs.write((char *)&magic, sizeof(int));
+    ofs.write((char *)&currentRLXVersion, sizeof(int));
+    char isrosyc = (isRoSy ? 1 : 0);
+    ofs.write(&isrosyc, 1);
+    weave->serialize(ofs);
+}
+
 void WeaveHook::deserializeVectorField()
 {
     std::ifstream ifs(vectorFieldName, ios::binary);
@@ -864,7 +900,25 @@ void WeaveHook::deserializeVectorField()
         return;
     }
     clear();    
-    weave->deserialize(ifs);
+    int header=0;
+    ifs.read((char *)&header, sizeof(int));
+    if (header != magic)
+    {
+        // old version
+        ifs.clear();
+        ifs.seekg(0);
+        isRoSy = false;
+        weave->deserialize(ifs);
+    }
+    else
+    {
+        int saveversion = 0;
+        ifs.read((char *)&saveversion, sizeof(int));
+        char isrosyc = 0;
+        ifs.read(&isrosyc, 1);
+        isRoSy = (isrosyc > 0);
+        weave->deserialize(ifs);
+    }
     updateRenderGeometry();
 }
 
@@ -872,6 +926,7 @@ void WeaveHook::deserializeVectorFieldOld()
 {
     std::ifstream ifs(vectorFieldName);
     weave->deserializeOldRelaxFile(ifs);
+    isRoSy = false;
     updateRenderGeometry();
 }
 
@@ -937,8 +992,17 @@ void WeaveHook::updateRenderGeometry()
 {
     renderQWeave = weave->fs->data().V;
     renderFWeave = weave->fs->data().F;
-    weave->createVisualizationEdges(edgePtsWeave, edgeSegsWeave, edgeColorsWeave, 
-        vectorVisMode, normalizeVectors, vectorScale);
+    if (isRoSy)
+    {
+        weave->createVisualizationEdges(edgePtsWeave, edgeSegsWeave, edgeColorsWeave,
+            rosyVisMode, normalizeVectors, vectorScale);
+    }
+    else
+    {
+        weave->createVisualizationEdges(edgePtsWeave, edgeSegsWeave, edgeColorsWeave,
+            vectorVisMode, normalizeVectors, vectorScale);
+    }
+   
     weave->createVisualizationCuts(cutPos1Weave, cutPos2Weave);
     curFaceEnergies = tempFaceEnergies;
 
@@ -1116,4 +1180,14 @@ void WeaveHook::exportForRendering()
     {
         singfs << singularVerts_topo(i,0) << ", " << singularVerts_topo(i,1) << ", " << singularVerts_topo(i,2) << std::endl;
     }
+}
+
+void WeaveHook::convertToRoSy()
+{
+    if (!weave || isRoSy || weave->fs->nFields() != 1)
+        return;
+
+    weave->convertToRoSy();
+    isRoSy = true;
+    updateRenderGeometry();
 }

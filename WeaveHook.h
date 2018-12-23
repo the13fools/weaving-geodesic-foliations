@@ -76,6 +76,7 @@ public:
         traceFaceId = 0;
         
         vectorVisMode = VMM_VFANDDELTA;
+        rosyVisMode = RVM_ROSY;
         showSingularities = false;
         wireframe = false;
 
@@ -104,6 +105,7 @@ public:
         minRodLen = 1.0;
 
         hideCoverVectors = false;
+        isRoSy = false;
     }
 
     virtual void drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu);
@@ -131,6 +133,7 @@ public:
     void rationalizeTraces();
     void saveRods();
     void exportForRendering();
+    void convertToRoSy();
     
     virtual void initSimulation();
 
@@ -147,6 +150,7 @@ public:
 
     void showCutVertexSelection(igl::opengl::glfw::Viewer &viewer);
     void updateSingularVerts(igl::opengl::glfw::Viewer &viewer);
+
 private:
     void clear();
     std::string meshName;
@@ -177,6 +181,7 @@ private:
     Eigen::MatrixXd edgeColorsCover;    
     std::vector<Eigen::Vector3d> renderSelectedVertices; // teal selected vertex spheres
     VectorVisualizationMode vectorVisMode;
+    RoSyVisualizationMode rosyVisMode;
     bool normalizeVectors;
     bool showCoverCuts;
     bool wireframe;
@@ -239,6 +244,8 @@ private:
 
     int fieldCount;
     bool hideCoverVectors;
+
+    bool isRoSy;
 };
 
 #endif
