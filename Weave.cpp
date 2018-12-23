@@ -717,20 +717,104 @@ Weave *Weave::splitFromRosy()
         return NULL;
 
     Weave *result = new Weave(fs->data().V, fs->data().F, 3);
-    // set vector fields
+
+    // set vector fields    
     int nfaces = fs->nFaces();
+    std::vector<bool> visited(nfaces, false);
+    // bread-first search of faces
     for (int i = 0; i < nfaces; i++)
     {
-        Eigen::Vector2d rv[3];
-        repVecToRoSy(*fs, i, fs->v(i, 0), rv[0], rv[1], rv[2]);
-        for (int j = 0; j < 3; j++)
+        if (visited[i])
+            continue;
+        
+        struct Visit
         {
-            int vidx = result->fs->vidx(i, j);
-            result->fs->vectorFields.segment<2>(vidx) = rv[j];
-        }
+            int from;
+            int to;
+        };
+
+        std::deque<Visit> q;
+        q.push_back(Visit{ -1,i });
+        while (!q.empty())
+        {
+            Visit vis = q.front();
+            q.pop_front();
+            if (visited[vis.to])
+                continue;
+            visited[vis.to] = true;
+
+            Eigen::Vector2d rv[3];
+            repVecToRoSy(*fs, vis.to, fs->v(vis.to, 0), rv[0], rv[1], rv[2]);
+            
+            if (vis.from == -1)
+            {
+                for (int j = 0; j < 3; j++)
+                {
+                    int vidx = result->fs->vidx(vis.to, j);
+                    result->fs->vectorFields.segment<2>(vidx) = rv[j];
+                }
+            }
+            else
+            {
+                // find optimal cyclic permutation
+
+                // vector 0 on neighbor face
+                Eigen::Vector2d v0 = result->fs->v(vis.from, 0);
+                // tranport to current face
+                int edge = -1;
+                int fromside = -1;
+                for (int j = 0; j < 3; j++)
+                {
+                    int eid = result->fs->data().faceEdges(vis.to, j);
+                    int opp = 0;
+                    if(result->fs->data().E(eid, opp) == vis.to)
+                        opp = 1;
+                    if (result->fs->data().E(eid, opp) == vis.from)
+                    {
+                        edge = eid;
+                        fromside = opp;
+                    }
+                }
+                assert(edge != -1);
+                assert(result->fs->data().E(edge, fromside) == vis.from);
+                assert(result->fs->data().E(edge, 1-fromside) == vis.to);
+                Eigen::Vector2d xportv0 = result->fs->data().Ts.block<2, 2>(2 * edge, 2 * fromside) * v0;
+                int bestidx = 0;
+                double bestdot = -1.0;
+                for (int j = 0; j < 3; j++)
+                {
+                    Eigen::Vector3d vec1 = result->fs->data().Bs[vis.to] * xportv0;
+                    vec1.normalize();
+                    Eigen::Vector3d vec2 = result->fs->data().Bs[vis.to] * rv[j];
+                    vec2.normalize();
+                    double curdot = (vec1).dot(vec2);
+                    if (curdot > bestdot)
+                    {
+                        bestidx = j;
+                        bestdot = curdot;
+                    }
+                }
+
+                // set vectors
+                for (int j = 0; j < 3; j++)
+                {
+                    int vidx = result->fs->vidx(vis.to, j);
+                    result->fs->vectorFields.segment<2>(vidx) = rv[(j + bestidx) % 3];
+
+                }
+            }
+            
+            // queue neighbors
+            for (int j = 0; j < 3; j++)
+            {
+                int nb = result->fs->data().faceNeighbors(vis.to, j);
+                if (nb != -1 && !visited[nb])
+                    q.push_back(Visit{ vis.to, nb });
+            }
+        }        
     }
 
-    reassignAllPermutations(*result);
+    //reassignAllPermutations(*result);
 
     return result;
 }
