@@ -667,9 +667,9 @@ bool WeaveHook::simulateOneStep()
 
     if ( solver_mode == Solver_Enum::CURLFREE )
     {
- //       Eigen::VectorXd primal = weave->fs->vectorFields.segment(0, 2*nfaces*nfields);
- //       Eigen::VectorXd dual = weave->fs->vectorFields.segment(2*nfaces*nfields, 2*nfaces*nfields);
-
+        Eigen::VectorXd primal = weave->fs->vectorFields.segment(0, 2*nfaces*nfields);
+        Eigen::VectorXd dual = weave->fs->vectorFields.segment(2*nfaces*nfields, 2*nfaces*nfields);
+/*
      //   ls.buildDualMatrix(*weave, params, primal, dual); // add this precomputation...
        
 
@@ -701,6 +701,7 @@ bool WeaveHook::simulateOneStep()
 
   //      X2 = igl::rotate_vectors(X1, VectorXd::Constant(1, igl::PI / 2), B1, B2);
 
+*/
         for (int i = 0; i < 1; i++)
         {            
             ls.updateDualVars_new(*weave, params, primal, dual);
@@ -708,7 +709,7 @@ bool WeaveHook::simulateOneStep()
         }
 
         weave->fs->nFields_ = nfields; // UNDO HACK !!!
-
+/*
         const double PI = 3.1415926535898;
         for (int i = 0; i < nfaces; i++)
         {
@@ -733,9 +734,9 @@ bool WeaveHook::simulateOneStep()
             }
         }
 
-
-  //      weave->fs->vectorFields.segment(0, 2*nfaces*nfields) = primal;
-  //      weave->fs->vectorFields.segment(2*nfaces*nfields, 2*nfaces*nfields) = dual;
+*/
+        weave->fs->vectorFields.segment(0, 2*nfaces*nfields) = primal;
+        weave->fs->vectorFields.segment(2*nfaces*nfields, 2*nfaces*nfields) = dual;
 
 
  //       std::cout << primal.transpose()<< std::endl << primal.norm() << std::endl<< std::endl;
