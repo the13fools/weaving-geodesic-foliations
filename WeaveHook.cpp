@@ -21,14 +21,15 @@ void WeaveHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
     ImGui::Combo("GUI Mode", (int *)&gui_mode, cover ? "Weave\0Cover\0\0" : "Weave\0\0");
     int nf = (weave ? weave->fs->nFields() : 0);
     ImGui::Text("Number of fields: %d", nf);
-    if (isRoSy)
+    if (rosyN)
     {
-        ImGui::Text("Is RoSy");
+        ImGui::Text("Is %d-RoSy", rosyN);
     }
     else
     {
         if (nf == 1)
         {
+            ImGui::InputInt("Symmetry Degree:", &desiredRoSyN, 0, 0);
             if (ImGui::Button("Convert to RoSy", ImVec2(-1, 0)))
                 convertToRoSy();
         }
@@ -52,7 +53,7 @@ void WeaveHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
         if (ImGui::CollapsingHeader("Visualization (Weave)", ImGuiTreeNodeFlags_DefaultOpen))
         {
             bool needsrender = false;
-            if (isRoSy)
+            if (rosyN)
             {
                 needsrender |= ImGui::Combo("Show", (int *)&rosyVisMode, "Nothing\0RoSy\0Rep. vector\0\0");
             }
@@ -321,7 +322,7 @@ void WeaveHook::clear()
 
     traces.clear();
 
-    isRoSy = false;
+    rosyN = 0;
 }
 
 void WeaveHook::initSimulation()
@@ -831,9 +832,9 @@ void WeaveHook::augmentField()
 
     weave->fs->undeleteAllFaces();
     
-    if (isRoSy)
+    if (rosyN)
     {
-        Weave *splitWeave = weave->splitFromRosy();
+        Weave *splitWeave = weave->splitFromRosy(rosyN);
         std::vector<int> topsingularities;
         std::vector<std::pair<int, int> > geosingularities;
         findSingularVertices(*splitWeave, topsingularities, geosingularities);
@@ -905,12 +906,11 @@ static const int magic = 0x4242;
 
 void WeaveHook::serializeVectorField()
 {
-    int currentRLXVersion = 1;
+    int currentRLXVersion = 2;
     std::ofstream ofs(vectorFieldName, ios::binary);
     ofs.write((char *)&magic, sizeof(int));
     ofs.write((char *)&currentRLXVersion, sizeof(int));
-    char isrosyc = (isRoSy ? 1 : 0);
-    ofs.write(&isrosyc, 1);
+    ofs.write((char *)&rosyN, sizeof(int));
     weave->serialize(ofs);
 }
 
@@ -930,16 +930,23 @@ void WeaveHook::deserializeVectorField()
         // old version
         ifs.clear();
         ifs.seekg(0);
-        isRoSy = false;
+        rosyN = 0;
         weave->deserialize(ifs);
     }
     else
     {
         int saveversion = 0;
         ifs.read((char *)&saveversion, sizeof(int));
-        char isrosyc = 0;
-        ifs.read(&isrosyc, 1);
-        isRoSy = (isrosyc > 0);
+        if (saveversion == 1)
+        {
+            char isrosyc=0;
+            ifs.read(&isrosyc, 1);
+            rosyN = (isrosyc ? 3 : 0);
+        }
+        else
+        {
+            ifs.read((char *)&rosyN, sizeof(int));
+        }
         weave->deserialize(ifs);
     }
     updateRenderGeometry();
@@ -949,7 +956,7 @@ void WeaveHook::deserializeVectorFieldOld()
 {
     std::ifstream ifs(vectorFieldName);
     weave->deserializeOldRelaxFile(ifs);
-    isRoSy = false;
+    rosyN = 0;
     updateRenderGeometry();
 }
 
@@ -1015,10 +1022,10 @@ void WeaveHook::updateRenderGeometry()
 {
     renderQWeave = weave->fs->data().V;
     renderFWeave = weave->fs->data().F;
-    if (isRoSy)
+    if (rosyN)
     {
         weave->createVisualizationEdges(edgePtsWeave, edgeSegsWeave, edgeColorsWeave,
-            rosyVisMode, normalizeVectors, vectorScale);
+            rosyVisMode, normalizeVectors, vectorScale, rosyN);
     }
     else
     {
@@ -1207,10 +1214,10 @@ void WeaveHook::exportForRendering()
 
 void WeaveHook::convertToRoSy()
 {
-    if (!weave || isRoSy || weave->fs->nFields() != 1)
+    if (!weave || rosyN > 0 || desiredRoSyN < 1 || weave->fs->nFields() != 1)
         return;
 
-    weave->convertToRoSy();
-    isRoSy = true;
+    weave->convertToRoSy(desiredRoSyN);
+    rosyN = desiredRoSyN;
     updateRenderGeometry();
 }

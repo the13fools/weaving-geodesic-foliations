@@ -193,7 +193,8 @@ void Weave::createVisualizationEdges(
     Eigen::MatrixXd &colors,
     RoSyVisualizationMode mode,
     bool normalizeVectors,
-    double baseVectorLength) // ignored if normalizeVectors=true
+    double baseVectorLength,
+    int rosyN)
 {
     int nfaces = fs->nFaces();
     int nhandles = nHandles();
@@ -201,7 +202,7 @@ void Weave::createVisualizationEdges(
     if (mode == RVM_REPVEC)
         vecsperface = 1;
     else if (mode == RVM_ROSY)
-        vecsperface = 3;
+        vecsperface = rosyN;
     edgePts.resize(2 * nfaces * vecsperface + 2 * nhandles, 3);
     edgePts.setZero();
     edgeSegs.resize(nfaces * vecsperface + nhandles, 2);
@@ -238,9 +239,9 @@ void Weave::createVisualizationEdges(
         }
         if (mode == RVM_ROSY)
         {
-            Eigen::Vector2d vecs[3];
-            repVecToRoSy(*fs, i, fs->v(i, 0), vecs[0], vecs[1], vecs[2]);
-            for (int j = 0; j < 3; j++)
+            std::vector<Eigen::Vector2d> vecs;
+            repVecToRoSy(*fs, i, fs->v(i, 0), vecs, rosyN);
+            for (int j = 0; j < rosyN; j++)
             {
                 Eigen::Vector3d extv = fs->data().Bs[i] * vecs[j];
 
@@ -252,11 +253,11 @@ void Weave::createVisualizationEdges(
                 }
                 extv *= fs->data().averageEdgeLength * sqrt(3.0) / 6.0 * 0.75;
 
-                edgePts.row(2 * 3 * i + 2 * j) = centroid.transpose();
-                edgePts.row(2 * 3 * i + 2 * j + 1) = (centroid + extv).transpose();
-                edgeSegs(3 * i + j, 0) = 2 * (3 * i + j);
-                edgeSegs(3 * i + j, 1) = 2 * (3 * i + j) + 1;
-                colors.row(3 * i + j) = fcolor;
+                edgePts.row(2 * rosyN * i + 2 * j) = centroid.transpose();
+                edgePts.row(2 * rosyN * i + 2 * j + 1) = (centroid + extv).transpose();
+                edgeSegs(rosyN * i + j, 0) = 2 * (rosyN * i + j);
+                edgeSegs(rosyN * i + j, 1) = 2 * (rosyN * i + j) + 1;
+                colors.row(rosyN * i + j) = fcolor;
             }
         }
     }
@@ -691,7 +692,7 @@ std::vector<Eigen::MatrixXd> Weave::_augmentPs() const
     return perms;
 }
 
-void Weave::convertToRoSy()
+void Weave::convertToRoSy(int rosyN)
 {
     assert(fs->nFields() == 1);        
 
@@ -700,7 +701,7 @@ void Weave::convertToRoSy()
     {
         Eigen::Vector2d srcvec = fs->v(i, 0);
         double theta = vectorAngle(*fs, i, srcvec);
-        theta *= 3.0;
+        theta *= double(rosyN);
 
         Eigen::Matrix3d rot = Eigen::AngleAxisd(theta, fs->faceNormal(i)).toRotationMatrix();
         Eigen::Matrix<double, 3, 2> B = fs->data().Bs[i];
@@ -711,12 +712,12 @@ void Weave::convertToRoSy()
     }
 }
 
-Weave *Weave::splitFromRosy()
+Weave *Weave::splitFromRosy(int rosyN)
 {
     if (fs->nFields() != 1)
         return NULL;
 
-    Weave *result = new Weave(fs->data().V, fs->data().F, 3);
+    Weave *result = new Weave(fs->data().V, fs->data().F, rosyN);
 
     // set vector fields    
     int nfaces = fs->nFaces();
@@ -743,12 +744,12 @@ Weave *Weave::splitFromRosy()
                 continue;
             visited[vis.to] = true;
 
-            Eigen::Vector2d rv[3];
-            repVecToRoSy(*fs, vis.to, fs->v(vis.to, 0), rv[0], rv[1], rv[2]);
+            std::vector<Eigen::Vector2d> rv;
+            repVecToRoSy(*fs, vis.to, fs->v(vis.to, 0), rv, rosyN);
             
             if (vis.from == -1)
             {
-                for (int j = 0; j < 3; j++)
+                for (int j = 0; j < rosyN; j++)
                 {
                     int vidx = result->fs->vidx(vis.to, j);
                     result->fs->vectorFields.segment<2>(vidx) = rv[j];
@@ -781,7 +782,7 @@ Weave *Weave::splitFromRosy()
                 Eigen::Vector2d xportv0 = result->fs->data().Ts.block<2, 2>(2 * edge, 2 * fromside) * v0;
                 int bestidx = 0;
                 double bestdot = -1.0;
-                for (int j = 0; j < 3; j++)
+                for (int j = 0; j < rosyN; j++)
                 {
                     Eigen::Vector3d vec1 = result->fs->data().Bs[vis.to] * xportv0;
                     vec1.normalize();
@@ -796,10 +797,10 @@ Weave *Weave::splitFromRosy()
                 }
 
                 // set vectors
-                for (int j = 0; j < 3; j++)
+                for (int j = 0; j < rosyN; j++)
                 {
                     int vidx = result->fs->vidx(vis.to, j);
-                    result->fs->vectorFields.segment<2>(vidx) = rv[(j + bestidx) % 3];
+                    result->fs->vectorFields.segment<2>(vidx) = rv[(j + bestidx) % rosyN];
 
                 }
             }

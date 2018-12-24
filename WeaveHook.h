@@ -105,7 +105,8 @@ public:
         minRodLen = 1.0;
 
         hideCoverVectors = false;
-        isRoSy = false;
+        rosyN = 0;
+        desiredRoSyN = 3;
     }
 
     virtual void drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu);
@@ -245,7 +246,8 @@ private:
     int fieldCount;
     bool hideCoverVectors;
 
-    bool isRoSy;
+    int rosyN;
+    int desiredRoSyN;
 };
 
 #endif
