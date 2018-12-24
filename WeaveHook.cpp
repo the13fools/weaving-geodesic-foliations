@@ -6,8 +6,9 @@
 #include <igl/opengl/glfw/imgui/ImGuiHelpers.h>
 #include "Surface.h"
 #include "CoverMesh.h"
-#include "OurFieldIntegration.h"
-#include "BommesFieldIntegration.h"
+#include "SpectralLocalIntegration.h"
+#include "MIGlobalIntegration.h"
+#include "GNGlobalIntegration.h"
 #include <igl/decimate.h>
 #include <igl/upsample.h>
 
@@ -211,17 +212,18 @@ void WeaveHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
 
         if (ImGui::CollapsingHeader("Cover Controls", ImGuiTreeNodeFlags_DefaultOpen))
         {
-            ImGui::Combo("Integration Method", (int *)&field_integration_method, "Ours\0Bommes\0\0");
-            if (field_integration_method == FI_OURS)
+            ImGui::Combo("Local Method", (int *)&local_field_integration_method, "Nothing\0Our Spectral\0\0");
+            if (local_field_integration_method == LFI_SPECTRAL)
             {
                 ImGui::InputDouble("Regularization", &initSReg);
-                ImGui::InputDouble("Global Rescaling", &globalSScale);
             }
-            else if (field_integration_method == FI_BOMMES)
+            ImGui::Combo("Global Method", (int *)&global_field_integration_method, "Our Gauss-Newton\0Mixed Integer\0\0");
+            ImGui::InputDouble("Global Rescaling", &globalSScale);
+            
+            if (global_field_integration_method == GFI_MI)
             {
                 ImGui::InputDouble("Anisotropy", &bommesAniso);
-                ImGui::InputDouble("Regularization", &initSReg);
-                ImGui::InputDouble("Global Rescaling", &globalSScale);
+                ImGui::InputDouble("Regularization", &MIReg);
             }
             if (ImGui::Button("Compute Function Value", ImVec2(-1, 0)))
                 computeFunc();
@@ -864,18 +866,25 @@ void WeaveHook::computeFunc()
 {
     if (cover)
     {
-        FieldIntegration *method;
-        if (field_integration_method == FI_OURS)
-            method = new OurFieldIntegration(initSReg, globalSScale);
-        else if (field_integration_method == FI_BOMMES)
-            method = new BommesFieldIntegration(bommesAniso, initSReg, globalSScale);
+        LocalFieldIntegration *method;
+        if (local_field_integration_method == LFI_TRIVIAL)
+            method = new TrivialLocalIntegration();
+        else if(local_field_integration_method == LFI_SPECTRAL)
+            method = new SpectralLocalIntegration(initSReg);
         else
         {
-            assert(!"Unknown integration method");
+            assert(!"Unknown local integration method");
             return;
         }
-        cover->integrateField(method);
+        GlobalFieldIntegration *gmethod;
+        if (global_field_integration_method == GFI_GN)
+            gmethod = new GNGlobalIntegration(globalSScale);
+        else if(global_field_integration_method == GFI_MI)
+            gmethod = new MIGlobalIntegration(bommesAniso, initSReg, globalSScale);
+
+        cover->integrateField(method, gmethod);
         delete method;
+        delete gmethod;
     }
     updateRenderGeometry();
 }

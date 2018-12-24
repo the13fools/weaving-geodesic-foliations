@@ -10,7 +10,8 @@ class FieldSurface;
 class Weave;
 class Surface;
 class TraceSet;
-class FieldIntegration;
+class LocalFieldIntegration;
+class GlobalFieldIntegration;
 
 struct CoverData
 {
@@ -41,7 +42,7 @@ public:
         bool hideVectors,
         double vectorScale);
 
-    void integrateField(FieldIntegration *method);
+    void integrateField(LocalFieldIntegration *lmethod, GlobalFieldIntegration *gmethod);
     void roundAntipodalCovers(int numISOLines);
     double renderScale() {return renderScale_;}
     const Surface &splitMesh() const;

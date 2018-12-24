@@ -400,7 +400,7 @@ void CoverMesh::roundAntipodalCovers(int numISOLines)
     }
 }
 
-void CoverMesh::integrateField(FieldIntegration *method)
+void CoverMesh::integrateField(LocalFieldIntegration *lmethod, GlobalFieldIntegration *gmethod)
 {
     int globalverts = fs->nVerts();
     theta.resize(globalverts);
@@ -464,9 +464,11 @@ void CoverMesh::integrateField(FieldIntegration *method)
         
         std::cout << "Built connected component surface" << std::endl;
 
-        // component theta
+        // component theta and s
+        Eigen::VectorXd compS;
         Eigen::VectorXd compTheta;
-        method->integrateOneComponent(surf, compField, compTheta);
+        lmethod->locallyIntegrateOneComponent(surf, compField, compS);
+        gmethod->globallyIntegrateOneComponent(surf, compField, compS, compTheta);
         
         
         // map component theta to the global theta vector
