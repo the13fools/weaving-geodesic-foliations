@@ -7,10 +7,9 @@
 class MIGlobalIntegration : public GlobalFieldIntegration
 {
 public:
-    MIGlobalIntegration(double anisotropy, double smoothnessReg, double globalScale) :
+    MIGlobalIntegration(double anisotropy, double smoothnessReg) :
         aniso_(anisotropy),
-        smoothreg_(smoothnessReg),
-        globalScale_(globalScale)
+        smoothreg_(smoothnessReg)
     {}
 
     virtual void globallyIntegrateOneComponent(const Surface &surf, const Eigen::MatrixXd &v, Eigen::VectorXd &s, Eigen::VectorXd &theta);
@@ -18,7 +17,6 @@ public:
 private:
     double aniso_;
     double smoothreg_;
-    double globalScale_;
 };
 
 #endif

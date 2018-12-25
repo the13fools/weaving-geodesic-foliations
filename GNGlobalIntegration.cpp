@@ -5,7 +5,7 @@
 
 static const double M_PI = 3.1415926535898;
 
-void GNGlobalIntegration::globallyIntegrateOneComponent(const Surface &surf, const Eigen::MatrixXd &v, Eigen::VectorXd &s, Eigen::VectorXd &theta)
+void GNGlobalIntegration::globallyIntegrateOneComponent(const Surface &surf, const Eigen::MatrixXd &v, Eigen::VectorXd &scales, Eigen::VectorXd &theta)
 {
     theta.setZero();
 
@@ -42,8 +42,7 @@ void GNGlobalIntegration::globallyIntegrateOneComponent(const Surface &surf, con
         difVecUnscaled.push_back(e20.dot(faceVec));
     }
     assert((rowsL.size() == 3 * nfaces) && (colsL.size() == 3 * nfaces) && (difVecUnscaled.size() == 3 * nfaces));
-
-    Eigen::VectorXd scales = globalScale_ * s;
+    
     assert(scales.size() == nfaces);
 
     int totalIter = 6;

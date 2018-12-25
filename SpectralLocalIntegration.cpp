@@ -184,18 +184,6 @@ void SpectralLocalIntegration::locallyIntegrateOneComponent(const Surface &surf,
     for (int i = 0; i < nfaces; i++)
         s[i] = x[3*nfaces + i];
 
-    double maxS = 0;
-    for(int i=0; i<nfaces; i++)
-    {
-        if ( fabs(s[i]) > maxS ) 
-        {
-            maxS = fabs(s[i]);
-        }
-    }
-
-    double s_scale = 3.1415 / surf.data().averageEdgeLength / maxS;
-    s *= s_scale;
-
     // fix s sign
     double totals = s.sum();
     if (totals < 0)

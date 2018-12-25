@@ -42,7 +42,7 @@ public:
         bool hideVectors,
         double vectorScale);
 
-    void integrateField(LocalFieldIntegration *lmethod, GlobalFieldIntegration *gmethod);
+    void integrateField(LocalFieldIntegration *lmethod, GlobalFieldIntegration *gmethod, double globalScale);
     void roundAntipodalCovers(int numISOLines);
     double renderScale() {return renderScale_;}
     const Surface &splitMesh() const;

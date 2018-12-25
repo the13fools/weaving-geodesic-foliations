@@ -758,12 +758,11 @@ void MIGlobalIntegration::globallyIntegrateOneComponent(const Surface &surf, con
     }
     Eigen::SparseMatrix<double> M(2 * nfaces, 2 * nfaces);
     M.setFromTriplets(Mcoeffs.begin(), Mcoeffs.end());
-    Eigen::VectorXd projvf(2 * nfaces);
-    double scale = surf.data().averageEdgeLength * globalScale_;
+    Eigen::VectorXd projvf(2 * nfaces);    
     for (int i = 0; i < nfaces; i++)
     {
         Eigen::Vector3d vec = surf.data().Bs[i] * v.row(i).transpose();
-        double fac = scale * scales[i];
+        double fac = scales[i];
         projvf.segment<2>(2 * i) = fac * surf.data().Js.block<2,2>(2*i,0) * v.row(i).transpose();
     }
 

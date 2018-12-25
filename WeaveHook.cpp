@@ -878,11 +878,11 @@ void WeaveHook::computeFunc()
         }
         GlobalFieldIntegration *gmethod;
         if (global_field_integration_method == GFI_GN)
-            gmethod = new GNGlobalIntegration(globalSScale);
+            gmethod = new GNGlobalIntegration();
         else if(global_field_integration_method == GFI_MI)
-            gmethod = new MIGlobalIntegration(bommesAniso, initSReg, globalSScale);
+            gmethod = new MIGlobalIntegration(bommesAniso, initSReg);
 
-        cover->integrateField(method, gmethod);
+        cover->integrateField(method, gmethod, globalSScale);
         delete method;
         delete gmethod;
     }

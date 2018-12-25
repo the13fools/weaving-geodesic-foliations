@@ -34,7 +34,7 @@ public:
         s.resize(nfaces);
         for (int i = 0; i < nfaces; i++)
         {
-            s[i] = 1.0 / v.row(i).norm();
+            s[i] = 1.0;
         }
     }
 };

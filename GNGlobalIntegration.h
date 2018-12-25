@@ -8,12 +8,9 @@
 class GNGlobalIntegration : public  GlobalFieldIntegration
 {
 public:
-    GNGlobalIntegration(double globalScale) : globalScale_(globalScale) {}
+    GNGlobalIntegration() {}
 
-    void globallyIntegrateOneComponent(const Surface &surf, const Eigen::MatrixXd &v, Eigen::VectorXd &s, Eigen::VectorXd &theta);
-
-private:
-    double globalScale_;
+    void globallyIntegrateOneComponent(const Surface &surf, const Eigen::MatrixXd &v, Eigen::VectorXd &scales, Eigen::VectorXd &theta);
 };
 
 #endif
