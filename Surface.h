@@ -23,7 +23,7 @@ struct SurfaceData
                             // cDiffs.row(2*i+1) is the same but with the roles of the faces reversed
     std::vector<Eigen::Matrix<double, 3, 2> > Bs; // Basis vectors in ambient coordinates for the barycentric coordinates on faces
     Eigen::MatrixXd Ts;     // Transition matrices. Ts.block<2,2>(2*i,0) maps vectors from barycentric coordinates of face E(i,0) to barycentric coordinates of E(i,1). Ts.block<2,2>(2*i, 2) is opposite.
-    Eigen::MatrixXd Ts_rosy;     // Transition matrices. Ts_rosy.block<2,2>(2*i,0), lives on face E(i,1), and rotates a vector by 3*(angle between v1-v0 on face 0 and v1-v0 on face 1).
+    Eigen::MatrixXd Ts_rosy;     // Transition matrices. Ts_rosy.block<2,2>(2*i,0), lives on face E(i,1), and rotates a vector by (angle between v1-v0 on face 0 and v1-v0 on face 1).
     Eigen::MatrixXd Js;     // Js.block<2,2>(2*i,0) rotates vectors on face i (in face i's barycentric coordinates) to the perpendicular vector (as measured in ambient space)
     double averageEdgeLength; // exactly what it says on the tin
 };
