@@ -839,6 +839,7 @@ void WeaveHook::augmentField()
         Weave *splitWeave = weave->splitFromRosy(rosyN);
         std::vector<int> topsingularities;
         std::vector<std::pair<int, int> > geosingularities;
+        reassignAllPermutations(*splitWeave);
         findSingularVertices(*splitWeave, topsingularities, geosingularities);
 
         std::vector<int> todelete = topsingularities;
