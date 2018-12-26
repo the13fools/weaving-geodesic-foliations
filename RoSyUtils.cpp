@@ -20,6 +20,7 @@ void repVecToRoSy(Surface &s, int face, const Eigen::Vector2d &v, std::vector<Ei
     Eigen::Vector3d n = s.faceNormal(face);
     Eigen::Matrix<double, 3, 2> B = s.data().Bs[face];
     Eigen::Vector3d u = B.col(0);
+    u.normalize();
     Eigen::Matrix2d BTBinv = (B.transpose()*B).inverse();
     for (int j = 0; j < rosyN; j++)
     {

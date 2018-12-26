@@ -18,6 +18,7 @@ struct SolverParams
     bool vizNormalizeVecs;
     bool vizShowCurlSign; // round the viz to see the sign.
     bool disableCurlConstraint;
+    int rosyN;
     Eigen::VectorXd edgeWeights;
 };
 

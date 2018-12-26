@@ -712,6 +712,7 @@ void Weave::convertToRoSy(int rosyN)
         Eigen::Matrix3d rot = Eigen::AngleAxisd(theta, fs->faceNormal(i)).toRotationMatrix();
         Eigen::Matrix<double, 3, 2> B = fs->data().Bs[i];
         Eigen::Vector3d newvecext = rot * B.col(0);
+        newvecext.normalize();
         Eigen::Vector2d newvec = (B.transpose()*B).inverse() * B.transpose() * newvecext;
         int vidx = fs->vidx(i, 0);
         fs->vectorFields.segment<2>(vidx) = newvec;

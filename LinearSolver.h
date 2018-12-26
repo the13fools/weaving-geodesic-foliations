@@ -29,6 +29,7 @@ public:
     
     void curlOperator(const Weave &weave, SolverParams params, Eigen::SparseMatrix<double> &curlOp);
     void differentialOperator(const Weave &weave, SolverParams params, Eigen::SparseMatrix<double> &D);
+    void differentialOperator_rosy(const Weave &weave, SolverParams params, Eigen::SparseMatrix<double> &D);
     void unconstrainedProjection(const Weave &weave, Eigen::SparseMatrix<double> &proj);
 
     void computeEnergy(const Weave &weave, SolverParams params, const Eigen::VectorXd &primalVars, const Eigen::VectorXd &dualVars );
@@ -36,6 +37,7 @@ public:
     void updateDualVars(const Weave &weave, SolverParams params, Eigen::VectorXd &primalVars, Eigen::VectorXd &dualVars);
     void buildDualMatrix(const Weave &weave, SolverParams params, Eigen::VectorXd &primalVars, Eigen::VectorXd &dualVars);
     void updateDualVars_new(const Weave &weave, SolverParams params, Eigen::VectorXd &primalVars, Eigen::VectorXd &dualVars);
+    void updateDualVars_rosy(const Weave &weave, SolverParams params, Eigen::VectorXd &primalVars, Eigen::VectorXd &dualVars);
 
     int dualMatrixSize(const Weave &weave);
     // Problem dimensions
