@@ -3,7 +3,7 @@
 #include <vector>
 #include <Eigen/Sparse>
 
-static const double M_PI = 3.1415926535898;
+static const double PI = 3.1415926535898;
 
 void GNGlobalIntegration::globallyIntegrateOneComponent(const Surface &surf, const Eigen::MatrixXd &v, Eigen::VectorXd &scales, Eigen::VectorXd &theta)
 {
@@ -114,8 +114,8 @@ void GNGlobalIntegration::globallyIntegrateOneComponent(const Surface &surf, con
         for (int i = 0; i < rowsL.size(); i++)
         {
             double curPred = theta[rowsL[i]] - theta[colsL[i]];
-            if (curPred > M_PI) curPred -= 2 * M_PI;
-            if (curPred < -M_PI) curPred += 2 * M_PI;
+            if (curPred > PI) curPred -= 2 * PI;
+            if (curPred < -PI) curPred += 2 * PI;
             difVecPred.push_back(curPred);
         }
         Eigen::VectorXd bScales(nfaces);
