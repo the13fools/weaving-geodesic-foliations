@@ -25,9 +25,15 @@ Weave::Weave(const std::string &objname, int m)
     Eigen::MatrixXd Vtmp;
     Eigen::MatrixXi Ftmp;
     if (!igl::read_triangle_mesh(objname, Vtmp, Ftmp))
-    {
+    {    
         std::cerr << "Couldn't load mesh " << objname << std::endl;
-        exit(-1);
+        std::string modname = "../" + objname;
+        std::cerr << "Trying " << modname << " instead" << std::endl;
+        if (!igl::read_triangle_mesh(modname, Vtmp, Ftmp))
+        {
+            std::cerr << "Couldn't load mesh " << modname << " either" << std::endl;
+            exit(-1);
+        }
     }
     if (Vtmp.cols() < 3)
     {
