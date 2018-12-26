@@ -21,9 +21,14 @@ enum WeaveShading_Enum {
     WS_CONNECTION_ENERGY
 };
 
-enum FieldIntegration_Enum {
-    FI_OURS = 0, // local+global s rescaling
-    FI_BOMMES    // anisotropic mixed-integer
+enum LocalFieldIntegration_Enum {
+    LFI_TRIVIAL,    // simple normalization
+    LFI_SPECTRAL    // our spectral approach
+};
+
+enum GlobalFieldIntegration_Enum {
+    GFI_GN,     // our Gauss-Newton code
+    GFI_MI      // Bommes et al mixed-integer
 };
 
 enum CoverShading_Enum {
@@ -92,10 +97,12 @@ public:
         showCoverCuts = true;
         numISOLines = 0;
         
-        field_integration_method = FI_OURS;
+        local_field_integration_method = LFI_SPECTRAL;
+        global_field_integration_method = GFI_GN;
         bommesAniso = 1.0;
         initSReg = 1e-4;
-        globalSScale = 1.0;
+        globalSScale = 0.5;
+        MIReg = 1e-4;
 
         showTraces = true;
         showRatTraces = true;
@@ -105,7 +112,8 @@ public:
         minRodLen = 1.0;
 
         hideCoverVectors = false;
-        isRoSy = false;
+        rosyN = 0;
+        desiredRoSyN = 3;
     }
 
     virtual void drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu);
@@ -235,17 +243,20 @@ private:
     Eigen::MatrixXd rattraceends;
     Eigen::MatrixXd ratcollisions;
 
-    FieldIntegration_Enum field_integration_method;
+    LocalFieldIntegration_Enum local_field_integration_method;
+    GlobalFieldIntegration_Enum global_field_integration_method;
 
     int numISOLines;
     double bommesAniso;
     double initSReg;
     double globalSScale;
+    double MIReg;
 
     int fieldCount;
     bool hideCoverVectors;
 
-    bool isRoSy;
+    int rosyN;
+    int desiredRoSyN;
 };
 
 #endif

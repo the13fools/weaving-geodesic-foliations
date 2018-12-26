@@ -12,15 +12,19 @@ double vectorAngle(Surface &s, int face, const Eigen::Vector2d &v)
     return 2.0 * std::atan2(u.cross(extv).dot(n), u.norm() * extv.norm() + u.dot(extv));
 }
 
-void repVecToRoSy(Surface &s, int face, const Eigen::Vector2d &v, Eigen::Vector2d &rv1, Eigen::Vector2d &rv2, Eigen::Vector2d &rv3)
+void repVecToRoSy(Surface &s, int face, const Eigen::Vector2d &v, std::vector<Eigen::Vector2d> &rv, int rosyN)
 {
+    rv.clear();
     double theta = vectorAngle(s, face, v);
-    double basetheta = theta / 3.0;
+    double basetheta = theta / double(rosyN);
     Eigen::Vector3d n = s.faceNormal(face);
     Eigen::Matrix<double, 3, 2> B = s.data().Bs[face];
     Eigen::Vector3d u = B.col(0);
     Eigen::Matrix2d BTBinv = (B.transpose()*B).inverse();
-    rv1 = BTBinv * B.transpose() * Eigen::AngleAxisd(basetheta, n).toRotationMatrix() * u;
-    rv2 = BTBinv * B.transpose() * Eigen::AngleAxisd(basetheta + 2.0 * M_PI / 3.0, n).toRotationMatrix() * u;
-    rv3 = BTBinv * B.transpose() * Eigen::AngleAxisd(basetheta + 4.0 * M_PI / 3.0, n).toRotationMatrix() * u;
+    for (int j = 0; j < rosyN; j++)
+    {
+        double angle = basetheta + 2.0 * M_PI * double(j) / double(rosyN);
+        Eigen::Vector2d rosyvec = BTBinv * B.transpose() * Eigen::AngleAxisd(angle, n).toRotationMatrix() * u;    
+        rv.push_back(rosyvec);
+    }
 }

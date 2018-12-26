@@ -75,7 +75,8 @@ public:
         Eigen::MatrixXd &colors,
         RoSyVisualizationMode mode,
         bool normalizeVectors,
-        double baseVectorLength // ignored if normalizeVectors=true
+        double baseVectorLength, // ignored if normalizeVectors=true
+        int rosyN
     );
 
     void createVisualizationCuts(Eigen::MatrixXd &cutPts1, Eigen::MatrixXd &cutPts2);
@@ -86,8 +87,8 @@ public:
     void deserialize(std::istream &is);
     void deserializeOldRelaxFile(std::istream &is);
 
-    void convertToRoSy();
-    Weave *splitFromRosy();
+    void convertToRoSy(int rosyN);
+    Weave *splitFromRosy(int rosyN);
 
 private:
     // scale mesh to unit size

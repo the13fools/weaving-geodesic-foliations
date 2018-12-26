@@ -1,4 +1,4 @@
-#include "BommesFieldIntegration.h"
+#include "MIGlobalIntegration.h"
 #include <iostream>
 #include <vector>
 #include <map>
@@ -636,7 +636,7 @@ static void cutMesh(const Eigen::MatrixXd &V, const Eigen::MatrixXi &F,
     delete[] visited;
 }
 
-void BommesFieldIntegration::integrateOneComponent(const Surface &surf, const Eigen::MatrixXd &v, Eigen::VectorXd &theta)
+void MIGlobalIntegration::globallyIntegrateOneComponent(const Surface &surf, const Eigen::MatrixXd &v, Eigen::VectorXd &scales, Eigen::VectorXd &theta)
 {
     int nverts = surf.nVerts();
     theta.resize(nverts);
@@ -758,12 +758,11 @@ void BommesFieldIntegration::integrateOneComponent(const Surface &surf, const Ei
     }
     Eigen::SparseMatrix<double> M(2 * nfaces, 2 * nfaces);
     M.setFromTriplets(Mcoeffs.begin(), Mcoeffs.end());
-    Eigen::VectorXd projvf(2 * nfaces);
-    double scale = surf.data().averageEdgeLength * globalScale_;
+    Eigen::VectorXd projvf(2 * nfaces);    
     for (int i = 0; i < nfaces; i++)
     {
         Eigen::Vector3d vec = surf.data().Bs[i] * v.row(i).transpose();
-        double fac = scale / vec.norm();
+        double fac = scales[i];
         projvf.segment<2>(2 * i) = fac * surf.data().Js.block<2,2>(2*i,0) * v.row(i).transpose();
     }
 
