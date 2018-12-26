@@ -643,21 +643,23 @@ void LinearSolver::differentialOperator(const Weave &weave, SolverParams params,
                 }
                 Eigen::Matrix2d Tgf = weave.fs->data().Ts.block<2, 2>(2 * e, 2 - 2 * side);
                 Eigen::Matrix2d Tgf_rosy = weave.fs->data().Ts_rosy.block<2, 2>(2 * e, 2 - 2 * side);
-        //        Tgf_rosy = Tgf_rosy.inverse();
-        //        Tgf_rosy = Tgf_rosy * Tgf_rosy; // depends on degree! 
+                Eigen::Matrix2d Tfg_rosy = weave.fs->data().Ts_rosy.block<2, 2>(2 * e, side);
+           //     Tgf_rosy = Tgf_rosy.inverse();
+                Tfg_rosy = Tfg_rosy * Tfg_rosy;
+                Tgf_rosy = Tgf_rosy * Tgf_rosy; // depends on degree! 
 
                 for (int coeff = 0; coeff < 2; coeff++)
                 {
                     Eigen::Vector2d innervec(0, 0);
                     innervec[coeff] = sqrt(params.edgeWeights(e));
-                    Eigen::Vector2d dE = innervec;
+                    Eigen::Vector2d dE = Tfg_rosy * innervec;
                     for (int k = 0; k < 2; k++)
                     {
                         coeffs.push_back(Eigen::Triplet<double>(term, weave.fs->vidx(f, i) + k, dE[k]));
                     }
                     for (int field = 0; field < m; field++)
                     {
-                        dE = -permut(i, field) * (Tgf).transpose() * innervec;
+                        dE = -permut(i, field) * (Tgf_rosy * Tgf).transpose() * innervec;
                         for (int k = 0; k < 2; k++)
                         {
                             coeffs.push_back(Eigen::Triplet<double>(term, weave.fs->vidx(g, field) + k, dE[k]));
