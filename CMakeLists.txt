@@ -25,8 +25,10 @@ option(LIBIGL_WITH_XML               "Use XML"            OFF)
 
 find_package(LIBIGL REQUIRED QUIET)
 find_package(BLAS REQUIRED)
+find_package(SPQR REQUIRED QUIET)
 
 # Add your project files
 file(GLOB SRCFILES *.cpp)
 add_executable(${PROJECT_NAME}_bin ${SRCFILES})
-target_link_libraries(${PROJECT_NAME}_bin igl::core igl::opengl_glfw igl::opengl_glfw_imgui igl::comiso)
+target_include_directories(${PROJECT_NAME}_bin PUBLIC  ${SPQR_INCLUDES})
+target_link_libraries(${PROJECT_NAME}_bin igl::core igl::opengl_glfw igl::opengl_glfw_imgui igl::comiso ${SPQR_LIBRARIES})
