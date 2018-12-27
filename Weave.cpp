@@ -724,7 +724,10 @@ Weave *Weave::splitFromRosy(int rosyN)
     if (fs->nFields() != 1)
         return NULL;
 
-    Weave *result = new Weave(fs->data().V, fs->data().F, rosyN);
+    bool isodd = (rosyN % 2);
+    int m = (isodd ? rosyN : rosyN / 2);
+
+    Weave *result = new Weave(fs->data().V, fs->data().F, m);
 
     // set vector fields    
     int nfaces = fs->nFaces();
@@ -756,7 +759,7 @@ Weave *Weave::splitFromRosy(int rosyN)
             
             if (vis.from == -1)
             {
-                for (int j = 0; j < rosyN; j++)
+                for (int j = 0; j < m; j++)
                 {
                     int vidx = result->fs->vidx(vis.to, j);
                     result->fs->vectorFields.segment<2>(vidx) = rv[j];
@@ -804,7 +807,7 @@ Weave *Weave::splitFromRosy(int rosyN)
                 }
 
                 // set vectors
-                for (int j = 0; j < rosyN; j++)
+                for (int j = 0; j < m; j++)
                 {
                     int vidx = result->fs->vidx(vis.to, j);
                     result->fs->vectorFields.segment<2>(vidx) = rv[(j + bestidx) % rosyN];
