@@ -15,22 +15,104 @@ find_path(SPQR_INCLUDES
   $ENV{SPQRDIR}
   ${INCLUDE_INSTALL_DIR}
   PATH_SUFFIXES
+  include
   suitesparse
+  include/suitesparse
   ufsparse
 )
 
-find_library(SPQR_LIBRARIES spqr $ENV{SPQRDIR} ${LIB_INSTALL_DIR})
+find_library(SPQR_LIBRARIES 
+  NAMES
+  spqr 
+  PATHS
+  $ENV{SPQRDIR} ${LIB_INSTALL_DIR}
+  PATH_SUFFIXES
+  lib
+  )
 
 if(SPQR_LIBRARIES)
 
-  find_library(SUITESPARSE_LIBRARY SuiteSparse PATHS $ENV{SPQRDIR} ${LIB_INSTALL_DIR})
+  find_library(SUITESPARSE_LIBRARY 
+  NAMES
+  SuiteSparse suitesparseconfig
+  PATHS $ENV{SPQRDIR} ${LIB_INSTALL_DIR}
+  PATH_SUFFIXES
+  lib
+  )
   if (SUITESPARSE_LIBRARY)
     set(SPQR_LIBRARIES ${SPQR_LIBRARIES} ${SUITESPARSE_LIBRARY})
   endif()
 
-  find_library(CHOLMOD_LIBRARY cholmod PATHS $ENV{UMFPACK_LIBDIR} $ENV{UMFPACKDIR} ${LIB_INSTALL_DIR})
+  find_library(CHOLMOD_LIBRARY 
+  NAMES
+  cholmod 
+  PATHS 
+  $ENV{SPQRDIR} $ENV{CHOLMOD_LIBDIR} $ENV{CHOLMODDIR} ${LIB_INSTALL_DIR}
+  PATH_SUFFIXES
+  lib
+  )
   if(CHOLMOD_LIBRARY)
     set(SPQR_LIBRARIES ${SPQR_LIBRARIES} ${CHOLMOD_LIBRARY})
+  endif()
+  
+  find_library(METIS_LIBRARY 
+  NAMES
+  metis 
+  PATHS 
+  $ENV{SPQRDIR} ${LIB_INSTALL_DIR}
+  PATH_SUFFIXES
+  lib
+  )
+  if(CHOLMOD_LIBRARY)
+    set(SPQR_LIBRARIES ${SPQR_LIBRARIES} ${METIS_LIBRARY})
+  endif()
+  
+  find_library(COLAMD_LIBRARY 
+  NAMES
+  colamd 
+  PATHS 
+  $ENV{SPQRDIR} ${LIB_INSTALL_DIR}
+  PATH_SUFFIXES
+  lib
+  )
+  if(CHOLMOD_LIBRARY)
+    set(SPQR_LIBRARIES ${SPQR_LIBRARIES} ${COLAMD_LIBRARY})
+  endif()
+  
+  find_library(CCOLAMD_LIBRARY 
+  NAMES
+  ccolamd 
+  PATHS 
+  $ENV{SPQRDIR} ${LIB_INSTALL_DIR}
+  PATH_SUFFIXES
+  lib
+  )
+  if(CHOLMOD_LIBRARY)
+    set(SPQR_LIBRARIES ${SPQR_LIBRARIES} ${CCOLAMD_LIBRARY})
+  endif()
+  
+  find_library(AMD_LIBRARY 
+  NAMES
+  amd 
+  PATHS 
+  $ENV{SPQRDIR} ${LIB_INSTALL_DIR}
+  PATH_SUFFIXES
+  lib
+  )
+  if(CHOLMOD_LIBRARY)
+    set(SPQR_LIBRARIES ${SPQR_LIBRARIES} ${AMD_LIBRARY})
+  endif()
+  
+  find_library(CAMD_LIBRARY 
+  NAMES
+  camd 
+  PATHS 
+  $ENV{SPQRDIR} ${LIB_INSTALL_DIR}
+  PATH_SUFFIXES
+  lib
+  )
+  if(CHOLMOD_LIBRARY)
+    set(SPQR_LIBRARIES ${SPQR_LIBRARIES} ${CAMD_LIBRARY})
   endif()
   
 endif(SPQR_LIBRARIES)

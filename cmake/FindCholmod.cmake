@@ -18,7 +18,15 @@ find_path(CHOLMOD_INCLUDES
   ufsparse
 )
 
-find_library(CHOLMOD_LIBRARIES cholmod PATHS $ENV{CHOLMODDIR} ${LIB_INSTALL_DIR} $ENV{CHOLMODDIR}/lib)
+find_library(CHOLMOD_LIBRARIES 
+  NAMES
+  cholmod 
+  PATHS 
+  $ENV{CHOLMODDIR} 
+  ${LIB_INSTALL_DIR} 
+  PATH_SUFFIXES
+  lib
+)
 
 if(CHOLMOD_LIBRARIES)
 

@@ -10,7 +10,7 @@
 #include "Weave.h"
 #include "Surface.h"
 
-//#include <Eigen/SPQRSupport>
+#include <Eigen/SPQRSupport>
 
 
 
@@ -587,8 +587,8 @@ void LinearSolver::updateDualVars_new(const Weave &weave, SolverParams params, E
     std::cout << matrixSize << " matrix size " << std::endl;
  //   std::cout << params.softHandleConstraint << " soft constraint " << std::endl;
 
-    //Eigen::SPQR<Eigen::SparseMatrix<double> > solver(dualMat);
-    Eigen::SparseQR<Eigen::SparseMatrix<double>, Eigen::COLAMDOrdering<int> > solver(dualMat);
+    Eigen::SPQR<Eigen::SparseMatrix<double> > solver(dualMat);
+    //Eigen::SparseQR<Eigen::SparseMatrix<double>, Eigen::COLAMDOrdering<int> > solver(dualMat);
 
 /////////////////////**********************************************************************************///////////////////////
 
