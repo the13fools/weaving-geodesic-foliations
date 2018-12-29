@@ -81,10 +81,15 @@ void reassignOnePermutation(Weave &weave, int edge, Eigen::MatrixXi &P)
 {
     int f = weave.fs->data().E(edge, 0);
     int g = weave.fs->data().E(edge, 1);
+
     Eigen::Vector3d n = weave.fs->faceNormal(f);
     int m = weave.fs->nFields();
     P.resize(m, m);
     P.setZero();
+
+    if (f == -1 || g == -1)
+        return;
+
     //gather the vectors
     std::vector<Eigen::Vector3d> fvecs;
     std::vector<Eigen::Vector3d> gvecs;

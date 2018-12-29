@@ -130,6 +130,7 @@ public:
     void drawISOLines();
     void resetCutSelection();
     void addCut();
+    void clearCuts();
     void resample();
     void addHandle();
     void removeHandle();
