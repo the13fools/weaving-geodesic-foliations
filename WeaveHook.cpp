@@ -781,6 +781,7 @@ void WeaveHook::augmentField()
     {
         traces.purgeTraces(cover->fs);
         delete cover;
+        cover = NULL;
     }
 
     weave->fs->undeleteAllFaces();
@@ -929,6 +930,7 @@ void WeaveHook::resetCutSelection()
 
 void WeaveHook::removeSingularities()
 {
+    weave->fs->undeleteAllFaces();
     std::vector<int> topsingularities;
     std::vector<std::pair<int, int> > geosingularities;
     findSingularVertices(*weave, topsingularities, geosingularities);
@@ -1194,4 +1196,23 @@ void WeaveHook::splitFromRoSy()
     weave = splitWeave;
     rosyN = 0;
     reassignAllPermutations(*weave);    
+    for (int i = 0; i < weave->fs->Ps_.size(); i++)
+    {
+        bool id = true;
+        for (int j = 0; j < 3; j++)
+        {
+            if (weave->fs->Ps(i)(j, j) != 1)
+            {
+                id = false;
+            }
+        }
+        if (!id)
+        {
+            Cut c;
+            std::pair<int, int> cutedge(i, 1);
+            c.path.push_back(cutedge);
+            weave->cuts.push_back(c);
+        }
+    }
+    updateRenderGeometry();
 }
