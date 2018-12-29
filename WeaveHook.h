@@ -142,6 +142,7 @@ public:
     void saveRods();
     void exportForRendering();
     void convertToRoSy();
+    void splitFromRoSy();
     
     virtual void initSimulation();
 

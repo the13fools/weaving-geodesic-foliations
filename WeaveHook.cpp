@@ -25,6 +25,8 @@ void WeaveHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
     if (rosyN)
     {
         ImGui::Text("Is %d-RoSy", rosyN);
+        if(ImGui::Button("Split into Fields", ImVec2(-1,0)))
+            splitFromRoSy();
     }
     else
     {
@@ -323,8 +325,6 @@ void WeaveHook::clear()
     pathends.resize(0,3);
 
     traces.clear();
-
-    rosyN = 0;
 }
 
 void WeaveHook::initSimulation()
@@ -332,6 +332,7 @@ void WeaveHook::initSimulation()
     if (weave)
         delete weave;
     weave = new Weave(meshName, fieldCount);    
+    rosyN = 0;
     clear();    
 }
 
@@ -1180,4 +1181,17 @@ void WeaveHook::convertToRoSy()
     weave->convertToRoSy(desiredRoSyN);
     rosyN = desiredRoSyN;
     updateRenderGeometry();
+}
+
+void WeaveHook::splitFromRoSy()
+{
+    if(!weave || rosyN == 0)
+        return;
+    
+    clear();
+    Weave *splitWeave = weave->splitFromRosy(rosyN);
+    delete weave;
+    weave = splitWeave;
+    rosyN = 0;
+    reassignAllPermutations(*weave);    
 }
