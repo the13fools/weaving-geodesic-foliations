@@ -35,6 +35,7 @@ public:
 
     FieldSurface *fs;
     Eigen::VectorXd theta;
+    Eigen::VectorXd scales;
     
     void createVisualization(Eigen::MatrixXd &V, Eigen::MatrixXi &F, 
         Eigen::MatrixXd &edgePts, Eigen::MatrixXi &edgeSegs, Eigen::MatrixXd &colors, 

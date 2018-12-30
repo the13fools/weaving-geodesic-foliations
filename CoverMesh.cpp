@@ -33,6 +33,9 @@ CoverMesh::CoverMesh(const Surface &originalSurf, const Eigen::MatrixXd &V, cons
 
     theta.resize(fs->nVerts());
     theta.setZero();
+
+    scales.resize(fs->nFaces());
+    scales.setZero();
     
     renderScale_ = 1.0;
 
@@ -405,6 +408,8 @@ void CoverMesh::integrateField(LocalFieldIntegration *lmethod, GlobalFieldIntegr
     int globalverts = fs->nVerts();
     theta.resize(globalverts);
     theta.setZero();
+    scales.resize(fs->nFaces());
+    scales.setZero();
 
     // create a mesh without deleted faces
     int undeletedFaces = fs->numUndeletedFaces();
@@ -451,8 +456,8 @@ void CoverMesh::integrateField(LocalFieldIntegration *lmethod, GlobalFieldIntegr
                 compFacesToGlobal[idx] = undelFaceMap[i];
                 compF.row(idx) = undelF.row(i);
                 Eigen::Vector2d vec = fs->v(undelFaceMap[i], 0); 
-                vec.normalize();
-                compField.row(idx) = vec.transpose();
+                double vecnorm = (fs->data().Bs[undelFaceMap[i]] * vec).norm();
+                compField.row(idx) = vec.transpose()/vecnorm;
                 idx++;
             }
         }
@@ -482,6 +487,12 @@ void CoverMesh::integrateField(LocalFieldIntegration *lmethod, GlobalFieldIntegr
 
         double s_scale = 3.1415 / fs->data().averageEdgeLength / maxS;
         compS *= globalScale * s_scale;
+
+        for (int i = 0; i < componentsizes[component]; i++)
+        {
+            scales[compFacesToGlobal[i]] = compS[i];
+        }
+
         gmethod->globallyIntegrateOneComponent(surf, compField, compS, compTheta);
         
         

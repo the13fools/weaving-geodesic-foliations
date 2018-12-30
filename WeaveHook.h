@@ -22,8 +22,9 @@ enum WeaveShading_Enum {
 };
 
 enum LocalFieldIntegration_Enum {
-    LFI_TRIVIAL,    // simple normalization
-    LFI_SPECTRAL    // our spectral approach
+    LFI_TRIVIAL,     // simple normalization
+    LFI_CURLCORRECT, // local curl correction
+    LFI_SPECTRAL     // our spectral approach
 };
 
 enum GlobalFieldIntegration_Enum {
@@ -33,6 +34,7 @@ enum GlobalFieldIntegration_Enum {
 
 enum CoverShading_Enum {
     CS_NONE = 0,
+    CS_S_VAL,
     FUN_VAL,
     CS_CONNECTION_ENERGY
 };

@@ -6,6 +6,7 @@
 #include <igl/opengl/glfw/imgui/ImGuiHelpers.h>
 #include "Surface.h"
 #include "CoverMesh.h"
+#include "CurlLocalIntegration.h"
 #include "SpectralLocalIntegration.h"
 #include "MIGlobalIntegration.h"
 #include "GNGlobalIntegration.h"
@@ -205,7 +206,7 @@ void WeaveHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
             bool needsrender = false;
             needsrender |= ImGui::InputDouble("Vector Scale", &vectorScale);
             needsrender |= ImGui::Checkbox("Hide Vectors", &hideCoverVectors);
-            ImGui::Combo("Shading", (int *)&cover_shading_state, "None\0Theta Value\0Connection\0\0");
+            ImGui::Combo("Shading", (int *)&cover_shading_state, "None\0S Value\0Theta Value\0Connection\0\0");
             ImGui::Checkbox("Show Cuts", &showCoverCuts);
 
             if (needsrender)
@@ -214,8 +215,8 @@ void WeaveHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
 
         if (ImGui::CollapsingHeader("Cover Controls", ImGuiTreeNodeFlags_DefaultOpen))
         {
-            ImGui::Combo("Local Method", (int *)&local_field_integration_method, "Nothing\0Our Spectral\0\0");
-            if (local_field_integration_method == LFI_SPECTRAL)
+            ImGui::Combo("Local Method", (int *)&local_field_integration_method, "Nothing\0Curl Correction\0Our Spectral\0\0");
+            if (local_field_integration_method == LFI_SPECTRAL || local_field_integration_method == LFI_CURLCORRECT)
             {
                 ImGui::InputDouble("Regularization", &initSReg);
             }
@@ -427,8 +428,11 @@ void WeaveHook::setFaceColorsCover(igl::opengl::glfw::Viewer &viewer)
             FVAL(i) = cover->theta[cover->visMeshToCoverMesh(i)];            
         }        
     }
-
-    if (cover_shading_state == CS_CONNECTION_ENERGY)
+    else if (cover_shading_state == CS_S_VAL)
+    {
+        Z = cover->scales;
+    }
+    else if (cover_shading_state == CS_CONNECTION_ENERGY)
     {
         cover->fs->connectionEnergy(Z, 0., params);
     }
@@ -822,6 +826,8 @@ void WeaveHook::computeFunc()
         LocalFieldIntegration *method;
         if (local_field_integration_method == LFI_TRIVIAL)
             method = new TrivialLocalIntegration();
+        else if (local_field_integration_method == LFI_CURLCORRECT)
+            method = new CurlLocalIntegration(initSReg);
         else if(local_field_integration_method == LFI_SPECTRAL)
             method = new SpectralLocalIntegration(initSReg);
         else
