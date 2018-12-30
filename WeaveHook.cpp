@@ -109,6 +109,8 @@ void WeaveHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
                 addCut();
             if (ImGui::Button("Remove Prev Cut", ImVec2(-1, 0)))
                 removePrevCut();
+            if (ImGui::Button("Clear All Cuts", ImVec2(-1, 0)))
+                clearCuts();
             if (ImGui::Button("Reassign Permutations", ImVec2(-1, 0)))
                 reassignPermutations();
         }
@@ -752,7 +754,7 @@ void WeaveHook::reassignPermutations()
         }
         if (!id)
         {
-  //          nonIdentityEdges.push_back(i);  TODO: Fix viz bug!
+            nonIdentityEdges.push_back(i);  // TODO: Fix viz bug!
         }
     }
     int ncuts = nonIdentityEdges.size();
@@ -1220,5 +1222,25 @@ void WeaveHook::splitFromRoSy()
             weave->cuts.push_back(c);
         }
     }
+
+    ls.clearHandles();
+    for (int i = 0; i < weave->fs->nFields(); i++)
+    {
+        Handle h;
+        
+        h.face = 0;
+        h.dir = weave->fs->v(0, i);
+        h.field = i;
+
+        ls.addHandle(h);
+    }
+    weave->handles = ls.handles;
+
+    updateRenderGeometry();
+}
+
+void WeaveHook::clearCuts()
+{
+    weave->cuts.clear();
     updateRenderGeometry();
 }

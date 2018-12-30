@@ -57,7 +57,8 @@ if(SPQR_LIBRARIES)
   
   find_library(METIS_LIBRARY 
   NAMES
-  metis 
+  metis
+  metis.so.5 
   PATHS 
   $ENV{SPQRDIR} ${LIB_INSTALL_DIR}
   PATH_SUFFIXES
