@@ -313,16 +313,22 @@ void CoverMesh::roundAntipodalCovers(int numISOLines)
     int undeletedFaces = fs->numUndeletedFaces();
     Eigen::MatrixXi undelF(undeletedFaces, 3);
     Eigen::VectorXi undelFaceMap(undeletedFaces);
-    int fid=0;
     int globalfaces = fs->nFaces();
+    Eigen::VectorXi coverFacesToUndelFaces(globalfaces);
+    int fid=0;
     for(int i=0; i<globalfaces; i++)
     {
         if(!fs->isFaceDeleted(i))
         {
             undelFaceMap[fid] = i;
             undelF.row(fid) = fs->data().F.row(i);
+            coverFacesToUndelFaces[i] = fid;
             fid++;
         }        
+        else
+        {
+            coverFacesToUndelFaces[i] = -1;
+        }
     }
 
     Eigen::MatrixXd prunedV;
@@ -334,37 +340,58 @@ void CoverMesh::roundAntipodalCovers(int numISOLines)
     igl::cotmatrix(prunedV, prunedF, L);
     
     int nfields = ncovers_ / 2;
-    int origverts = originalSurf_->nVerts();
     int newverts = prunedV.rows();
+    
+    // map vertices on the cover mesh to those on the antipodal cover
+    std::map<int, int> correspondences;
+    int prunedfaces = prunedF.rows();
+    int origfaces = originalSurf_->nFaces();
+    for(int i=0; i<prunedfaces; i++)
+    {    
+        // face on the covering mesh    
+        int origface = undelFaceMap[i];
+        int cover = origface / origfaces;
+        // only consider faces on positively-oriented covers
+        if(cover < nfields)
+        {            
+            int corrface = origface + nfields*origfaces;
+            if(coverFacesToUndelFaces[corrface] == -1)
+                continue; // shouldn't happen probably
+            for(int j=0; j<3; j++)
+            {
+                correspondences[fs->data().F(origface,j)] = fs->data().F(corrface, j);
+            }
+        }
+    }
+    int ncorrs = correspondences.size();
+    std::vector<std::pair<int, int> > corrs;
+    for(auto it : correspondences)
+        corrs.push_back(std::pair<int,int>(it.first, it.second));
     
     double phase = 2.0 * M_PI / double(numISOLines);
     double offset = M_PI / numISOLines;
 
-    Eigen::VectorXd result(newverts + nfields * origverts);
+    Eigen::VectorXd result(newverts + ncorrs*nfields);
     result.setZero();
 
     std::vector<Eigen::Triplet<double> > Ccoeffs;
     int row = 0;
-    for (int i = 0; i < origverts; i++)
+    for (int i = 0; i < ncorrs; i++)
     {
         for (int j = 0; j < nfields; j++)
         {
-            int v1 = j * origverts + i;
-            int v2 = (j + nfields)*origverts + i;
-            int covv1 = data_.splitToCoverVerts[v1];
-            int covv2 = data_.splitToCoverVerts[v2];
-            if (I[covv1] != -1 && I[covv2] != -1)
-            {
-                double thetadiff = theta[covv1] + theta[covv2];
-                Ccoeffs.push_back(Eigen::Triplet<double>(row, I[covv1], 1.0));
-                Ccoeffs.push_back(Eigen::Triplet<double>(row, I[covv2], 1.0));
-                Ccoeffs.push_back(Eigen::Triplet<double>(row, newverts + j * origverts + i, phase));
-                Ccoeffs.push_back(Eigen::Triplet<double>(row, newverts + nfields * origverts, offset + thetadiff));
-                row++;
-            }
+            int v1 = corrs[i].first;
+            int v2 = corrs[i].second;
+            assert(I[v1] != -1 && I[v2] != -1);
+            double thetadiff = theta[v1] + theta[v2];
+            Ccoeffs.push_back(Eigen::Triplet<double>(row, I[v1], 1.0));
+            Ccoeffs.push_back(Eigen::Triplet<double>(row, I[v2], 1.0));
+            Ccoeffs.push_back(Eigen::Triplet<double>(row, newverts + j * ncorrs + i, phase));
+            Ccoeffs.push_back(Eigen::Triplet<double>(row, newverts + nfields * ncorrs, offset + thetadiff));
+            row++;
         }
     }
-    Eigen::SparseMatrix<double> C(row, newverts + nfields * origverts + 1);
+    Eigen::SparseMatrix<double> C(row, newverts + nfields * ncorrs + 1);
     C.setFromTriplets(Ccoeffs.begin(), Ccoeffs.end());
 
     std::vector<Eigen::Triplet<double> > Acoeffs;
@@ -375,23 +402,23 @@ void CoverMesh::roundAntipodalCovers(int numISOLines)
             Acoeffs.push_back(Eigen::Triplet<double>(it.row(), it.col(), -it.value()));
         }
     }
-    for (int i = 0; i < newverts + nfields*origverts; i++)
+    for (int i = 0; i < newverts + nfields*ncorrs; i++)
         Acoeffs.push_back(Eigen::Triplet<double>(i, i, 1e-4));
-    Eigen::SparseMatrix<double> A(newverts + nfields*origverts, newverts + nfields*origverts);
+    Eigen::SparseMatrix<double> A(newverts + nfields*ncorrs, newverts + nfields*ncorrs);
     A.setFromTriplets(Acoeffs.begin(), Acoeffs.end());
 
-    Eigen::VectorXd rhs(newverts + nfields*origverts);
+    Eigen::VectorXd rhs(newverts + nfields*ncorrs);
     rhs.setZero();
 
-    Eigen::VectorXi toRound(nfields*origverts);
-    for (int i = 0; i < nfields*origverts; i++)
+    Eigen::VectorXi toRound(nfields*ncorrs);
+    for (int i = 0; i < nfields*ncorrs; i++)
         toRound[i] = newverts + i;
 
     ComisoWrapper(C, A, result, rhs, toRound, 1e-6);
     std::cout << "Residual: " << (A*result - rhs).norm() << std::endl;
-    Eigen::VectorXd ctest(newverts + nfields * origverts + 1);
-    ctest.segment(0, newverts + nfields * origverts) = result;
-    ctest[newverts + nfields * origverts] = 1.0;
+    Eigen::VectorXd ctest(newverts + nfields * ncorrs + 1);
+    ctest.segment(0, newverts + nfields * ncorrs) = result;
+    ctest[newverts + nfields * ncorrs] = 1.0;
     std::cout << "Constraint residual: " << (C*ctest).norm() << std::endl;
     for (int i = 0; i < fs->nVerts(); i++)
     {

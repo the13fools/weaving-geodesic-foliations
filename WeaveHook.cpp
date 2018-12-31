@@ -12,7 +12,7 @@
 #include "GNGlobalIntegration.h"
 #include <igl/decimate.h>
 #include <igl/upsample.h>
-
+#include <igl/hsv_to_rgb.h>
 #include <igl/local_basis.h>
 
 using namespace std;
@@ -412,48 +412,45 @@ void WeaveHook::removeHandle()
 void WeaveHook::setFaceColorsCover(igl::opengl::glfw::Viewer &viewer)
 {
     int faces = cover->fs->data().F.rows();
-    // if ( curFaceEnergies.rows() != faces && shading_state != NONE) { return ; }
-    // cout << "fuck" << endl;
-
+    
     igl::ColorMapType viz_color = igl::COLOR_MAP_TYPE_MAGMA;
 
-    Eigen::VectorXd Z(faces);
-    Z.setConstant(0.7);
-
     int nsplitverts = cover->splitMesh().nVerts();
-    Eigen::VectorXd FVAL(nsplitverts);
 
-    if (cover_shading_state == FUN_VAL)
-    {
-        for (int i = 0; i < nsplitverts; i++)
-        {            
-            FVAL(i) = cover->theta[cover->visMeshToCoverMesh(i)];            
-        }        
-    }
-    else if (cover_shading_state == CS_S_VAL)
-    {
-        Z = cover->scales;
-    }
-    else if (cover_shading_state == CS_CONNECTION_ENERGY)
-    {
-        cover->fs->connectionEnergy(Z, 0., params);
-    }
-       
     Eigen::MatrixXd faceColors(cover->fs->nFaces(), 3);
     Eigen::MatrixXd vertColors(nsplitverts, 3);
 
     switch (cover_shading_state) 
     {   
-    case CS_NONE:
-        faceColors.setConstant(0.7);
-        break;
-
-    case FUN_VAL:
-        igl::colormap(viz_color, FVAL, true, vertColors);        
-        break;
-    default:
-        igl::colormap(viz_color,Z, true, faceColors);
-        break;
+        case FUN_VAL:
+        {
+            const double PI = 3.1415926535898;
+            for (int i = 0; i < nsplitverts; i++)
+            {            
+                double theta = cover->theta[cover->visMeshToCoverMesh(i)];            
+                // as HSV: [ 360 * (theta+pi) / 2 pi, 1.0, 0.5 ]
+                double H = 360.0 * (theta + PI) / (2.0 * PI);
+                igl::hsv_to_rgb(H, 1.0, 0.5, vertColors(i,0), vertColors(i,1), vertColors(i,2));
+            }   
+            break;
+        }
+        case CS_S_VAL:
+        {
+            igl::colormap(viz_color, cover->scales, true, faceColors);        
+            break;
+        }
+        case CS_CONNECTION_ENERGY:
+        {
+            Eigen::VectorXd Z(faces);
+            cover->fs->connectionEnergy(Z, 0., params);
+            igl::colormap(viz_color, Z, true, faceColors);        
+        }
+        case CS_NONE:
+        default:
+        {
+            faceColors.setConstant(0.7);
+            break;
+        }
     }
     
     // fade deleted faces

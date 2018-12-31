@@ -376,7 +376,7 @@ void Weave::deserialize(std::istream &ifs)
     int ncuts;
     ifs.read((char *)&ncuts, sizeof(int));
     for (int i = 0; i < ncuts; i++)
-    {
+    {    
         int nlinks;
         ifs.read((char *)&nlinks, sizeof(int));
         Cut c;
@@ -473,9 +473,12 @@ void Weave::createVisualizationCuts(Eigen::MatrixXd &cutPts1, Eigen::MatrixXd &c
         {
             int f1 = fs->data().E(cuts[i].path[j].first, 0);
             int f2 = fs->data().E(cuts[i].path[j].first, 1);
-            Eigen::Vector3d n1 = fs->faceNormal(f1);
-            Eigen::Vector3d n2 = fs->faceNormal(f2);
-            Eigen::Vector3d offset = 0.0001*(n1 + n2);
+            Eigen::Vector3d n(0,0,0);
+            if(f1 != -1)
+                n += fs->faceNormal(f1);
+            if(f2 != -1)
+                n += fs->faceNormal(f2);
+            Eigen::Vector3d offset = 0.0001*n;
             cutPts1.row(idx) = fs->data().V.row(fs->data().edgeVerts(cuts[i].path[j].first, 0)) + offset.transpose();
             cutPts2.row(idx) = fs->data().V.row(fs->data().edgeVerts(cuts[i].path[j].first, 1)) + offset.transpose();
             idx++;
