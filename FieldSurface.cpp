@@ -342,7 +342,7 @@ void FieldSurface::connectionEnergy(Eigen::VectorXd &energies, double thresh, So
             int faceidx0 = -1;
             int faceidx1 = -1;
 
-            if(data().E(i,0) == -1 || data().E(i,1) == -1)
+            if(i == -1 || data().E(i,0) == -1 || data().E(i,1) == -1)
                 continue;
             for (int iter = 0; iter < 3; iter++)
             {
