@@ -136,7 +136,6 @@ public:
     void resample();
     void addHandle();
     void removeHandle();
-    void removeSingularities();
     void removePrevCut(); 
     void clearTraces();
     void deleteLastTrace();

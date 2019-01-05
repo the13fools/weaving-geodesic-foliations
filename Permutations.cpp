@@ -122,6 +122,7 @@ void reassignOnePermutation(Weave &weave, int edge, Eigen::MatrixXi &P)
             {
                 double sign = (signs & (1 << i)) ? -1.0 : 1.0;
                 double theta = angle(fvecs[i], sign*gvecs[perm[i]], n);
+
                 tottheta += theta*theta;
             }
             if (tottheta < best)
@@ -155,7 +156,7 @@ int reassignAllPermutations(Weave &weave)
     return count;
 }
 
-void findSingularVertices(const Weave &weave, std::vector<int> &topologicalSingularVerts, std::vector<std::pair<int, int> > &geometricSingularVerts)
+void findSingularVertices(const Weave &weave, std::vector<std::pair<int, int> > &topologicalSingularVerts, std::vector<std::pair<int, int> > &geometricSingularVerts)
 {
     int nverts = weave.fs->nVerts();
     topologicalSingularVerts.clear();
@@ -275,24 +276,21 @@ void findSingularVertices(const Weave &weave, std::vector<int> &topologicalSingu
 
         if (!isboundary)
         {
-            bool isidentity = true;
             for (int j = 0; j < m; j++)
             {
                 if (totperm(j, j) != 1)
-                    isidentity = false;
-            }
-            if (!isidentity)
-                topologicalSingularVerts.push_back(i);
-            else
-            {
-                for (int j = 0; j < m; j++)
                 {
-                    const double PI = 3.1415926535898;
-                    double index = angles[j] + 2 * PI - totangle;
-                    if (fabs(index) > PI)
-                    {
-                        geometricSingularVerts.push_back(std::pair<int, int>(i, j));
-                    }
+                    topologicalSingularVerts.push_back(std::pair<int,int>(i,j));
+                }
+            }
+
+            for (int j = 0; j < m; j++)
+            {
+                const double PI = 3.1415926535898;
+                double index = angles[j] + 2 * PI - totangle;
+                if (fabs(index) > PI)
+                {
+                    geometricSingularVerts.push_back(std::pair<int, int>(i, j));
                 }
             }
         }

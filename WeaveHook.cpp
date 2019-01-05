@@ -721,7 +721,7 @@ void WeaveHook::reassignPermutations()
 
     std::cout << flipped << " permutations changed" << std::endl;
     
-    std::vector<int> topsingularities;
+    std::vector<std::pair<int, int> > topsingularities;
     std::vector<std::pair<int, int> > geosingularities;
     findSingularVertices(*weave, topsingularities, geosingularities);
     std::cout << "now " << topsingularities.size() << " topological and " << geosingularities.size() << " geometric singularities" << std::endl;
@@ -735,14 +735,16 @@ void WeaveHook::reassignPermutations()
     singularVerts_topo = Eigen::MatrixXd::Zero(topsingularities.size(), 3);
     for (int i = 0; i < topsingularities.size(); i++)
     {
-        singularVerts_topo.row(i) = weave->fs->data().V.row(topsingularities[i]);
+        singularVerts_topo.row(i) = weave->fs->data().V.row(topsingularities[i].first);
     }
 
     std::vector<int> nonIdentityEdges;
+    int m = weave->fs->nFields();
     for (int i = 0; i < weave->fs->Ps_.size(); i++)
     {
         bool id = true;
-        for (int j = 0; j < 3; j++)
+        
+        for (int j = 0; j < m; j++)
         {
             if (weave->fs->Ps(i)(j, j) != 1)
             {
@@ -792,27 +794,30 @@ void WeaveHook::augmentField()
     if (rosyN)
     {
         Weave *splitWeave = weave->splitFromRosy(rosyN);
-        std::vector<int> topsingularities;
-        std::vector<std::pair<int, int> > geosingularities;
         reassignAllPermutations(*splitWeave);
+
+        std::vector<std::pair<int, int> > topsingularities;
+        std::vector<std::pair<int, int> > geosingularities;
         findSingularVertices(*splitWeave, topsingularities, geosingularities);
 
-        std::vector<int> todelete = topsingularities;
+        std::vector<std::pair<int, int> > todelete = topsingularities;
         for (int i = 0; i < geosingularities.size(); i++)
-            todelete.push_back(geosingularities[i].first);
+            todelete.push_back(geosingularities[i]);
 
-        for(int i : todelete)
-        {
-            splitWeave->fs->deleteVertex(i);
-        }
-        cover = splitWeave->createCover();
+        cover = splitWeave->createCover(todelete);
         delete splitWeave;
     }
     else
     {
-        removeSingularities();
+        std::vector<std::pair<int, int> > topsingularities;
+        std::vector<std::pair<int, int> > geosingularities;
+        findSingularVertices(*weave, topsingularities, geosingularities);
 
-        cover = weave->createCover();
+        std::vector<std::pair<int, int> > todelete = topsingularities;
+        for (int i = 0; i < geosingularities.size(); i++)
+            todelete.push_back(geosingularities[i]);
+
+        cover = weave->createCover(todelete);
     }
     updateRenderGeometry();
     gui_mode = GUIMode_Enum::COVER;
@@ -931,25 +936,6 @@ void WeaveHook::resetCutSelection()
 {
     selectedVertices.clear();
     renderSelectedVertices.clear();
-}
-
-void WeaveHook::removeSingularities()
-{
-    weave->fs->undeleteAllFaces();
-    std::vector<int> topsingularities;
-    std::vector<std::pair<int, int> > geosingularities;
-    findSingularVertices(*weave, topsingularities, geosingularities);
-
-    std::vector<int> todelete = topsingularities;
-    for (int i = 0; i < geosingularities.size(); i++)
-        todelete.push_back(geosingularities[i].first);
-
-    for(int i : todelete)
-    {
-        weave->fs->deleteVertex(i);
-    }
-    //weave->removePointsFromMesh(todelete);
-    updateRenderGeometry();
 }
 
 void WeaveHook::addCut()
@@ -1201,10 +1187,11 @@ void WeaveHook::splitFromRoSy()
     weave = splitWeave;
     rosyN = 0;
     reassignAllPermutations(*weave);    
+    int m = weave->fs->nFields();
     for (int i = 0; i < weave->fs->Ps_.size(); i++)
     {
         bool id = true;
-        for (int j = 0; j < 3; j++)
+        for (int j = 0; j < m; j++)
         {
             if (weave->fs->Ps(i)(j, j) != 1)
             {
@@ -1221,7 +1208,7 @@ void WeaveHook::splitFromRoSy()
     }
 
     ls.clearHandles();
-    for (int i = 0; i < weave->fs->nFields(); i++)
+    for (int i = 0; i < m; i++)
     {
         Handle h;
         
