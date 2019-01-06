@@ -81,7 +81,7 @@ public:
 
     void createVisualizationCuts(Eigen::MatrixXd &cutPts1, Eigen::MatrixXd &cutPts2);
     
-    CoverMesh *createCover() const;
+    CoverMesh *createCover(const std::vector<std::pair<int, int> > &singularities) const;
 
     void serialize(std::ostream &os);    
     void deserialize(std::istream &is);

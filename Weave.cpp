@@ -487,7 +487,7 @@ void Weave::createVisualizationCuts(Eigen::MatrixXd &cutPts1, Eigen::MatrixXd &c
 }
 
 
-CoverMesh *Weave::createCover() const
+CoverMesh *Weave::createCover(const std::vector<std::pair<int, int> > &singularities) const
 {
     int nCover = fs->nFields() * 2;
     int nfaces = fs->nFaces();
@@ -633,6 +633,27 @@ CoverMesh *Weave::createCover() const
         for(int j=0; j<nCover; j++)
         {
             ret->fs->setFaceDeleted(j*nfaces + i, fs->isFaceDeleted(i));
+        }
+    }
+    // also remove faces around singularities
+    std::map<int, std::set<int> > delvertcovers;
+    for(auto it : singularities)
+    {
+        delvertcovers[it.first].insert(it.second);
+    }
+    for(int i=0; i<nfaces; i++)
+    {
+        for(int j=0; j<3; j++)
+        {
+            int vert = fs->data().F(i,j);
+            for(int k=0; k<fs->nFields(); k++)
+            {
+                if(delvertcovers[vert].count(k))
+                {
+                    ret->fs->setFaceDeleted(k*nfaces + i, true);
+                    ret->fs->setFaceDeleted((k+fs->nFields())*nfaces + i, true);
+                }               
+            }
         }
     }
     return ret;

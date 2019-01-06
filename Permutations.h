@@ -6,7 +6,7 @@ class Weave;
 
 int reassignAllPermutations(Weave &weave);
 int reassignCutPermutations(Weave &weave);
-void findSingularVertices(const Weave &weave, std::vector<int> &topologicalSingularVerts, std::vector<std::pair<int, int> > &geometricSingularVerts);
+void findSingularVertices(const Weave &weave, std::vector<std::pair<int, int> > &topologicalSingularVerts, std::vector<std::pair<int, int> > &geometricSingularVerts);
 
 #endif
 
