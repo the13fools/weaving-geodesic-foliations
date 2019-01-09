@@ -36,7 +36,8 @@ enum CoverShading_Enum {
     CS_NONE = 0,
     CS_S_VAL,
     FUN_VAL,
-    CS_CONNECTION_ENERGY
+    CS_CONNECTION_ENERGY,
+    CS_GRAD_DEVIATION
 };
 
 enum GUIMode_Enum {

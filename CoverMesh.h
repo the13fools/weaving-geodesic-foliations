@@ -47,6 +47,7 @@ public:
     void roundAntipodalCovers(int numISOLines);
     double renderScale() {return renderScale_;}
     const Surface &splitMesh() const;
+    void gradThetaDeviation(Eigen::VectorXd &error) const;
     
     // maps indices of vertices on the visualization mesh to corresponding "parent" vertices on the cover mesh
     int visMeshToCoverMesh(int vertid);

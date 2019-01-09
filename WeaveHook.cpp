@@ -208,7 +208,7 @@ void WeaveHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
             bool needsrender = false;
             needsrender |= ImGui::InputDouble("Vector Scale", &vectorScale);
             needsrender |= ImGui::Checkbox("Hide Vectors", &hideCoverVectors);
-            ImGui::Combo("Shading", (int *)&cover_shading_state, "None\0S Value\0Theta Value\0Connection\0\0");
+            ImGui::Combo("Shading", (int *)&cover_shading_state, "None\0S Value\0Theta Value\0Connection\0Theta Grad Error\0");
             ImGui::Checkbox("Show Cuts", &showCoverCuts);
 
             if (needsrender)
@@ -443,7 +443,15 @@ void WeaveHook::setFaceColorsCover(igl::opengl::glfw::Viewer &viewer)
         {
             Eigen::VectorXd Z(faces);
             cover->fs->connectionEnergy(Z, 0., params);
-            igl::colormap(viz_color, Z, true, faceColors);        
+            igl::colormap(viz_color, Z, true, faceColors);   
+            break;     
+        }
+        case CS_GRAD_DEVIATION:
+        {
+            Eigen::VectorXd Z(faces);
+            cover->gradThetaDeviation(Z);
+            igl::colormap(viz_color, Z, false, faceColors);
+            break;
         }
         case CS_NONE:
         default:

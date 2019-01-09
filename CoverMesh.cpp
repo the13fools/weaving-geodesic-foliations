@@ -638,5 +638,39 @@ void CoverMesh::drawTraceOnSplitMesh(const Trace &trace, Eigen::MatrixXd &pathSt
     }
 }
 
+static double periodicDiff(double a, double b)
+{
+    double diff = b-a;
+    if(diff < -M_PI)
+        diff += 2.0*M_PI;
+    else if(diff > M_PI)
+        diff -= 2.0*M_PI;
+    return diff;
+}
 
-
+void CoverMesh::gradThetaDeviation(Eigen::VectorXd &error) const
+{
+    int nfaces = fs->nFaces();
+    error.resize(nfaces);
+    error.setZero();
+    for(int i=0; i<nfaces; i++)
+    {
+        double vals[3];
+        for(int j=0; j<3; j++)
+        {
+            vals[j] = theta[fs->data().F(i,j)];
+            Eigen::Vector2d diffs;
+            diffs[0] = periodicDiff(vals[0], vals[1]);
+            diffs[1] = periodicDiff(vals[0], vals[2]);
+            Eigen::Matrix<double, 3, 2> B = fs->data().Bs[i];
+            Eigen::Matrix2d BTB = B.transpose()*B;
+            Eigen::Matrix2d BTBinv = BTB.inverse();
+            Eigen::Vector2d grad = BTBinv * diffs;
+            Eigen::Vector3d grademb = B * grad;
+            Eigen::Vector3d vemb = B*fs->data().Js.block<2,2>(2*i,0)*fs->v(i,0);
+            Eigen::Vector3d n = fs->faceNormal(i);
+            double theta = asin(grademb.cross(vemb).dot(n) / grademb.norm() / vemb.norm());
+            error[i] = fabs( theta ) / (0.5 * M_PI);
+        }
+    }
+}
