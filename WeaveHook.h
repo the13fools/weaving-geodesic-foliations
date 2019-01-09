@@ -105,7 +105,9 @@ public:
         bommesAniso = 1.0;
         initSReg = 1e-4;
         globalSScale = 0.5;
-        MIReg = 1e-4;
+        globalThetaReg = 1e-4;
+        globalAlternations = 10;
+        globalPowerIters = 10;
 
         showTraces = true;
         showRatTraces = true;
@@ -254,7 +256,9 @@ private:
     double bommesAniso;
     double initSReg;
     double globalSScale;
-    double MIReg;
+    double globalThetaReg;
+    int globalAlternations;
+    int globalPowerIters;
 
     int fieldCount;
     bool hideCoverVectors;

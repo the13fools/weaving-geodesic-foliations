@@ -225,10 +225,15 @@ void WeaveHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
             ImGui::Combo("Global Method", (int *)&global_field_integration_method, "Our Gauss-Newton\0Mixed Integer\0\0");
             ImGui::InputDouble("Global Rescaling", &globalSScale);
             
-            if (global_field_integration_method == GFI_MI)
+            if(global_field_integration_method == GFI_GN)
+            {
+                ImGui::InputInt("Alternations", &globalAlternations);                
+                ImGui::InputInt("Power Iterations", &globalPowerIters);
+            }
+            else if (global_field_integration_method == GFI_MI)
             {
                 ImGui::InputDouble("Anisotropy", &bommesAniso);
-                ImGui::InputDouble("Regularization", &MIReg);
+                ImGui::InputDouble("Regularization", &globalThetaReg);
             }
             if (ImGui::Button("Compute Function Value", ImVec2(-1, 0)))
                 computeFunc();
@@ -850,9 +855,9 @@ void WeaveHook::computeFunc()
         }
         GlobalFieldIntegration *gmethod;
         if (global_field_integration_method == GFI_GN)
-            gmethod = new GNGlobalIntegration();
+            gmethod = new GNGlobalIntegration(globalAlternations, globalPowerIters);
         else if(global_field_integration_method == GFI_MI)
-            gmethod = new MIGlobalIntegration(bommesAniso, MIReg);
+            gmethod = new MIGlobalIntegration(bommesAniso, globalThetaReg);
 
         cover->integrateField(method, gmethod, globalSScale);
         delete method;

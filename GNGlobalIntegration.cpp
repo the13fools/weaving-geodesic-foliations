@@ -46,7 +46,7 @@ void GNGlobalIntegration::globallyIntegrateOneComponent(const Surface &surf, con
     
     assert(scales.size() == nfaces);
 
-    int totalIter = 6;
+    int totalIter = outerIters_;
     for (int iter = 0; iter < totalIter; iter++)
     {
         std::vector<double> difVec;
@@ -90,7 +90,7 @@ void GNGlobalIntegration::globallyIntegrateOneComponent(const Surface &surf, con
         Eigen::VectorXd eigenVec(Lmat.rows());
         eigenVec.setRandom();
         eigenVec /= eigenVec.norm();
-        for (int i = 0; i < 10; i++)
+        for (int i = 0; i < powerIters_; i++)
         {
             eigenVec = solverL.solve(eigenVec);
             eigenVec /= eigenVec.norm();
