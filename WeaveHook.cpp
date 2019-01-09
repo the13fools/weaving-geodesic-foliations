@@ -708,7 +708,8 @@ bool WeaveHook::simulateOneStep()
         oneStep(*weave, params);
         faceEnergies(*weave, params, tempFaceEnergies);
     }
-    std::cout << "Total Geodesic Energy" << weave->fs->getGeodesicEnergy(params) << std::endl;
+    Eigen::VectorXd temp;
+    std::cout << "Total Geodesic Energy" << weave->fs->getGeodesicEnergy(temp, params) << std::endl;
 
     std::cout << "ran a step" << std::endl;
     return false;
@@ -899,7 +900,7 @@ void WeaveHook::deserializeVectorField()
     ifs.read((char *)&header, sizeof(int));
     if (header != magic)
     {
-        // old version
+           // old version
         ifs.clear();
         ifs.seekg(0);
         rosyN = 0;
@@ -1150,6 +1151,17 @@ void WeaveHook::exportForRendering()
             thetafs << cover->theta[cover->visMeshToCoverMesh(i*nverts+j)] << ",\t 0,\t0" << std::endl;
         }
     }
+
+    std::stringstream ss3;
+    ss3 << exportPrefix << "_geoeng" << ".csv";
+    std::ofstream geoengfs(ss3.str().c_str());
+    Eigen::VectorXd energy(nfaces);
+    weave->fs->connectionEnergy(energy, 0, params);
+    for(int i=0; i<nfaces; i++)
+    {
+        geoengfs << energy(i) << ",\t 0,\t0" << std::endl;
+    }
+
     std::string cutsname = exportPrefix + std::string("_cuts.csv");
     std::ofstream cfs(cutsname.c_str());
     int nsegs = nonIdentity1Weave.rows();
@@ -1172,6 +1184,8 @@ void WeaveHook::convertToRoSy()
         return;
 
     weave->convertToRoSy(desiredRoSyN);
+    ls.clearHandles();
+    weave->handles = ls.handles;
     rosyN = desiredRoSyN;
     updateRenderGeometry();
 }

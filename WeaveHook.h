@@ -68,7 +68,7 @@ public:
         params.lambdacompat = 100;
         params.lambdareg = 1e-3;
         params.softHandleConstraint = true;
-        params.disableCurlConstraint = true;
+        params.disableCurlConstraint = false;
 
         params.vizVectorCurl = 1.; // in field surface, vizualization variable
         params.vizCorrectionCurl = 0. ; // in field surface, vizualization variable
@@ -115,7 +115,7 @@ public:
 
         hideCoverVectors = false;
         rosyN = 0;
-        desiredRoSyN = 3;
+        desiredRoSyN = 6;
     }
 
     virtual void drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu);

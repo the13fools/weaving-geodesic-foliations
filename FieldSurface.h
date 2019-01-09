@@ -29,9 +29,11 @@ public:
     Eigen::Vector2d v(int face, int field) const;    
     Eigen::Vector2d beta(int face, int field) const;
     double alpha(int face, int field) const;
-    double getGeodesicEnergy(SolverParams params);
+    double getGeodesicEnergy(Eigen::VectorXd energy, SolverParams params);
 
     const Eigen::MatrixXi Ps(int edge) const;
+
+    double edgeCurlEnergy(int f, int e, int field);
 
     void normalizeFields(); // make all vectors unit-length
 
