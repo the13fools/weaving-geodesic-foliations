@@ -682,14 +682,14 @@ bool WeaveHook::simulateOneStep()
         {            
             if (rosyN != 0)
             {
-                ls.updateDualVars_rosy(*weave, params, primal, dual);
+                ls.updateDualVars_new(*weave, params, primal, dual, true);
            //     std::cout << nfields << std::endl;
             }
             else 
             {
-                ls.updateDualVars_new(*weave, params, primal, dual);
+                ls.updateDualVars_new(*weave, params, primal, dual, false);
             }
-            ls.updatePrimalVars(*weave, params, primal, dual);
+            ls.updatePrimalVars(*weave, params, primal, dual, rosyN != 0);
         }
 
         weave->fs->vectorFields.segment(0, 2*nfaces*nfields) = primal;
