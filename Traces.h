@@ -83,6 +83,7 @@ public:
     void collisionPoint(int collision, Eigen::Vector3d &pt0, Eigen::Vector3d &pt1) const;
 
     void exportRodFile(const char*filename);
+    void exportForRendering(const char *filename);
 
 private:
     void findTraceStart(const FieldSurface &parent,

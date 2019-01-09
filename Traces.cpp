@@ -310,6 +310,32 @@ void TraceSet::findCurvedVerts(const Trace &tr, double maxcurvature, std::set<in
     }
 }
 
+void TraceSet::exportForRendering(const char *filename)
+{
+    std::ofstream ofs(filename);
+    for(auto &it : rattraces_)
+    {   
+        int nsegs = it.pts.rows()-1;
+        std::vector<double> curvatures(nsegs+1,0.0);
+        for(int i=0; i<nsegs-1; i++)
+        {
+            Eigen::Vector3d v0 = it.pts.row(i);
+            Eigen::Vector3d v1 = it.pts.row(i+1);
+            Eigen::Vector3d v2 = it.pts.row(i+2);
+            Eigen::Vector3d n = it.normals.row(i+1);
+            double theta = angle(v1-v0, v2-v1, n);
+            double curvature = 0.5 * theta / (v1-v0).norm() / (v2-v1).norm();
+            curvatures[i+1] = curvature;
+        }
+        for(int i=0; i<nsegs; i++)
+        {
+            Eigen::Vector3d v0 = it.pts.row(i);
+            Eigen::Vector3d v1 = it.pts.row(i+1);
+            ofs << v0[0] << ",\t" << v0[1] << ",\t" << v0[2] << ",\t" << v1[0] << ",\t" << v1[1] << ",\t" << v1[2] << ",\t" << curvatures[i] << ",\t" << curvatures[i+1] << std::endl;        
+        }
+    }
+}
+
 void TraceSet::splitTrace(const Trace &tr, const std::set<int> &badverts, std::vector<Trace> &splittr) const
 {
     splittr.clear();

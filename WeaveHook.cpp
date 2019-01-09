@@ -1189,6 +1189,9 @@ void WeaveHook::exportForRendering()
     {
         singfs << singularVerts_topo(i,0) << ", " << singularVerts_topo(i,1) << ", " << singularVerts_topo(i,2) << std::endl;
     }
+    
+    std::string tracename = exportPrefix + std::string("_traces.csv");
+    traces.exportForRendering(tracename.c_str());
 }
 
 void WeaveHook::convertToRoSy()
