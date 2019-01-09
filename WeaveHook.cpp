@@ -843,7 +843,7 @@ void WeaveHook::computeFunc()
         if (global_field_integration_method == GFI_GN)
             gmethod = new GNGlobalIntegration();
         else if(global_field_integration_method == GFI_MI)
-            gmethod = new MIGlobalIntegration(bommesAniso, initSReg);
+            gmethod = new MIGlobalIntegration(bommesAniso, MIReg);
 
         cover->integrateField(method, gmethod, globalSScale);
         delete method;

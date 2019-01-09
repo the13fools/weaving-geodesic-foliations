@@ -725,6 +725,22 @@ void MIGlobalIntegration::globallyIntegrateOneComponent(const Surface &surf, con
     }
     Eigen::SparseMatrix<double> A(3 * nfaces, newverts + intdofs);
     A.setFromTriplets(Acoeffs.begin(), Acoeffs.end());
+    
+    std::vector<Eigen::Triplet<double> > Minvcoeffs;
+    for(int i=0; i<nfaces; i++)
+    {
+        double area = s.faceArea(i);
+        Eigen::Matrix<double, 3, 2> B = s.data().Bs[i];
+        Eigen::Matrix2d BTB = area * B.transpose()*B;
+        Eigen::Matrix2d BTBinv = BTB.inverse();
+        for (int j = 0; j < 2; j++)
+            for (int k = 0; k < 2; k++)
+            {
+                Minvcoeffs.push_back(Eigen::Triplet<double>(2 * i + j, 2 * i + k, BTBinv(j, k)));
+            }
+    }
+    Eigen::SparseMatrix<double> Minv(2*nfaces, 2*nfaces);
+    Minv.setFromTriplets(Minvcoeffs.begin(), Minvcoeffs.end());
 
     std::vector<Eigen::Triplet<double> > Dcoeffs;
     for (int i = 0; i < nfaces; i++)
@@ -761,13 +777,12 @@ void MIGlobalIntegration::globallyIntegrateOneComponent(const Surface &surf, con
     Eigen::VectorXd projvf(2 * nfaces);    
     for (int i = 0; i < nfaces; i++)
     {
-        Eigen::Vector3d vec = surf.data().Bs[i] * v.row(i).transpose();
         double fac = scales[i];
         projvf.segment<2>(2 * i) = fac * surf.data().Js.block<2,2>(2*i,0) * v.row(i).transpose();
     }
 
-    Eigen::VectorXd rhs = A.transpose() * D.transpose() * M * projvf;
-    Eigen::SparseMatrix<double> Mat = A.transpose()  * D.transpose() * M * D * A;
+    Eigen::VectorXd rhs = A.transpose() * D.transpose() * Minv.transpose() * M * projvf;
+    Eigen::SparseMatrix<double> Mat = A.transpose()  * D.transpose() * Minv.transpose() * M * Minv * D * A;
 
     Eigen::SparseMatrix<double> L;
     igl::cotmatrix(s.data().V, s.data().F, L);
@@ -800,6 +815,7 @@ void MIGlobalIntegration::globallyIntegrateOneComponent(const Surface &surf, con
 
     Eigen::SimplicialLDLT<Eigen::SparseMatrix<double> > solver(Mat);
     Eigen::VectorXd unconstr = solver.solve(rhs);
+    std::cout << "unconstr residual: " << (Mat*unconstr-rhs).norm() << std::endl;
     //result = unconstr;
     for (int i = 0; i < nfaces; i++)
     {
