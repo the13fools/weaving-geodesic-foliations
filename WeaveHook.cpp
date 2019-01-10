@@ -192,6 +192,11 @@ void WeaveHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
                 {
                     rationalizeTraces();
                 }
+                if (ImGui::Button("Smooth", ImVec2(-1,0)))
+                {
+                    traces.smoothRationalizedTraces(0.1);
+                    updateRenderGeometry();
+                }
                 ImGui::InputText("Rod Filename", rodFilename);
                 if (ImGui::Button("Save To Rod File", ImVec2(-1, 0)))
                 {

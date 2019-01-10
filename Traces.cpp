@@ -578,6 +578,68 @@ void TraceSet::sampleTrace(const Trace &tr, double start, double end, int nsegs,
 
 }
 
+void TraceSet::smoothRationalizedTraces(double amount)
+{
+    for(auto &it : rattraces_)
+    {
+        int npts = it.pts.rows();
+        std::vector<Eigen::Triplet<double> > coeffs;
+        for(int i=0; i<npts; i++)
+        {
+            if(i==0 || i == npts-1)
+            {
+                coeffs.push_back(Eigen::Triplet<double>(i, i, 1.0 + amount));
+                if(i==0)
+                    coeffs.push_back(Eigen::Triplet<double>(i, i+1, -amount));
+                if(i==npts-1)
+                    coeffs.push_back(Eigen::Triplet<double>(i, i-1, -amount));                
+            }
+            else
+            {
+                coeffs.push_back(Eigen::Triplet<double>(i, i, 1.0 + 2.0*amount));            
+                coeffs.push_back(Eigen::Triplet<double>(i, i+1, -amount));
+                coeffs.push_back(Eigen::Triplet<double>(i, i-1, -amount));                
+            }
+        }
+        Eigen::SparseMatrix<double> mat(npts, npts);
+        mat.setFromTriplets(coeffs.begin(), coeffs.end());
+        Eigen::SimplicialLDLT<Eigen::SparseMatrix<double> > solver(mat);
+        Eigen::MatrixXd newpts = solver.solve(it.pts);
+        it.pts = newpts;
+        
+        int nsegs = it.normals.rows();
+        coeffs.clear();
+        for(int i=0; i<nsegs; i++)
+        {
+            if(i==0 || i == nsegs-1)
+            {
+                coeffs.push_back(Eigen::Triplet<double>(i, i, 1.0 + amount));
+                if(i==0)
+                    coeffs.push_back(Eigen::Triplet<double>(i, i+1, -amount));
+                if(i==nsegs-1)
+                    coeffs.push_back(Eigen::Triplet<double>(i, i-1, -amount));                
+            }
+            else
+            {
+                coeffs.push_back(Eigen::Triplet<double>(i, i, 1.0 + 2.0*amount));            
+                coeffs.push_back(Eigen::Triplet<double>(i, i+1, -amount));
+                coeffs.push_back(Eigen::Triplet<double>(i, i-1, -amount));                
+            }
+        }
+        mat.resize(nsegs, nsegs);
+        mat.setFromTriplets(coeffs.begin(), coeffs.end());
+        solver.compute(mat);
+        Eigen::MatrixXd newnormals = solver.solve(it.normals);
+        it.normals = newnormals;
+        for(int i=0; i<nsegs; i++)
+        {
+            Eigen::Vector3d n = it.normals.row(i).transpose();
+            n.normalize();
+            it.normals.row(i) = n.transpose();
+        }
+    }
+}
+
 void TraceSet::rationalizeTraces(double maxcurvature, double extenddist, double seglen, double minlen)
 {
     rattraces_.clear();

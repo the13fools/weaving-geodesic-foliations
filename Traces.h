@@ -62,6 +62,8 @@ public:
     
     int nRationalizedTraces() const { return rattraces_.size(); }
     const RationalizedTrace &rationalizedTrace(int id) const { return rattraces_[id]; }
+    
+    void smoothRationalizedTraces(double amount);
 
     int nCollisions() const { return collisions_.size(); }
     
