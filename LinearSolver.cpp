@@ -10,9 +10,17 @@
 #include "Weave.h"
 #include "Surface.h"
 
-#include <Eigen/SPQRSupport>
 
 
+DualSolver::DualSolver(Eigen::SparseMatrix<double> &M)
+{
+    solver.compute(M);
+}
+
+void DualSolver::solve(const Eigen::VectorXd &rhs, Eigen::VectorXd &x)
+{
+    x = solver.solve(rhs);
+}
 
 
 void LinearSolver::addHandle(const Handle &h)
@@ -23,6 +31,21 @@ void LinearSolver::addHandle(const Handle &h)
 void LinearSolver::clearHandles()
 {
     handles.clear();
+}
+
+void LinearSolver::takeSomeSteps(const Weave &weave, SolverParams params, Eigen::VectorXd &primalVars, Eigen::VectorXd &dualVars, bool isRoSy, int numSteps)
+{
+    DualSolver *ds = buildDualUpdateSolver(weave, params, isRoSy);
+    for(int i=0; i<numSteps; i++)
+    {
+        std::cout << "###############" << std::endl;
+        std::cout << "Step " << i+1 << " of " << numSteps << std::endl;
+        std::cout << "###############" << std::endl;
+        updateDualVars_new(weave, params, primalVars, dualVars, isRoSy, ds);
+        updatePrimalVars(weave, params, primalVars, dualVars, isRoSy);
+    }
+    
+    delete ds;
 }
 
 static void identityMatrix(int n, Eigen::SparseMatrix<double> &I)
@@ -118,15 +141,8 @@ void LinearSolver::updatePrimalVars(const Weave &weave, SolverParams params, Eig
 
 }
 
-void LinearSolver::updateDualVars_new(const Weave &weave, SolverParams params, Eigen::VectorXd &primalVars, Eigen::VectorXd &dualVars, bool isRoSy)
+DualSolver *LinearSolver::buildDualUpdateSolver(const Weave &weave, SolverParams params, bool isRoSy)
 {
-    // min_delta, \lambda   0.5 delta^2 + \lambda^T L (v + delta)
-    // delta + L^T \lambda = 0
-    // L delta + LL^T \lambda = 0
-    // -L v + LL^T \lambda = 0
-    // LL^T \lambda = Lv
-    // delta = - L^T \lambda
-
     int nfaces = weave.fs->data().F.rows();
     int m = weave.fs->nFields();
     int nhandles = handles.size();
@@ -143,7 +159,9 @@ void LinearSolver::updateDualVars_new(const Weave &weave, SolverParams params, E
     else
         differentialOperator(weave, params, D);
     Eigen::VectorXd h0;
-    handleConstraintOperator(weave, params, primalVars, H, h0);
+    Eigen::VectorXd dummy(2 * nfaces * m);
+    dummy.setZero();
+    handleConstraintOperator(weave, params, dummy, H, h0);
     int nhconstraints = h0.size();
     int matsize = 2 * nfaces * m + intedges * m + nhconstraints;
     curlOperator(weave, params, curlOp);
@@ -156,15 +174,7 @@ void LinearSolver::updateDualVars_new(const Weave &weave, SolverParams params, E
     massMatrix(weave, BTB);
     double t = params.lambdacompat;
     Eigen::SparseMatrix<double> M = BTB + t * D.transpose() * D;
-
-    Eigen::VectorXd rhs(matsize);
-    rhs.setZero();
-    rhs.segment(0, 2*nfaces*m) = -t * D.transpose() * D * primalVars;
-    rhs.segment(2*nfaces*m, intedges * m ) = -curlOp * (primalVars);
-    rhs.segment(2*nfaces*m + intedges * m, nhconstraints) = -h0;
-
-/////////////////////**********************************************************************************///////////////////////
-
+    
     std::vector<Eigen::Triplet<double> > dualCoeffs;
 
     for (int k=0; k<M.outerSize(); ++k)
@@ -209,17 +219,68 @@ void LinearSolver::updateDualVars_new(const Weave &weave, SolverParams params, E
         }
     }
 
+    std::cout << matsize << " matrix size " << std::endl;
+
     Eigen::SparseMatrix<double> dualMat;
     dualMat.resize(matsize, matsize);
     dualMat.setFromTriplets(dualCoeffs.begin(), dualCoeffs.end());
+    std::cout << "Factoring matrix" << std::endl;
+    DualSolver *ds = new DualSolver(dualMat);
+    std::cout << "Done" << std::endl;
+    return ds;
+}
 
-    std::cout << matsize << " matrix size " << std::endl;
+void LinearSolver::updateDualVars_new(const Weave &weave, SolverParams params, Eigen::VectorXd &primalVars, Eigen::VectorXd &dualVars, bool isRoSy, DualSolver *solver)
+{
+    // min_delta, \lambda   0.5 delta^2 + \lambda^T L (v + delta)
+    // delta + L^T \lambda = 0
+    // L delta + LL^T \lambda = 0
+    // -L v + LL^T \lambda = 0
+    // LL^T \lambda = Lv
+    // delta = - L^T \lambda
+    
+    std::cout << "Building rhs" << std::endl;
 
-    Eigen::SPQR<Eigen::SparseMatrix<double> > solver(dualMat);
+    int nfaces = weave.fs->data().F.rows();
+    int m = weave.fs->nFields();
+    int nhandles = handles.size();
+    int intedges = weave.fs->numInteriorEdges();
 
-/////////////////////**********************************************************************************///////////////////////
+    Eigen::SparseMatrix<double> D;
+    Eigen::SparseMatrix<double> H;
+    Eigen::SparseMatrix<double> curlOp;
+    
+    if(isRoSy)
+        differentialOperator_rosy(weave, params, D);
+    else
+        differentialOperator(weave, params, D);
+    Eigen::VectorXd h0;
+    handleConstraintOperator(weave, params, primalVars, H, h0);
+    int nhconstraints = h0.size();
+    int matsize = 2 * nfaces * m + intedges * m + nhconstraints;
+    curlOperator(weave, params, curlOp);
 
-    Eigen::VectorXd deltalambda = solver.solve(rhs);
+    if (params.disableCurlConstraint || isRoSy)
+    {
+        curlOp.setZero();
+    }
+
+    double t = params.lambdacompat;
+
+
+    Eigen::VectorXd rhs(matsize);
+    rhs.setZero();
+    rhs.segment(0, 2*nfaces*m) = -t * D.transpose() * D * primalVars;
+    rhs.segment(2*nfaces*m, intedges * m ) = -curlOp * (primalVars);
+    rhs.segment(2*nfaces*m + intedges * m, nhconstraints) = -h0;
+
+
+    std::cout << "Solving" << std::endl;
+
+
+    Eigen::VectorXd deltalambda;
+    
+    solver->solve(rhs, deltalambda);
 
     dualVars = deltalambda.segment(0, 2  * nfaces * m);
    

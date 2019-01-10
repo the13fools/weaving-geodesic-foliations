@@ -691,19 +691,8 @@ bool WeaveHook::simulateOneStep()
         Eigen::VectorXd primal = weave->fs->vectorFields.segment(0, 2*nfaces*nfields);
         Eigen::VectorXd dual = weave->fs->vectorFields.segment(2*nfaces*nfields, 2*nfaces*nfields);
 
-        for (int i = 0; i < 1; i++)
-        {            
-            if (rosyN != 0)
-            {
-                ls.updateDualVars_new(*weave, params, primal, dual, true);
-           //     std::cout << nfields << std::endl;
-            }
-            else 
-            {
-                ls.updateDualVars_new(*weave, params, primal, dual, false);
-            }
-            ls.updatePrimalVars(*weave, params, primal, dual, rosyN != 0);
-        }
+        const int numDesignIters = 10;
+        ls.takeSomeSteps(*weave, params, primal, dual, rosyN != 0, numDesignIters);
 
         weave->fs->vectorFields.segment(0, 2*nfaces*nfields) = primal;
         weave->fs->vectorFields.segment(2*nfaces*nfields, 2*nfaces*nfields) = dual;
