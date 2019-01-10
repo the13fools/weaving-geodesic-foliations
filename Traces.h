@@ -51,6 +51,7 @@ public:
 struct RationalizedTrace
 {
     Eigen::MatrixXd pts;
+    Eigen::VectorXi origface;
     Eigen::MatrixXd normals;
 };
 
@@ -85,7 +86,7 @@ public:
 
     void collisionPoint(int collision, Eigen::Vector3d &pt0, Eigen::Vector3d &pt1) const;
 
-    void exportRodFile(const char*filename);
+    void exportRodFile(const char*filename, int colorGroupSize);
     void exportForRendering(const char *filename);
 
 private:

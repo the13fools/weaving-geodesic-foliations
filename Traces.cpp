@@ -547,6 +547,7 @@ void TraceSet::sampleTrace(const Trace &tr, double start, double end, int nsegs,
 {
     samples.clear();
     rattrace.normals.resize(nsegs, 3);
+    rattrace.origface.resize(nsegs);
     rattrace.pts.resize(nsegs + 1, 3);    
     for (int i = 0; i < nsegs+1; i++)
     {
@@ -575,6 +576,8 @@ void TraceSet::sampleTrace(const Trace &tr, double start, double end, int nsegs,
         Eigen::Vector3d newpt1 = rattrace.pts.row(i+1);
         Eigen::Vector3d newnormal = parallelTransport(normal, oldpt1 - oldpt0, newpt1 - newpt0);
         rattrace.normals.row(i) = newnormal.transpose();
+        
+        rattrace.origface[i] = tr.segs[seg].face;
     }
 
 }
@@ -821,12 +824,12 @@ void TraceSet::rationalizeTraces(double maxcurvature, double extenddist, double 
 }
     
 
-void TraceSet::exportRodFile(const char*filename)
+void TraceSet::exportRodFile(const char*filename, int colorGroupSize)
 {
     std::ofstream myfile(filename);
     // Write Header 
     myfile << -217 << std::endl;
-    myfile << 1 << std::endl;
+    myfile << 2 << std::endl;
     myfile << rattraces_.size() << std::endl;;
     myfile << collisions_.size() << std::endl;;
     myfile << "0.001"  << std::endl;;
@@ -864,8 +867,15 @@ void TraceSet::exportRodFile(const char*filename)
         
         for(int i=0; i<nsegs; i++)
         {
-            myfile << "0.02 " << std::endl;
+            myfile << "0.02 ";
         }
+        myfile << std::endl;
+        
+        for(int i=0; i<nsegs; i++)
+        {
+            myfile << int(it.origface[i] / colorGroupSize) << " ";            
+        }        
+        myfile << std::endl;
         myfile << std::endl;
     }
     
