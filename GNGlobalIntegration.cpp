@@ -88,6 +88,7 @@ void GNGlobalIntegration::globallyIntegrateOneComponent(const Surface &surf, con
         // Eigen Decompose
         Eigen::SimplicialLDLT<Eigen::SparseMatrix<double> > solverL(Lmat);
         Eigen::VectorXd eigenVec(Lmat.rows());
+        srand(0);
         eigenVec.setRandom();
         eigenVec /= eigenVec.norm();
         for (int i = 0; i < powerIters_; i++)
