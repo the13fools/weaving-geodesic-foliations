@@ -1116,7 +1116,7 @@ void WeaveHook::updateRenderGeometry()
 
 void WeaveHook::saveRods()
 {
-    traces.exportRodFile(rodFilename.c_str());
+    traces.exportRodFile(rodFilename.c_str(), weave->fs->nFaces());
 }
 
 void WeaveHook::exportForRendering()
