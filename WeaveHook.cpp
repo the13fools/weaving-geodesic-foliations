@@ -14,6 +14,8 @@
 #include <igl/upsample.h>
 #include <igl/hsv_to_rgb.h>
 #include <igl/local_basis.h>
+#include <random>
+#include <chrono>
 
 using namespace std;
 
@@ -100,6 +102,8 @@ void WeaveHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
                 deserializeVectorField();
             if (ImGui::Button("Load Field (Old Format)", ImVec2(-1, 0)))
                 deserializeVectorFieldOld();
+            if (ImGui::Button("Load Field (Paul)", ImVec2(-1,0)))
+                deserializePaulField();
         }
         if (ImGui::CollapsingHeader("Cuts", ImGuiTreeNodeFlags_DefaultOpen))
         {
@@ -172,6 +176,12 @@ void WeaveHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
                 {
                     computeTrace();
                 }
+                if (ImGui::Button("Draw Random Traces", ImVec2(-1, 0)))
+                {
+                    computeRandomTraces(numRandomTraces);
+                }
+                ImGui::InputInt("Number of Them", &numRandomTraces);
+                
                 if (ImGui::Button("Delete Last Trace", ImVec2(-1, 0)))
                 {
                     deleteLastTrace();
@@ -635,6 +645,27 @@ void WeaveHook::computeTrace()
     updateRenderGeometry();
 }
 
+void WeaveHook::computeRandomTraces(int numtraces)
+{
+    int nfaces = weave->fs->nFaces();
+    int nfields = weave->fs->nFields();
+    
+    std::default_random_engine generator;
+    generator.seed(std::chrono::system_clock::now().time_since_epoch().count());
+    std::uniform_int_distribution<int> facedistribution(0,nfaces-1);
+    std::uniform_int_distribution<int> fielddistribution(0,nfields-1);
+    std::uniform_int_distribution<int> dirdistribution(0, 1);
+    
+    for (int i = 0; i < numtraces; i++)
+    {
+        int face = facedistribution(generator);
+        int field = fielddistribution(generator);
+        int dir = 2*dirdistribution(generator) - 1;
+        traces.traceCurve(*weave->fs, trace_state, field, dir, face, traceSteps);
+    }
+    updateRenderGeometry();
+}
+
 void WeaveHook::updateSingularVerts(igl::opengl::glfw::Viewer &viewer)
 {
     Eigen::RowVector3d green(.1, .9, .1);
@@ -937,6 +968,14 @@ void WeaveHook::deserializeVectorFieldOld()
 {
     std::ifstream ifs(vectorFieldName);
     weave->deserializeOldRelaxFile(ifs);
+    rosyN = 0;
+    updateRenderGeometry();
+}
+
+void WeaveHook::deserializePaulField()
+{
+    std::ifstream ifs(vectorFieldName);
+    weave->deserializePaulFile(ifs);
     rosyN = 0;
     updateRenderGeometry();
 }
