@@ -319,7 +319,7 @@ double FieldSurface::getGeodesicEnergy(Eigen::VectorXd energy, SolverParams para
     return geodesicEnergy_;
 }
 
-double FieldSurface::edgeCurlEnergy(int f, int e, int field)
+double FieldSurface::edgeCurlEnergy(int f, int e, int field) const
 {
     int nfields = nFields();
     double deltaNorm = 0.; // remove these things...

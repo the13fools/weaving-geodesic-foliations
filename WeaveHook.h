@@ -65,7 +65,7 @@ public:
         // vectorFieldName = "bunny_coarser_nosing";
         vectorFieldName = "tet.rlx";
         rodFilename = "example.rod";
-        exportPrefix = "export/example";
+        exportPrefix = "../final/export/example";
         params.lambdacompat = 100;
         params.lambdareg = 1e-3;
         params.softHandleConstraint = true;

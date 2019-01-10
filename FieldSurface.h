@@ -33,7 +33,7 @@ public:
 
     const Eigen::MatrixXi Ps(int edge) const;
 
-    double edgeCurlEnergy(int f, int e, int field);
+    double edgeCurlEnergy(int f, int e, int field) const;
 
     void normalizeFields(); // make all vectors unit-length
 

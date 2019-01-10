@@ -222,6 +222,7 @@ void TraceSet::traceCurve(const FieldSurface &parent, const Trace_Mode trace_sta
         seg.side[1] = next_edge_id;
         seg.bary[0] = curr_bary;
         seg.bary[1] = next_bary;
+        seg.inplanebending = parent.edgeCurlEnergy(curr_face_id, next_edge_id, 0);
         t.segs.push_back(seg);
 
         switch (trace_state)
