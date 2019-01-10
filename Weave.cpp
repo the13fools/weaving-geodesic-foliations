@@ -345,6 +345,59 @@ void Weave::serialize(std::ostream &ofs)
     }
 }
 
+void Weave::deserializePaulFile(std::ifstream &ifs)
+{
+    FieldSurface *newfs = new FieldSurface(fs->data().V, fs->data().F, 2);    
+    int nfaces = fs->nFaces();
+    for(int i=0; i<nfaces; i++)
+    {
+        double dummy;
+        char comma;
+        Eigen::Vector3d vecs[3];
+        for(int j=0; j<3; j++)
+        {
+            ifs >> vecs[0][j];
+            ifs >> comma;
+        }
+        for(int j=0; j<3; j++)
+        {
+            ifs >> vecs[1][j];
+            ifs >> comma;
+        }
+        for(int j=0; j<3; j++)
+        {
+            ifs >> vecs[2][j];
+            if(j != 2)
+                ifs >> comma;
+        }
+        Eigen::Matrix<double, 3, 2> B = fs->data().Bs[i];
+        Eigen::Vector3d n = fs->faceNormal(i);
+        
+        Eigen::Matrix2d BTB = B.transpose() * B;
+        
+        int idx=0;
+        std::cout << "start" << std::endl;
+        for(int j=0; j<3 && idx<2; j++)
+        {
+            if(fabs(n.dot(vecs[j])) > 0.5)
+                continue;
+                
+            Eigen::Vector2d vint = BTB.inverse() * B.transpose() * vecs[j];
+            newfs->vectorFields.segment<2>(newfs->vidx(i,idx)) = vint;
+            idx++;
+        }
+    }
+    if(ifs)
+    {
+        delete fs;
+        fs = newfs;
+    }
+    else
+    {
+        delete newfs;
+    }
+}
+
 void Weave::deserialize(std::istream &ifs)
 {
     FieldSurface *newfs = FieldSurface::deserialize(ifs);

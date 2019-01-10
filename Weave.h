@@ -86,6 +86,7 @@ public:
     void serialize(std::ostream &os);    
     void deserialize(std::istream &is);
     void deserializeOldRelaxFile(std::istream &is);
+    void deserializePaulFile(std::ifstream &ifs);
 
     void convertToRoSy(int rosyN);
     Weave *splitFromRosy(int rosyN);

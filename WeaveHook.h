@@ -119,6 +119,8 @@ public:
         hideCoverVectors = false;
         rosyN = 0;
         desiredRoSyN = 6;
+        
+        numRandomTraces = 100;
     }
 
     virtual void drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu);
@@ -129,6 +131,7 @@ public:
     void serializeVectorField();
     void deserializeVectorField();    
     void deserializeVectorFieldOld();
+    void deserializePaulField();
     void augmentField();
     void computeFunc();
     void roundCovers();
@@ -143,6 +146,7 @@ public:
     void clearTraces();
     void deleteLastTrace();
     void computeTrace();   
+    void computeRandomTraces(int numtraces);   
     void rationalizeTraces();
     void saveRods();
     void exportForRendering();
@@ -262,6 +266,8 @@ private:
 
     int fieldCount;
     bool hideCoverVectors;
+    
+    int numRandomTraces;
 
     int rosyN;
     int desiredRoSyN;
