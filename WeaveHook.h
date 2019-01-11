@@ -111,10 +111,10 @@ public:
 
         showTraces = true;
         showRatTraces = true;
-        extendTrace = 0.1;
-        segLen = 0.02;
+        extendTrace = 0.01;
+        segLen = 0.001;
         maxCurvature = 0.5;
-        minRodLen = 1.0;
+        minRodLen = 0.1;
 
         hideCoverVectors = false;
         rosyN = 0;
