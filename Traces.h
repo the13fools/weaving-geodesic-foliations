@@ -53,6 +53,7 @@ struct RationalizedTrace
     Eigen::MatrixXd pts;
     Eigen::VectorXi origface;
     Eigen::MatrixXd normals;
+    Eigen::VectorXd curlbending;
 };
 
 // a collection of traces on a surface

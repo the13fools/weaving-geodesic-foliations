@@ -98,7 +98,7 @@ public:
         handleParams(2) = 1;
 
         showCoverCuts = true;
-        numISOLines = 0;
+        numISOLines = 1;
         
         local_field_integration_method = LFI_SPECTRAL;
         global_field_integration_method = GFI_GN;
@@ -111,10 +111,10 @@ public:
 
         showTraces = true;
         showRatTraces = true;
-        extendTrace = 0.1;
-        segLen = 0.02;
+        extendTrace = 0.;
+        segLen = 0.005;
         maxCurvature = 0.5;
-        minRodLen = 1.0;
+        minRodLen = .1;
 
         hideCoverVectors = false;
         rosyN = 0;

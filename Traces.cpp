@@ -222,7 +222,8 @@ void TraceSet::traceCurve(const FieldSurface &parent, const Trace_Mode trace_sta
         seg.side[1] = next_edge_id;
         seg.bary[0] = curr_bary;
         seg.bary[1] = next_bary;
-        seg.inplanebending = parent.edgeCurlEnergy(curr_face_id, next_edge_id, 0);
+    //    std::cout << parent.faceCurlEnergy(curr_face_id, 0) << std::endl;
+        seg.inplanebending = parent.faceCurlEnergy(curr_face_id, 0);
         t.segs.push_back(seg);
 
         switch (trace_state)
@@ -332,7 +333,9 @@ void TraceSet::exportForRendering(const char *filename)
         {
             Eigen::Vector3d v0 = it.pts.row(i);
             Eigen::Vector3d v1 = it.pts.row(i+1);
-            ofs << v0[0] << ",\t" << v0[1] << ",\t" << v0[2] << ",\t" << v1[0] << ",\t" << v1[1] << ",\t" << v1[2] << ",\t" << curvatures[i] << ",\t" << curvatures[i+1] << std::endl;        
+            ofs << v0[0] << ",\t" << v0[1] << ",\t" << v0[2] << ",\t" 
+                << v1[0] << ",\t" << v1[1] << ",\t" << v1[2] << ",\t" 
+                << curvatures[i] << ",\t" << curvatures[i+1] << ",\t" << it.curlbending(i) << std::endl;        
         }
     }
 }
@@ -565,6 +568,7 @@ void TraceSet::sampleTrace(const Trace &tr, double start, double end, int nsegs,
     samples.clear();
     rattrace.normals.resize(nsegs, 3);
     rattrace.origface.resize(nsegs);
+    rattrace.curlbending.resize(nsegs);
     rattrace.pts.resize(nsegs + 1, 3);    
     for (int i = 0; i < nsegs+1; i++)
     {
@@ -595,6 +599,8 @@ void TraceSet::sampleTrace(const Trace &tr, double start, double end, int nsegs,
         rattrace.normals.row(i) = newnormal.transpose();
         
         rattrace.origface[i] = tr.segs[seg].face;
+   //     std::cout << tr.segs[seg].inplanebending << std::endl;
+        rattrace.curlbending[i] = tr.segs[seg].inplanebending;
     }
 
 }

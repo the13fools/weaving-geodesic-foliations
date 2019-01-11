@@ -399,6 +399,23 @@ double FieldSurface::edgeCurlEnergy(int f, int e, int field) const
     }
 }
 
+double FieldSurface::faceCurlEnergy(int f, int field) const
+{
+    int nedges = nEdges();
+    int nfaces = nFaces();
+    int nfields = nFields();
+
+    double ret = 0;
+
+    for (int e = 0; e < 3; e++)
+    {
+        double angle = edgeCurlEnergy(f, e, field);
+        ret += angle;
+    }
+    
+    return ret;
+}
+
 void FieldSurface::connectionEnergy(Eigen::VectorXd &energies, double thresh, SolverParams params)
 {
     energies.resize(nFaces());

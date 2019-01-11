@@ -835,7 +835,7 @@ void WeaveHook::augmentField()
     if (rosyN)
     {
         Weave *splitWeave = weave->splitFromRosy(rosyN);
-        reassignAllPermutations(*splitWeave);
+//        reassignAllPermutations(*splitWeave);
 
         std::vector<std::pair<int, int> > topsingularities;
         std::vector<std::pair<int, int> > geosingularities;

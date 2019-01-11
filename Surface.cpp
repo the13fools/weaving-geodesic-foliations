@@ -292,7 +292,7 @@ void Surface::buildGeometricStructures()
         data_.Ts_rosy.block<2, 2>(2 * edgeidx, 2) = BTB1.inverse() * data_.Bs[face1].transpose() * R2 * data_.Bs[face1];
 
        
-   //     std::cout << (data_.Bs[face2] * data_.Ts_rosy.block<2, 2>(2 * edgeidx, 0) * data_.Ts.block<2, 2>(2 * edgeidx, 0) * vec).normalized().dot(basis2) << " ";
+        std::cout << (data_.Bs[face2] * data_.Ts_rosy.block<2, 2>(2 * edgeidx, 0) * data_.Ts.block<2, 2>(2 * edgeidx, 0) * vec).normalized().dot(basis2) << " ";
 
     }
     std::cout << std::endl;
