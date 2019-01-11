@@ -664,6 +664,12 @@ void WeaveHook::computeRandomTraces(int numtraces)
         int dir = 2*dirdistribution(generator) - 1;
         traces.traceCurve(*weave->fs, trace_state, field, dir, face, traceSteps);
     }
+
+    std::string tracename = exportPrefix + std::string("_traces.csv");    
+    traces.exportTraces(tracename.c_str());
+    std::string meshName = exportPrefix + std::string("_mesh.obj");
+    igl::writeOBJ(meshName.c_str(), weave->fs->data().V, weave->fs->data().F);
+
     updateRenderGeometry();
 }
 

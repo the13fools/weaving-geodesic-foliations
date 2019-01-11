@@ -315,8 +315,10 @@ void TraceSet::findCurvedVerts(const Trace &tr, double maxcurvature, std::set<in
 void TraceSet::exportForRendering(const char *filename)
 {
     std::ofstream ofs(filename);
+    int counter = 0;
     for(auto &it : rattraces_)
     {   
+        counter++;
         int nsegs = it.pts.rows()-1;
         std::vector<double> curvatures(nsegs+1,0.0);
         for(int i=0; i<nsegs-1; i++)
@@ -335,7 +337,7 @@ void TraceSet::exportForRendering(const char *filename)
             Eigen::Vector3d v1 = it.pts.row(i+1);
             ofs << v0[0] << ",\t" << v0[1] << ",\t" << v0[2] << ",\t" 
                 << v1[0] << ",\t" << v1[1] << ",\t" << v1[2] << ",\t" 
-                << curvatures[i] << ",\t" << curvatures[i+1] << ",\t" << it.curlbending(i) << std::endl;        
+                << curvatures[i] << ",\t" << curvatures[i+1] << ",\t" << it.curlbending(i) << ",\t" << counter <<  std::endl;        
         }
     }
 }
