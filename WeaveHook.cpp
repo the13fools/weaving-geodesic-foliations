@@ -256,14 +256,15 @@ void WeaveHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
             if (ImGui::Button("Round Antipodal Covers", ImVec2(-1, 0)))
                 roundCovers();
             if (ImGui::Button("Draw Isolines", ImVec2(-1, 0)))
-                drawISOLines();
-            ImGui::InputText("Export Prefix", exportPrefix);
-            if (ImGui::Button("Export for Rendering", ImVec2(-1,0)))
-                exportForRendering();
+                drawISOLines();            
         }
 
         menu.callback_draw_custom_window = NULL;
     }
+    
+    ImGui::InputText("Export Prefix", exportPrefix);            
+    if (ImGui::Button("Export Everything", ImVec2(-1,0)))
+        exportForRendering();
 }
 
 bool WeaveHook::mouseClicked(igl::opengl::glfw::Viewer &viewer, int button)
@@ -1249,9 +1250,11 @@ void WeaveHook::exportForRendering()
     {
         singfs << singularVerts_geo(i,0) << ", " << singularVerts_geo(i,1) << ", " << singularVerts_geo(i,2) << std::endl;
     }
-    
-    std::string tracename = exportPrefix + std::string("_traces.csv");
-    traces.exportForRendering(tracename.c_str());
+
+    std::string tracename = exportPrefix + std::string("_traces.csv");    
+    traces.exportTraces(tracename.c_str());
+    std::string rattracename = exportPrefix + std::string("_rat_traces.csv");
+    traces.exportForRendering(rattracename.c_str());
 }
 
 void WeaveHook::convertToRoSy()

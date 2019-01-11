@@ -337,6 +337,23 @@ void TraceSet::exportForRendering(const char *filename)
     }
 }
 
+void TraceSet::exportTraces(const char *filename)
+{
+    std::ofstream ofs(filename);
+    int cnt=0;
+    for(auto &tr : traces_)
+    {
+        int nsegs = tr.segs.size();
+        for(int i=0; i<nsegs; i++)
+        {
+            Eigen::Vector3d v0 = pointFromBary(*tr.parent_, tr.segs[i].face, tr.segs[i].side[0], tr.segs[i].bary[0]);
+            Eigen::Vector3d v1 = pointFromBary(*tr.parent_, tr.segs[i].face, tr.segs[i].side[1], tr.segs[i].bary[1]);
+            ofs << v0[0] << ",\t" << v0[1] << ",\t" << v0[2] << ",\t" << v1[0] << ",\t" << v1[1] << ",\t" << v1[2] << ",\t" << cnt << std::endl;
+        }
+        cnt++;
+    }
+}
+
 void TraceSet::splitTrace(const Trace &tr, const std::set<int> &badverts, std::vector<Trace> &splittr) const
 {
     splittr.clear();

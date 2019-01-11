@@ -88,6 +88,7 @@ public:
 
     void exportRodFile(const char*filename, int colorGroupSize);
     void exportForRendering(const char *filename);
+    void exportTraces(const char *filename);
 
 private:
     void findTraceStart(const FieldSurface &parent,

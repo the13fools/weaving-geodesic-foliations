@@ -166,6 +166,7 @@ void SpectralLocalIntegration::locallyIntegrateOneComponent(const Surface &surf,
 
     std::cout << "Starting inverse power interation" << std::endl;
     Eigen::VectorXd x(4*nfaces);
+    srand(0);
     x.setRandom();
     x /= sqrt(x.transpose() * (B * x));
     for(int i=0; i<1000; i++)
