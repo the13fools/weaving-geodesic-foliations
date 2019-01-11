@@ -635,13 +635,14 @@ void WeaveHook::rationalizeTraces()
     updateRenderGeometry();
 }
 
+// geodesic thing
 void WeaveHook::computeTrace()
 {
-    for (int i = 0; i < 3; i++)
-    {
-        traces.traceCurve(*weave->fs, trace_state, i, 1, traceFaceId, traceSteps);
-        traces.traceCurve(*weave->fs, trace_state, i, -1, traceFaceId, traceSteps);
-    }
+    // for (int i = 0; i < 3; i++)
+    // {
+        traces.traceCurve(*weave->fs, trace_state, 0, 1, traceFaceId, traceSteps);
+    //     traces.traceCurve(*weave->fs, trace_state, i, -1, traceFaceId, traceSteps);
+    // }
     updateRenderGeometry();
 }
 
@@ -663,6 +664,12 @@ void WeaveHook::computeRandomTraces(int numtraces)
         int dir = 2*dirdistribution(generator) - 1;
         traces.traceCurve(*weave->fs, trace_state, field, dir, face, traceSteps);
     }
+
+    std::string tracename = exportPrefix + std::string("_traces.csv");    
+    traces.exportTraces(tracename.c_str());
+    std::string meshName = exportPrefix + std::string("_mesh.obj");
+    igl::writeOBJ(meshName.c_str(), weave->fs->data().V, weave->fs->data().F);
+
     updateRenderGeometry();
 }
 
@@ -689,7 +696,7 @@ void WeaveHook::renderRenderGeometry(igl::opengl::glfw::Viewer &viewer)
         if (showRatTraces)
         {
             viewer.data().add_edges(rattracestarts, rattraceends, orange);
-            viewer.data().add_points(ratcollisions, red);
+      //      viewer.data().add_points(ratcollisions, red);
         }
 
         updateSingularVerts(viewer);
@@ -834,7 +841,7 @@ void WeaveHook::augmentField()
     if (rosyN)
     {
         Weave *splitWeave = weave->splitFromRosy(rosyN);
-        reassignAllPermutations(*splitWeave);
+//        reassignAllPermutations(*splitWeave);
 
         std::vector<std::pair<int, int> > topsingularities;
         std::vector<std::pair<int, int> > geosingularities;
@@ -1199,6 +1206,24 @@ void WeaveHook::exportForRendering()
         }
     }
 
+    std::string coverMeshName = exportPrefix + std::string("_covermesh.obj");
+    igl::writeOBJ(coverMeshName.c_str(), cover->splitMesh().data().V, cover->splitMesh().data().F);
+    for(int i=0; i<2*nfields; i++)
+    {       
+        std::stringstream ssfb;
+        ssfb << exportPrefix << "_facebased_" << i << ".csv";
+        std::ofstream fbfs(ssfb.str().c_str());
+        Eigen::VectorXd connection(nfaces); 
+        Eigen::VectorXd deviation(nfaces);
+        cover->fs->connectionEnergy(connection, 0., params);// make sure calculation per face not per cover...
+        cover->gradThetaDeviation(deviation);
+        for(int j=0; j<nfaces; j++)
+        {
+            int idx = i*nfaces + j;
+            fbfs << cover->scales(idx) << ",\t" << connection(idx) << ",\t" << deviation(idx) << std::endl;
+        }
+    }
+
     std::stringstream ss3;
     ss3 << exportPrefix << "_geoeng" << ".csv";
     std::ofstream geoengfs(ss3.str().c_str());
@@ -1216,12 +1241,20 @@ void WeaveHook::exportForRendering()
     {
         cfs << nonIdentity1Weave(i,0) << ", " << nonIdentity1Weave(i,1) << ", " << nonIdentity1Weave(i,2) << ", " << nonIdentity2Weave(i, 0) << ", " << nonIdentity2Weave(i,1) << ", " << nonIdentity2Weave(i,2) << std::endl;
     }
-    std::string singname = exportPrefix + std::string("_sing.csv");
-    std::ofstream singfs(singname.c_str());
+    std::string singname_topo = exportPrefix + std::string("_toposing.csv");
+    std::ofstream singfs_topo(singname_topo.c_str());
     int nsing = singularVerts_topo.rows();
     for(int i=0; i<nsing; i++)
     {
-        singfs << singularVerts_topo(i,0) << ", " << singularVerts_topo(i,1) << ", " << singularVerts_topo(i,2) << std::endl;
+        singfs_topo << singularVerts_topo(i,0) << ", " << singularVerts_topo(i,1) << ", " << singularVerts_topo(i,2) << std::endl;
+    }
+    
+    std::string singname_geom = exportPrefix + std::string("_geomsing.csv");
+    std::ofstream singfs(singname_geom.c_str());
+    nsing = singularVerts_geo.rows();
+    for(int i=0; i<nsing; i++)
+    {
+        singfs << singularVerts_geo(i,0) << ", " << singularVerts_geo(i,1) << ", " << singularVerts_geo(i,2) << std::endl;
     }
 
     std::string tracename = exportPrefix + std::string("_traces.csv");    

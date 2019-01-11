@@ -319,7 +319,7 @@ double FieldSurface::getGeodesicEnergy(Eigen::VectorXd energy, SolverParams para
     return geodesicEnergy_;
 }
 
-double FieldSurface::edgeCurlEnergy(int f, int e, int field)
+double FieldSurface::edgeCurlEnergy(int f, int e, int field) const
 {
     int nfields = nFields();
     double deltaNorm = 0.; // remove these things...
@@ -397,6 +397,23 @@ double FieldSurface::edgeCurlEnergy(int f, int e, int field)
 //        std::cout << " v1 " << v1.transpose() << " v2 " << v2.transpose() <<  " edge " << edgeVec.transpose() << std::endl;
 
     }
+}
+
+double FieldSurface::faceCurlEnergy(int f, int field) const
+{
+    int nedges = nEdges();
+    int nfaces = nFaces();
+    int nfields = nFields();
+
+    double ret = 0;
+
+    for (int e = 0; e < 3; e++)
+    {
+        double angle = edgeCurlEnergy(f, e, field);
+        ret += angle;
+    }
+    
+    return ret;
 }
 
 void FieldSurface::connectionEnergy(Eigen::VectorXd &energies, double thresh, SolverParams params)

@@ -139,6 +139,7 @@ void CoverMesh::extractIsoline(const Eigen::VectorXd &func, double isoval, doubl
                             break;
                         }
                     }
+                    nextseg.inplanebending = fs->faceCurlEnergy(curface, 0);
 
                     for(int k=0; k<3; k++)
                     {

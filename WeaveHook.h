@@ -65,7 +65,7 @@ public:
         // vectorFieldName = "bunny_coarser_nosing";
         vectorFieldName = "tet.rlx";
         rodFilename = "example.rod";
-        exportPrefix = "export/example";
+        exportPrefix = "../final/export/example";
         params.lambdacompat = 100;
         params.lambdareg = 1e-3;
         params.softHandleConstraint = true;
@@ -98,7 +98,7 @@ public:
         handleParams(2) = 1;
 
         showCoverCuts = true;
-        numISOLines = 0;
+        numISOLines = 1;
         
         local_field_integration_method = LFI_SPECTRAL;
         global_field_integration_method = GFI_GN;
@@ -111,10 +111,10 @@ public:
 
         showTraces = true;
         showRatTraces = true;
-        extendTrace = 0.01;
+        extendTrace = 0.;
         segLen = 0.001;
         maxCurvature = 0.5;
-        minRodLen = 0.1;
+        minRodLen = .1;
 
         hideCoverVectors = false;
         rosyN = 0;

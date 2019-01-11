@@ -27,6 +27,7 @@ struct TraceSegment
     int face; // index into the faces of the CoverMesh
     int side[2]; // integer [0,3]; the first endpoint of the segment lies on edge fs->data().faceEdges(side[0]), etc
     double bary[2]; // barycentric coordinates of segment endpoint along each edge
+    double inplanebending;
 };
 
 struct TraceCollision
@@ -52,6 +53,7 @@ struct RationalizedTrace
     Eigen::MatrixXd pts;
     Eigen::VectorXi origface;
     Eigen::MatrixXd normals;
+    Eigen::VectorXd curlbending;
 };
 
 // a collection of traces on a surface
