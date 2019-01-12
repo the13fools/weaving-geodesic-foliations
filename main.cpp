@@ -61,18 +61,22 @@ bool keyCallback(igl::opengl::glfw::Viewer &viewer, unsigned int key, int modifi
 
 bool drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
 {
-    if (ImGui::CollapsingHeader("Weaving", ImGuiTreeNodeFlags_DefaultOpen))
+    if(hook->showSimButtons())
     {
-        if (ImGui::Button("Run/Pause Sim", ImVec2(-1, 0)))
+        if (ImGui::CollapsingHeader("Weaving", ImGuiTreeNodeFlags_DefaultOpen))
         {
-            toggleSimulation();
-        }
-        if (ImGui::Button("Reset Sim", ImVec2(-1, 0)))
-        {
-            resetSimulation();
+            if (ImGui::Button("Run/Pause Sim", ImVec2(-1, 0)))
+            {
+                toggleSimulation();
+            }
+            if (ImGui::Button("Reset Sim", ImVec2(-1, 0)))
+            {
+                resetSimulation();
+            }
         }
     }
     hook->drawGUI(menu);
+    
     return false;
 }
 

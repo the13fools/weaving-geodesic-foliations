@@ -22,244 +22,264 @@ using namespace std;
 void WeaveHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
 {
     ImGui::InputText("Mesh", meshName);
-    ImGui::Combo("GUI Mode", (int *)&gui_mode, cover ? "Weave\0Cover\0\0" : "Weave\0\0");
-    int nf = (weave ? weave->fs->nFields() : 0);
-    ImGui::Text("Number of fields: %d", nf);
-    if (rosyN)
+    if(ImGui::Button("Load Mesh", ImVec2(-1,0)))
     {
-        ImGui::Text("Is %d-RoSy", rosyN);
-        if(ImGui::Button("Split into Fields", ImVec2(-1,0)))
-            splitFromRoSy();
+        initSimulation();
+        updateRenderGeometry();
+    }
+    
+    if(!advancedMode)
+    {
+        if(ImGui::Button("Whole Pipeline", ImVec2(-1,0)))
+        {
+            wholePipeline();
+            updateRenderGeometry();
+        }
+        if(ImGui::Button("Advanced Mode", ImVec2(-1,0)))
+        {
+            advancedMode = true;
+        }
     }
     else
     {
-        if (nf == 1)
+        ImGui::Combo("GUI Mode", (int *)&gui_mode, cover ? "Weave\0Cover\0\0" : "Weave\0\0");
+        int nf = (weave ? weave->fs->nFields() : 0);
+        ImGui::Text("Number of fields: %d", nf);
+        if (rosyN)
         {
-            ImGui::InputInt("Symmetry Degree:", &desiredRoSyN, 0, 0);
-            if (ImGui::Button("Convert to RoSy", ImVec2(-1, 0)))
-                convertToRoSy();
+            ImGui::Text("Is %d-RoSy", rosyN);
+            if(ImGui::Button("Split into Fields", ImVec2(-1,0)))
+                splitFromRoSy();
         }
         else
         {
-            ImGui::Text("Not RoSy");
-        }
-    }
-
-    ImGui::Combo("Solver Mode", (int *)&solver_mode, "Curl Free\0Dirchlet (Knoppel '13)\0\0");
-    ImGui::Checkbox("Soft Handle Constraint", &params.softHandleConstraint);
-    ImGui::Checkbox("Disable Curl Constraint", &params.disableCurlConstraint);
-    if (ImGui::Button("One Step", ImVec2(-1, 0)))
-    {
-        simulateOneStep();
-        updateRenderGeometry();
-    }
-
-    if (gui_mode == GUIMode_Enum::WEAVE)
-    {
-        if (ImGui::CollapsingHeader("Visualization (Weave)", ImGuiTreeNodeFlags_DefaultOpen))
-        {
-            bool needsrender = false;
-            if (rosyN)
+            if (nf == 1)
             {
-                needsrender |= ImGui::Combo("Show", (int *)&rosyVisMode, "Nothing\0RoSy\0Rep. vector\0\0");
+                ImGui::InputInt("Symmetry Degree:", &desiredRoSyN, 0, 0);
+                if (ImGui::Button("Convert to RoSy", ImVec2(-1, 0)))
+                    convertToRoSy();
             }
             else
             {
-                needsrender |= ImGui::Combo("Show", (int *)&vectorVisMode, "Nothing\0V\0V and delta\0V + delta\0\0");
+                ImGui::Text("Not RoSy");
             }
-            needsrender |= ImGui::InputDouble("Vector Scale", &vectorScale);
-            needsrender |= ImGui::Checkbox("Normalize Vectors", &normalizeVectors);
-            ImGui::Checkbox("Wireframe", &wireframe);
-            ImGui::InputDouble("Handle Scale", &params.handleScale);
-            ImGui::Combo("Shading", (int *)&weave_shading_state, "None\0F1 Energy\0F2 Energy\0F3 Energy\0Total Energy\0Connection\0\0");
-            if (ImGui::Button("Normalize Fields", ImVec2(-1, 0)))
-                normalizeFields();
-            ImGui::Checkbox("Fix Fields", &weave->fixFields);
-
-            if (needsrender)
-                updateRenderGeometry();
         }
-        if (ImGui::CollapsingHeader("Solver Parameters", ImGuiTreeNodeFlags_DefaultOpen))
+        ImGui::Combo("Solver Mode", (int *)&solver_mode, "Curl Free\0Dirchlet (Knoppel '13)\0\0");
+        ImGui::Checkbox("Soft Handle Constraint", &params.softHandleConstraint);
+        ImGui::Checkbox("Disable Curl Constraint", &params.disableCurlConstraint);
+        if (ImGui::Button("One Step", ImVec2(-1, 0)))
         {
-            ImGui::InputDouble("Compatilibity Lambda", &params.lambdacompat);
-            ImGui::InputDouble("Tikhonov Reg", &params.lambdareg);
-            ImGui::InputDouble("Curl Viz Face threshold", &params.curlreg);
-
-            ImGui::InputDouble("vizVectorCurl", &params.vizVectorCurl);
-            ImGui::InputDouble("vizCorrectionCurl", &params.vizCorrectionCurl);
-            ImGui::Checkbox("Normalize Viz Vecs", &params.vizNormalizeVecs);
-            ImGui::Checkbox("Show Curl Sign", &params.vizShowCurlSign);
-
-            if (ImGui::Button("Create Cover", ImVec2(-1, 0)))
-                augmentField();            
-        }
-        if (ImGui::CollapsingHeader("Save/Load Field", ImGuiTreeNodeFlags_DefaultOpen))
-        {
-            ImGui::InputText("Filename", vectorFieldName);
-            if (ImGui::Button("Save Field", ImVec2(-1, 0)))
-                serializeVectorField();
-            if (ImGui::Button("Load Field", ImVec2(-1, 0)))
-                deserializeVectorField();
-            if (ImGui::Button("Load Field (Old Format)", ImVec2(-1, 0)))
-                deserializeVectorFieldOld();
-            if (ImGui::Button("Load Field (Paul)", ImVec2(-1,0)))
-                deserializePaulField();
-        }
-        if (ImGui::CollapsingHeader("Cuts", ImGuiTreeNodeFlags_DefaultOpen))
-        {
-            if (ImGui::Button("Reset Cut Select", ImVec2(-1, 0)))
-                resetCutSelection();
-            if (ImGui::Button("Add Cut", ImVec2(-1, 0)))
-                addCut();
-            if (ImGui::Button("Remove Prev Cut", ImVec2(-1, 0)))
-                removePrevCut();
-            if (ImGui::Button("Clear All Cuts", ImVec2(-1, 0)))
-                clearCuts();
-            if (ImGui::Button("Reassign Permutations", ImVec2(-1, 0)))
-                reassignPermutations();
-        }
-        if (ImGui::CollapsingHeader("Misc", ImGuiTreeNodeFlags_DefaultOpen))
-        {
-            ImGui::InputInt("Target # faces", &targetResolution, 0, 0);
-            ImGui::InputInt("Num Fields", &fieldCount, 0, 0);
-            if (ImGui::Button("Resample Mesh", ImVec2(-1, 0)))
-                resample();
-            ImGui::InputInt("Num Isolines", &numISOLines);
-            if (ImGui::Button("Draw Isolines", ImVec2(-1, 0)))
-                drawISOLines();
+            simulateOneStep();
+            updateRenderGeometry();
         }
 
-        menu.callback_draw_custom_window = [&]()
+        if (gui_mode == GUIMode_Enum::WEAVE)
         {
-            // Define next window position + size
-            ImGui::SetNextWindowPos(ImVec2(180.f * menu.menu_scaling(), 10), ImGuiSetCond_FirstUseEver);
-            ImGui::SetNextWindowSize(ImVec2(200, 200), ImGuiSetCond_FirstUseEver);
-            ImGui::Begin(
-                "Handles", nullptr,
-                ImGuiWindowFlags_NoSavedSettings
-            );
-
-            ImGui::InputInt("Handle Face", &handleLocation[0], 0, 0);
-            ImGui::InputInt("Handle Field", &handleLocation[1], 0, 0);
-            ImGui::InputDouble("P0", &handleParams[0]);
-            ImGui::InputDouble("P1", &handleParams[1]);
-            ImGui::InputDouble("P2", &handleParams[2]);
-
-            if (ImGui::Button("Add Handle", ImVec2(-1, 0)))
-                addHandle();
-            if (ImGui::Button("Remove Handle", ImVec2(-1, 0)))
-                removeHandle();
-
-            ImGui::End();
-
-            ImGui::SetNextWindowPos(ImVec2(180.f * menu.menu_scaling(), 210), ImGuiSetCond_FirstUseEver);
-            ImGui::SetNextWindowSize(ImVec2(200, 500), ImGuiSetCond_FirstUseEver);
-
-            ImGui::Begin(
-                "Manipulate", nullptr,
-                ImGuiWindowFlags_NoSavedSettings
-            );
-
-            if (ImGui::CollapsingHeader("Tracing Controls", ImGuiTreeNodeFlags_DefaultOpen))
+            if (ImGui::CollapsingHeader("Visualization (Weave)", ImGuiTreeNodeFlags_DefaultOpen))
             {
-                ImGui::InputInt("Trace Face", &traceFaceId, 0, 0);
-                ImGui::InputInt("Trace Steps", &traceSteps, 0, 0);
-                ImGui::InputInt("Trace Field", &traceIdx, 0, 0);
-                ImGui::InputInt("Trace Sign", &traceSign, 0, 0);
-                ImGui::Combo("Trace Mode", (int *)&trace_state, "Geodesic\0Field\0\0");                
-            }
-            if (ImGui::CollapsingHeader("Traces", ImGuiTreeNodeFlags_DefaultOpen))
-            {
-                ImGui::Checkbox("Show Traces", &showTraces);
+                bool needsrender = false;
+                if (rosyN)
+                {
+                    needsrender |= ImGui::Combo("Show", (int *)&rosyVisMode, "Nothing\0RoSy\0Rep. vector\0\0");
+                }
+                else
+                {
+                    needsrender |= ImGui::Combo("Show", (int *)&vectorVisMode, "Nothing\0V\0V and delta\0V + delta\0\0");
+                }
+                needsrender |= ImGui::InputDouble("Vector Scale", &vectorScale);
+                needsrender |= ImGui::Checkbox("Normalize Vectors", &normalizeVectors);
+                ImGui::Checkbox("Wireframe", &wireframe);
+                ImGui::InputDouble("Handle Scale", &params.handleScale);
+                ImGui::Combo("Shading", (int *)&weave_shading_state, "None\0F1 Energy\0F2 Energy\0F3 Energy\0Total Energy\0Connection\0\0");
+                if (ImGui::Button("Normalize Fields", ImVec2(-1, 0)))
+                    normalizeFields();
+                ImGui::Checkbox("Fix Fields", &weave->fixFields);
 
-                if (ImGui::Button("Draw Trace", ImVec2(-1, 0)))
-                {
-                    computeTrace();
-                }
-                if (ImGui::Button("Draw Random Traces", ImVec2(-1, 0)))
-                {
-                    computeRandomTraces(numRandomTraces);
-                }
-                ImGui::InputInt("Number of Them", &numRandomTraces);
-                
-                if (ImGui::Button("Delete Last Trace", ImVec2(-1, 0)))
-                {
-                    deleteLastTrace();
-                }
-                if (ImGui::Button("Clear All Traces", ImVec2(-1, 0)))
-                {
-                    clearTraces();
-                }                
-            }
-            if (ImGui::CollapsingHeader("Rods", ImGuiTreeNodeFlags_DefaultOpen))
-            {
-                ImGui::Checkbox("Show Rod Segments", &showRatTraces);
-                ImGui::InputDouble("Extend Traces By", &extendTrace);
-                ImGui::InputDouble("Segment Lenght", &segLen);
-                ImGui::InputDouble("Max Curvature", &maxCurvature);
-                ImGui::InputDouble("Min Rod Length", &minRodLen);
-                if (ImGui::Button("Generate From Traces", ImVec2(-1, 0)))
-                {
-                    rationalizeTraces();
-                }
-                if (ImGui::Button("Smooth", ImVec2(-1,0)))
-                {
-                    traces.smoothRationalizedTraces(0.1);
+                if (needsrender)
                     updateRenderGeometry();
-                }
-                ImGui::InputText("Rod Filename", rodFilename);
-                if (ImGui::Button("Save To Rod File", ImVec2(-1, 0)))
+            }
+            if (ImGui::CollapsingHeader("Solver Parameters", ImGuiTreeNodeFlags_DefaultOpen))
+            {
+                ImGui::InputDouble("Compatilibity Lambda", &params.lambdacompat);
+                ImGui::InputDouble("Tikhonov Reg", &params.lambdareg);
+                ImGui::InputDouble("Curl Viz Face threshold", &params.curlreg);
+
+                ImGui::InputDouble("vizVectorCurl", &params.vizVectorCurl);
+                ImGui::InputDouble("vizCorrectionCurl", &params.vizCorrectionCurl);
+                ImGui::Checkbox("Normalize Viz Vecs", &params.vizNormalizeVecs);
+                ImGui::Checkbox("Show Curl Sign", &params.vizShowCurlSign);
+
+                if (ImGui::Button("Create Cover", ImVec2(-1, 0)))
+                    augmentField();            
+            }
+            if (ImGui::CollapsingHeader("Save/Load Field", ImGuiTreeNodeFlags_DefaultOpen))
+            {
+                ImGui::InputText("Filename", vectorFieldName);
+                if (ImGui::Button("Save Field", ImVec2(-1, 0)))
+                    serializeVectorField(vectorFieldName);
+                if (ImGui::Button("Load Field", ImVec2(-1, 0)))
+                    deserializeVectorField();
+                if (ImGui::Button("Load Field (Old Format)", ImVec2(-1, 0)))
+                    deserializeVectorFieldOld();
+                if (ImGui::Button("Load Field (Paul)", ImVec2(-1,0)))
+                    deserializePaulField();
+            }
+            if (ImGui::CollapsingHeader("Cuts", ImGuiTreeNodeFlags_DefaultOpen))
+            {
+                if (ImGui::Button("Reset Cut Select", ImVec2(-1, 0)))
+                    resetCutSelection();
+                if (ImGui::Button("Add Cut", ImVec2(-1, 0)))
+                    addCut();
+                if (ImGui::Button("Remove Prev Cut", ImVec2(-1, 0)))
+                    removePrevCut();
+                if (ImGui::Button("Clear All Cuts", ImVec2(-1, 0)))
+                    clearCuts();
+                if (ImGui::Button("Reassign Permutations", ImVec2(-1, 0)))
+                    reassignPermutations();
+            }
+            if (ImGui::CollapsingHeader("Misc", ImGuiTreeNodeFlags_DefaultOpen))
+            {
+                ImGui::InputInt("Target # faces", &targetResolution, 0, 0);
+                ImGui::InputInt("Num Fields", &fieldCount, 0, 0);
+                if (ImGui::Button("Resample Mesh", ImVec2(-1, 0)))
+                    resample();
+                ImGui::InputInt("Num Isolines", &numISOLines);
+                if (ImGui::Button("Draw Isolines", ImVec2(-1, 0)))
+                    drawISOLines();
+            }
+
+            menu.callback_draw_custom_window = [&]()
+            {
+                // Define next window position + size
+                ImGui::SetNextWindowPos(ImVec2(180.f * menu.menu_scaling(), 10), ImGuiSetCond_FirstUseEver);
+                ImGui::SetNextWindowSize(ImVec2(200, 200), ImGuiSetCond_FirstUseEver);
+                ImGui::Begin(
+                    "Handles", nullptr,
+                    ImGuiWindowFlags_NoSavedSettings
+                );
+
+                ImGui::InputInt("Handle Face", &handleLocation[0], 0, 0);
+                ImGui::InputInt("Handle Field", &handleLocation[1], 0, 0);
+                ImGui::InputDouble("P0", &handleParams[0]);
+                ImGui::InputDouble("P1", &handleParams[1]);
+                ImGui::InputDouble("P2", &handleParams[2]);
+
+                if (ImGui::Button("Add Handle", ImVec2(-1, 0)))
+                    addHandle();
+                if (ImGui::Button("Remove Handle", ImVec2(-1, 0)))
+                    removeHandle();
+
+                ImGui::End();
+
+                ImGui::SetNextWindowPos(ImVec2(180.f * menu.menu_scaling(), 210), ImGuiSetCond_FirstUseEver);
+                ImGui::SetNextWindowSize(ImVec2(200, 500), ImGuiSetCond_FirstUseEver);
+
+                ImGui::Begin(
+                    "Manipulate", nullptr,
+                    ImGuiWindowFlags_NoSavedSettings
+                );
+
+                if (ImGui::CollapsingHeader("Tracing Controls", ImGuiTreeNodeFlags_DefaultOpen))
                 {
-                    saveRods();
+                    ImGui::InputInt("Trace Face", &traceFaceId, 0, 0);
+                    ImGui::InputInt("Trace Steps", &traceSteps, 0, 0);
+                    ImGui::InputInt("Trace Field", &traceIdx, 0, 0);
+                    ImGui::InputInt("Trace Sign", &traceSign, 0, 0);
+                    ImGui::Combo("Trace Mode", (int *)&trace_state, "Geodesic\0Field\0\0");                
                 }
-            }
-            ImGui::End();
-        };
-    }
-    else if (gui_mode == GUIMode_Enum::COVER)
-    {
-        if (ImGui::CollapsingHeader("Visualization (Cover)", ImGuiTreeNodeFlags_DefaultOpen))
-        {
-            bool needsrender = false;
-            needsrender |= ImGui::InputDouble("Vector Scale", &vectorScale);
-            needsrender |= ImGui::Checkbox("Hide Vectors", &hideCoverVectors);
-            ImGui::Combo("Shading", (int *)&cover_shading_state, "None\0S Value\0Theta Value\0Connection\0Theta Grad Error\0");
-            ImGui::Checkbox("Show Cuts", &showCoverCuts);
+                if (ImGui::CollapsingHeader("Traces", ImGuiTreeNodeFlags_DefaultOpen))
+                {
+                    ImGui::Checkbox("Show Traces", &showTraces);
 
-            if (needsrender)
-                updateRenderGeometry();
+                    if (ImGui::Button("Draw Trace", ImVec2(-1, 0)))
+                    {
+                        computeTrace();
+                    }
+                    if (ImGui::Button("Draw Random Traces", ImVec2(-1, 0)))
+                    {
+                        computeRandomTraces(numRandomTraces);
+                    }
+                    ImGui::InputInt("Number of Them", &numRandomTraces);
+                    
+                    if (ImGui::Button("Delete Last Trace", ImVec2(-1, 0)))
+                    {
+                        deleteLastTrace();
+                    }
+                    if (ImGui::Button("Clear All Traces", ImVec2(-1, 0)))
+                    {
+                        clearTraces();
+                    }                
+                }
+                if (ImGui::CollapsingHeader("Rods", ImGuiTreeNodeFlags_DefaultOpen))
+                {
+                    ImGui::Checkbox("Show Rod Segments", &showRatTraces);
+                    ImGui::InputDouble("Extend Traces By", &extendTrace);
+                    ImGui::InputDouble("Segment Lenght", &segLen);
+                    ImGui::InputDouble("Max Curvature", &maxCurvature);
+                    ImGui::InputDouble("Min Rod Length", &minRodLen);
+                    if (ImGui::Button("Generate From Traces", ImVec2(-1, 0)))
+                    {
+                        rationalizeTraces();
+                    }
+                    if (ImGui::Button("Smooth", ImVec2(-1,0)))
+                    {
+                        traces.smoothRationalizedTraces(0.1);
+                        updateRenderGeometry();
+                    }
+                    ImGui::InputText("Rod Filename", rodFilename);
+                    if (ImGui::Button("Save To Rod File", ImVec2(-1, 0)))
+                    {
+                        saveRods();
+                    }
+                }
+                ImGui::End();
+            };
         }
-
-        if (ImGui::CollapsingHeader("Cover Controls", ImGuiTreeNodeFlags_DefaultOpen))
+        else if (gui_mode == GUIMode_Enum::COVER)
         {
-            ImGui::Combo("Local Method", (int *)&local_field_integration_method, "Nothing\0Curl Correction\0Our Spectral\0\0");
-            if (local_field_integration_method == LFI_SPECTRAL || local_field_integration_method == LFI_CURLCORRECT)
+            if (ImGui::CollapsingHeader("Visualization (Cover)", ImGuiTreeNodeFlags_DefaultOpen))
             {
-                ImGui::InputDouble("Regularization", &initSReg);
-            }
-            ImGui::Combo("Global Method", (int *)&global_field_integration_method, "Our Gauss-Newton\0Mixed Integer\0\0");
-            ImGui::InputDouble("Global Rescaling", &globalSScale);
-            
-            if(global_field_integration_method == GFI_GN)
-            {
-                ImGui::InputInt("Alternations", &globalAlternations);                
-                ImGui::InputInt("Power Iterations", &globalPowerIters);
-            }
-            else if (global_field_integration_method == GFI_MI)
-            {
-                ImGui::InputDouble("Anisotropy", &bommesAniso);
-                ImGui::InputDouble("Regularization", &globalThetaReg);
-            }
-            if (ImGui::Button("Compute Function Value", ImVec2(-1, 0)))
-                computeFunc();
-            ImGui::InputInt("Num Isolines", &numISOLines);
-            if (ImGui::Button("Round Antipodal Covers", ImVec2(-1, 0)))
-                roundCovers();
-            if (ImGui::Button("Draw Isolines", ImVec2(-1, 0)))
-                drawISOLines();            
-        }
+                bool needsrender = false;
+                needsrender |= ImGui::InputDouble("Vector Scale", &vectorScale);
+                needsrender |= ImGui::Checkbox("Hide Vectors", &hideCoverVectors);
+                ImGui::Combo("Shading", (int *)&cover_shading_state, "None\0S Value\0Theta Value\0Connection\0Theta Grad Error\0");
+                ImGui::Checkbox("Show Cuts", &showCoverCuts);
 
-        menu.callback_draw_custom_window = NULL;
+                if (needsrender)
+                    updateRenderGeometry();
+            }
+
+            if (ImGui::CollapsingHeader("Cover Controls", ImGuiTreeNodeFlags_DefaultOpen))
+            {
+                ImGui::Combo("Local Method", (int *)&local_field_integration_method, "Nothing\0Curl Correction\0Our Spectral\0\0");
+                if (local_field_integration_method == LFI_SPECTRAL || local_field_integration_method == LFI_CURLCORRECT)
+                {
+                    ImGui::InputDouble("Regularization", &initSReg);
+                }
+                ImGui::Combo("Global Method", (int *)&global_field_integration_method, "Our Gauss-Newton\0Mixed Integer\0\0");
+                ImGui::InputDouble("Global Rescaling", &globalSScale);
+                
+                if(global_field_integration_method == GFI_GN)
+                {
+                    ImGui::InputInt("Alternations", &globalAlternations);                
+                    ImGui::InputInt("Power Iterations", &globalPowerIters);
+                }
+                else if (global_field_integration_method == GFI_MI)
+                {
+                    ImGui::InputDouble("Anisotropy", &bommesAniso);
+                    ImGui::InputDouble("Regularization", &globalThetaReg);
+                }
+                if (ImGui::Button("Compute Function Value", ImVec2(-1, 0)))
+                    computeFunc();
+                ImGui::InputInt("Num Isolines", &numISOLines);
+                if (ImGui::Button("Round Antipodal Covers", ImVec2(-1, 0)))
+                    roundCovers();
+                if (ImGui::Button("Draw Isolines", ImVec2(-1, 0)))
+                    drawISOLines();            
+            }
+
+            menu.callback_draw_custom_window = NULL;
+        }
     }
     
     ImGui::InputText("Export Prefix", exportPrefix);            
@@ -923,10 +943,10 @@ void WeaveHook::drawISOLines()
 
 static const int magic = 0x4242;
 
-void WeaveHook::serializeVectorField()
+void WeaveHook::serializeVectorField(const std::string &filename)
 {
     int currentRLXVersion = 2;
-    std::ofstream ofs(vectorFieldName, ios::binary);
+    std::ofstream ofs(filename, ios::binary);
     ofs.write((char *)&magic, sizeof(int));
     ofs.write((char *)&currentRLXVersion, sizeof(int));
     ofs.write((char *)&rosyN, sizeof(int));
@@ -1168,6 +1188,11 @@ void WeaveHook::saveRods()
 
 void WeaveHook::exportForRendering()
 {    
+    std::string rodsName = exportPrefix + std::string(".rod");
+    traces.exportRodFile(rodsName.c_str(), weave->fs->nFaces());
+    std::string rlxName = exportPrefix + std::string(".rlx");
+    serializeVectorField(rlxName);
+    
     std::string meshName = exportPrefix + std::string("_mesh.obj");
     igl::writeOBJ(meshName.c_str(), weave->fs->data().V, weave->fs->data().F);
     std::string fieldName = exportPrefix + std::string("_field.csv");
@@ -1326,4 +1351,32 @@ void WeaveHook::clearCuts()
 {
     weave->cuts.clear();
     updateRenderGeometry();
+}
+
+void WeaveHook::wholePipeline()
+{
+    targetResolution = 30000;
+    resample();
+    desiredRoSyN = 6;
+    convertToRoSy();
+    simulateOneStep();
+    splitFromRoSy();
+    reassignPermutations();
+    clearCuts();        
+    params.lambdacompat = 100;
+    simulateOneStep();
+    params.lambdacompat = 1;
+    simulateOneStep();
+    params.lambdacompat = 0.01;
+    simulateOneStep();
+    params.lambdacompat = 0.0;
+    simulateOneStep();
+    simulateOneStep();
+    augmentField();    
+    computeFunc();
+    numISOLines = 1;
+    roundCovers();
+    drawISOLines();
+    rationalizeTraces();                
+    gui_mode = GUIMode_Enum::WEAVE;
 }
