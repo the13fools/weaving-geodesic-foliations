@@ -32,6 +32,8 @@ void WeaveHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
     {
         if(ImGui::Button("Whole Pipeline", ImVec2(-1,0)))
         {
+            desiredRoSyN = 6;
+            targetResolution = 30000;
             wholePipeline();
             updateRenderGeometry();
         }
@@ -67,43 +69,10 @@ void WeaveHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
         ImGui::Combo("Solver Mode", (int *)&solver_mode, "Curl Free\0Dirchlet (Knoppel '13)\0\0");
         ImGui::Checkbox("Soft Handle Constraint", &params.softHandleConstraint);
         ImGui::Checkbox("Disable Curl Constraint", &params.disableCurlConstraint);
-        if (ImGui::Button("One Step", ImVec2(-1, 0)))
+        if(ImGui::Button("Whole Pipeline (cur settings)", ImVec2(-1,0)))
         {
-            ImGui::InputText("Filename", vectorFieldName);
-            if (ImGui::Button("Save Field", ImVec2(-1, 0)))
-                serializeVectorField();
-            if (ImGui::Button("Load Field", ImVec2(-1, 0)))
-                deserializeVectorField();
-            if (ImGui::Button("Load Field (Old Format)", ImVec2(-1, 0)))
-                deserializeVectorFieldOld();
-            if (ImGui::Button("Load Field (Paul)", ImVec2(-1,0)))
-                deserializePaulField();
-            if (ImGui::Button("Load Field (Qixing)", ImVec2(-1,0)))
-                deserializeQixingField();
-        }
-        if (ImGui::CollapsingHeader("Cuts", ImGuiTreeNodeFlags_DefaultOpen))
-        {
-            if (ImGui::Button("Reset Cut Select", ImVec2(-1, 0)))
-                resetCutSelection();
-            if (ImGui::Button("Add Cut", ImVec2(-1, 0)))
-                addCut();
-            if (ImGui::Button("Remove Prev Cut", ImVec2(-1, 0)))
-                removePrevCut();
-            if (ImGui::Button("Clear All Cuts", ImVec2(-1, 0)))
-                clearCuts();
-            if (ImGui::Button("Reassign Permutations", ImVec2(-1, 0)))
-                reassignPermutations();
-        }
-        if (ImGui::CollapsingHeader("Misc", ImGuiTreeNodeFlags_DefaultOpen))
-        {
-            ImGui::InputInt("Target # faces", &targetResolution, 0, 0);
-            ImGui::InputInt("Num Fields", &fieldCount, 0, 0);
-            if (ImGui::Button("Resample Mesh", ImVec2(-1, 0)))
-                resample();
-            ImGui::InputInt("Num Isolines", &numISOLines);
-            if (ImGui::Button("Draw Isolines", ImVec2(-1, 0)))
-                drawISOLines();
-
+            wholePipeline();
+            updateRenderGeometry();
         }
 
         if (gui_mode == GUIMode_Enum::WEAVE)
@@ -156,6 +125,8 @@ void WeaveHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
                     deserializeVectorFieldOld();
                 if (ImGui::Button("Load Field (Paul)", ImVec2(-1,0)))
                     deserializePaulField();
+                if (ImGui::Button("Load Field (Qixing)", ImVec2(-1,0)))
+                    deserializeQixingField();
             }
             if (ImGui::CollapsingHeader("Cuts", ImGuiTreeNodeFlags_DefaultOpen))
             {
@@ -962,6 +933,7 @@ void WeaveHook::roundCovers()
 
 void WeaveHook::drawISOLines()
 {
+    std::cout << "sdfsdfdsfs" << std::endl;
     if(cover)
     {
         traces.purgeTraces(cover->fs);
@@ -1396,9 +1368,7 @@ void WeaveHook::clearCuts()
 
 void WeaveHook::wholePipeline()
 {
-    targetResolution = 30000;
     resample();
-    desiredRoSyN = 6;
     convertToRoSy();
     simulateOneStep();
     splitFromRoSy();
