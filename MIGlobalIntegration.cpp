@@ -664,7 +664,8 @@ void MIGlobalIntegration::globallyIntegrateOneComponent(const Surface &surf, con
     
     Surface s(newV, newF);
     int newverts = s.nVerts();
-    int intdofs = cuts.size();
+    //int intdofs = cuts.size();
+    int intdofs=0;
 
     std::vector<Eigen::Triplet<double> > Ccoeffs;
     int row = 0;
@@ -704,11 +705,12 @@ void MIGlobalIntegration::globallyIntegrateOneComponent(const Surface &surf, con
 
         Ccoeffs.push_back(Eigen::Triplet<double>(row, newv1, sign));
         Ccoeffs.push_back(Eigen::Triplet<double>(row, newv2, -sign));
-        Ccoeffs.push_back(Eigen::Triplet<double>(row, newverts + it->second, 1.0));
+        Ccoeffs.push_back(Eigen::Triplet<double>(row, newverts + intdofs, 1.0));
         Ccoeffs.push_back(Eigen::Triplet<double>(row + 1, neww1, sign));
         Ccoeffs.push_back(Eigen::Triplet<double>(row + 1, neww2, -sign));
-        Ccoeffs.push_back(Eigen::Triplet<double>(row + 1, newverts + it->second, 1.0));
+        Ccoeffs.push_back(Eigen::Triplet<double>(row + 1, newverts + intdofs, 1.0));
         row += 2;
+        intdofs++;
     }
     Eigen::SparseMatrix<double> C(row, newverts + intdofs + 1);
     C.setFromTriplets(Ccoeffs.begin(), Ccoeffs.end());

@@ -404,7 +404,6 @@ void WeaveHook::resample()
     delete weave;
     
     weave = new Weave(V, F, fieldCount); 
-    std::cout << fieldCount << std::endl;   
     clear();  
 
     // Hacky... 
@@ -933,7 +932,6 @@ void WeaveHook::roundCovers()
 
 void WeaveHook::drawISOLines()
 {
-    std::cout << "sdfsdfdsfs" << std::endl;
     if(cover)
     {
         traces.purgeTraces(cover->fs);

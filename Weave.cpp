@@ -376,7 +376,6 @@ void Weave::deserializePaulFile(std::ifstream &ifs)
         Eigen::Matrix2d BTB = B.transpose() * B;
         
         int idx=0;
-        std::cout << "start" << std::endl;
         for(int j=0; j<3 && idx<2; j++)
         {
             if(fabs(n.dot(vecs[j])) > 0.5)
