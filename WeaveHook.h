@@ -112,7 +112,7 @@ public:
         showTraces = true;
         showRatTraces = true;
         extendTrace = 0.;
-        segLen = 0.005;
+        segLen = 0.001;
         maxCurvature = 0.5;
         minRodLen = .1;
 
@@ -121,14 +121,21 @@ public:
         desiredRoSyN = 6;
         
         numRandomTraces = 100;
+        advancedMode = false;
     }
+    
+    virtual bool showSimButtons()
+    {
+        return advancedMode;
+    }
+
 
     virtual void drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu);
     virtual bool mouseClicked(igl::opengl::glfw::Viewer &viewer, int button);
 
     void reassignPermutations();
     void normalizeFields();
-    void serializeVectorField();
+    void serializeVectorField(const std::string &filename);
     void deserializeVectorField();    
     void deserializeVectorFieldOld();
     void deserializePaulField();
@@ -153,6 +160,7 @@ public:
     void exportForRendering();
     void convertToRoSy();
     void splitFromRoSy();
+    void wholePipeline();
     
     virtual void initSimulation();
 
@@ -272,6 +280,8 @@ private:
 
     int rosyN;
     int desiredRoSyN;
+    
+    bool advancedMode;
 };
 
 #endif

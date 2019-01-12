@@ -163,13 +163,12 @@ DualSolver *LinearSolver::buildDualUpdateSolver(const Weave &weave, SolverParams
     dummy.setZero();
     handleConstraintOperator(weave, params, dummy, H, h0);
     int nhconstraints = h0.size();
-    int matsize = 2 * nfaces * m + intedges * m + nhconstraints;
+    
+    bool usecurl = !(params.disableCurlConstraint || isRoSy);
+    int ncurlconstraints = usecurl ? intedges * m : 0;
+    
+    int matsize = 2 * nfaces * m + ncurlconstraints + nhconstraints;
     curlOperator(weave, params, curlOp);
-
-    if (params.disableCurlConstraint || isRoSy)
-    {
-        curlOp.setZero();
-    }
 
     massMatrix(weave, BTB);
     double t = params.lambdacompat;
@@ -185,20 +184,23 @@ DualSolver *LinearSolver::buildDualUpdateSolver(const Weave &weave, SolverParams
         }
     }
 
-    for (int k=0; k<curlOp.outerSize(); ++k)
+    if(usecurl)
     {
-        for (Eigen::SparseMatrix<double>::InnerIterator it(curlOp,k); it; ++it)
+        for (int k=0; k<curlOp.outerSize(); ++k)
         {
-            dualCoeffs.push_back(Eigen::Triplet<double>(it.row() + 2*m*nfaces, it.col(), it.value()));
+            for (Eigen::SparseMatrix<double>::InnerIterator it(curlOp,k); it; ++it)
+            {
+                dualCoeffs.push_back(Eigen::Triplet<double>(it.row() + 2*m*nfaces, it.col(), it.value()));
+            }
         }
-    }
 
-    Eigen::SparseMatrix<double> CT = curlOp.transpose();
-    for (int k=0; k<CT.outerSize(); ++k)
-    {
-        for (Eigen::SparseMatrix<double>::InnerIterator it(CT,k); it; ++it)
+        Eigen::SparseMatrix<double> CT = curlOp.transpose();
+        for (int k=0; k<CT.outerSize(); ++k)
         {
-            dualCoeffs.push_back(Eigen::Triplet<double>(it.row(), it.col() + 2*m*nfaces, it.value()));
+            for (Eigen::SparseMatrix<double>::InnerIterator it(CT,k); it; ++it)
+            {
+                dualCoeffs.push_back(Eigen::Triplet<double>(it.row(), it.col() + 2*m*nfaces, it.value()));
+            }
         }
     }
 
@@ -206,7 +208,7 @@ DualSolver *LinearSolver::buildDualUpdateSolver(const Weave &weave, SolverParams
     {
         for (Eigen::SparseMatrix<double>::InnerIterator it(H,k); it; ++it)
         {
-            dualCoeffs.push_back(Eigen::Triplet<double>(it.row() + 2*m*nfaces + intedges * m, it.col(), it.value()));
+            dualCoeffs.push_back(Eigen::Triplet<double>(it.row() + 2*m*nfaces + ncurlconstraints, it.col(), it.value()));
         }
     }
 
@@ -215,7 +217,7 @@ DualSolver *LinearSolver::buildDualUpdateSolver(const Weave &weave, SolverParams
     {
         for (Eigen::SparseMatrix<double>::InnerIterator it(HT,k); it; ++it)
         {
-            dualCoeffs.push_back(Eigen::Triplet<double>(it.row(), it.col() + 2*m*nfaces + intedges * m, it.value()));
+            dualCoeffs.push_back(Eigen::Triplet<double>(it.row(), it.col() + 2*m*nfaces + ncurlconstraints, it.value()));
         }
     }
 
@@ -257,13 +259,13 @@ void LinearSolver::updateDualVars_new(const Weave &weave, SolverParams params, E
     Eigen::VectorXd h0;
     handleConstraintOperator(weave, params, primalVars, H, h0);
     int nhconstraints = h0.size();
-    int matsize = 2 * nfaces * m + intedges * m + nhconstraints;
+ 
+    bool usecurl = !(params.disableCurlConstraint || isRoSy);
+    int ncurlconstraints = usecurl ? intedges * m : 0;
+    
+    int matsize = 2 * nfaces * m + ncurlconstraints + nhconstraints;
+    
     curlOperator(weave, params, curlOp);
-
-    if (params.disableCurlConstraint || isRoSy)
-    {
-        curlOp.setZero();
-    }
 
     double t = params.lambdacompat;
 
@@ -271,8 +273,10 @@ void LinearSolver::updateDualVars_new(const Weave &weave, SolverParams params, E
     Eigen::VectorXd rhs(matsize);
     rhs.setZero();
     rhs.segment(0, 2*nfaces*m) = -t * D.transpose() * D * primalVars;
-    rhs.segment(2*nfaces*m, intedges * m ) = -curlOp * (primalVars);
-    rhs.segment(2*nfaces*m + intedges * m, nhconstraints) = -h0;
+    if(usecurl)
+        rhs.segment(2*nfaces*m, intedges * m ) = -curlOp * (primalVars);
+        
+    rhs.segment(2*nfaces*m + ncurlconstraints, nhconstraints) = -h0;
 
 
     std::cout << "Solving" << std::endl;

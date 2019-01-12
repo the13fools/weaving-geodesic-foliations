@@ -17,6 +17,11 @@ public:
     {
         killSimThread();        
     }
+    
+    virtual bool showSimButtons()
+    {
+        return true;
+    }
 
     /*
     * Runs when the user redraws/interacts with the GUI.
