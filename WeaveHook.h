@@ -80,7 +80,7 @@ public:
 
         traceIdx = 0;
         traceSign = 1;
-        traceSteps = 100;
+        traceSteps = 30;
         traceFaceId = 0;
         
         vectorVisMode = VMM_VFANDDELTA;
@@ -132,6 +132,7 @@ public:
     void deserializeVectorField();    
     void deserializeVectorFieldOld();
     void deserializePaulField();
+    void deserializeQixingField();
     void augmentField();
     void computeFunc();
     void roundCovers();
@@ -211,7 +212,7 @@ private:
     GUIMode_Enum gui_mode;
     WeaveShading_Enum weave_shading_state;
     CoverShading_Enum cover_shading_state;
-    Trace_Mode trace_state = Trace_Mode::GEODESIC;
+    Trace_Mode trace_state = Trace_Mode::FIELD;
     
     int traceIdx;
     int traceSign;

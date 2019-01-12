@@ -104,6 +104,8 @@ void WeaveHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
                 deserializeVectorFieldOld();
             if (ImGui::Button("Load Field (Paul)", ImVec2(-1,0)))
                 deserializePaulField();
+            if (ImGui::Button("Load Field (Qixing)", ImVec2(-1,0)))
+                deserializeQixingField();
         }
         if (ImGui::CollapsingHeader("Cuts", ImGuiTreeNodeFlags_DefaultOpen))
         {
@@ -665,7 +667,7 @@ void WeaveHook::computeRandomTraces(int numtraces)
         traces.traceCurve(*weave->fs, trace_state, field, dir, face, traceSteps);
     }
 
-    std::string tracename = exportPrefix + std::string("_traces.csv");    
+    std::string tracename = exportPrefix + std::string("_rand_traces.csv");    
     traces.exportTraces(tracename.c_str());
     std::string meshName = exportPrefix + std::string("_mesh.obj");
     igl::writeOBJ(meshName.c_str(), weave->fs->data().V, weave->fs->data().F);
@@ -983,6 +985,14 @@ void WeaveHook::deserializePaulField()
 {
     std::ifstream ifs(vectorFieldName);
     weave->deserializePaulFile(ifs);
+    rosyN = 0;
+    updateRenderGeometry();
+}
+
+void WeaveHook::deserializeQixingField()
+{
+    std::ifstream ifs(vectorFieldName);
+    weave->deserializeQixingFile(ifs);
     rosyN = 0;
     updateRenderGeometry();
 }
