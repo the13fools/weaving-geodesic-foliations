@@ -81,7 +81,8 @@ bool drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
 }
 
 int main(int argc, char *argv[])
-{
+{  
+  
   igl::opengl::glfw::Viewer viewer;
 
   hook = new WeaveHook();

@@ -397,6 +397,119 @@ void Weave::deserializePaulFile(std::ifstream &ifs)
     }
 }
 
+static Eigen::Vector3d parallelTransport(const Eigen::Vector3d &v, const Eigen::Vector3d &e1, const Eigen::Vector3d &e2)
+{
+    Eigen::Vector3d t1 = e1 / e1.norm();
+    Eigen::Vector3d t2 = e2 / e2.norm();
+    Eigen::Vector3d n = t1.cross(t2);
+    if (n.norm() < 1e-8)
+        return v;
+    n /= n.norm();
+    Eigen::Vector3d p1 = n.cross(t1);
+    Eigen::Vector3d p2 = n.cross(t2);
+    return v.dot(n)*n + v.dot(t1)*t2 + v.dot(p1)*p2;
+}
+
+static double angle(Eigen::Vector3d v, Eigen::Vector3d w, Eigen::Vector3d n)
+{
+    return 2.0 * atan2( v.cross(w).dot(n), v.norm() * w.norm() + v.dot(w));
+}
+
+static void alignFrame(std::vector<Eigen::Vector3d> &from, const std::vector<Eigen::Vector3d> &to, const Eigen::Vector3d &n)
+{
+    int m = to.size();
+    std::vector<int> cand;
+    std::vector<int> bestperm;
+    double bestangle = std::numeric_limits<double>::infinity();
+    for(int i=0; i<m; i++)
+        cand.push_back(i);
+    do 
+    {
+        double totangle = 0;
+        for(int j=0; j<m; j++)
+        {
+            Eigen::Vector3d v1 = to[j];
+            Eigen::Vector3d v2 = from[cand[j]];
+            double theta = angle(v1, v2, n);
+            totangle += theta*theta;            
+        }
+        if(totangle < bestangle)
+        {
+            bestangle = totangle;
+            bestperm = cand;
+        }
+    } 
+    while ( std::next_permutation(cand.begin(), cand.end()) );
+    
+    std::vector<Eigen::Vector3d> newvecs;
+    for(int i=0; i<m; i++)
+        newvecs.push_back(from[bestperm[i]]);
+    from = newvecs;
+}
+
+void Weave::deserializeVertexFile(std::ifstream &ifs)
+{
+    int numfields;
+    ifs >> numfields;
+    FieldSurface *newfs = new FieldSurface(fs->data().V, fs->data().F, numfields);
+    
+    int nfaces = fs->nFaces();
+    int nverts = fs->nVerts();
+    Eigen::MatrixXd normals(nverts, 3);
+    Eigen::MatrixXd vfields(nverts, 3*numfields);
+    
+    for(int i=0; i<nverts; i++)
+    {
+        ifs >> normals(i,0) >> normals(i,1) >> normals(i,2);
+        for(int j=0; j<3*numfields; j++)
+        {
+            ifs >> vfields(i, j);
+        }
+    }
+    
+    for(int i=0; i<nfaces; i++)
+    {
+        Eigen::Matrix<double, 3, 2> B = fs->data().Bs[i];
+        Eigen::Vector3d n = fs->faceNormal(i);
+        
+        std::vector<Eigen::Vector3d> alignedfields[3];
+        for(int j=0; j<3; j++)
+        {
+            int vid = fs->data().F(i,j);
+            Eigen::Vector3d vertnormal = normals.row(vid).transpose();
+            for(int k=0; k<numfields; k++)
+            {
+                Eigen::Vector3d v = vfields.block(vid, 3*k, 1, 3).transpose();
+                Eigen::Vector3d xported = parallelTransport(v, vertnormal, n);
+                alignedfields[j].push_back(xported);
+            }
+        }
+        
+        alignFrame(alignedfields[1], alignedfields[0], n);
+        alignFrame(alignedfields[2], alignedfields[0], n);
+        
+        Eigen::Matrix2d BTB = B.transpose() * B;
+        
+        for(int j=0; j<numfields; j++)
+        {
+            Eigen::Vector3d avv = alignedfields[0][j] + alignedfields[1][j] + alignedfields[2][j];
+            avv /= 3.0;
+        
+            Eigen::Vector2d vint = BTB.inverse() * B.transpose() * avv;
+            newfs->vectorFields.segment<2>(newfs->vidx(i,j)) = vint;
+        }
+    }
+    if(ifs)
+    {
+        delete fs;
+        fs = newfs;
+    }
+    else
+    {
+        delete newfs;
+    }
+}
+
 void Weave::deserializeQixingFile(std::ifstream &ifs)
 {
     FieldSurface *newfs = new FieldSurface(fs->data().V, fs->data().F, 1);    
@@ -416,19 +529,7 @@ void Weave::deserializeQixingFile(std::ifstream &ifs)
         
         Eigen::Matrix2d BTB = B.transpose() * B;
         Eigen::Vector2d vint = BTB.inverse() * B.transpose() * vecs;
-        newfs->vectorFields.segment<2>(newfs->vidx(i,0)) = vint;
-        
-        // int idx=0;
-        // std::cout << "start" << std::endl;
-        // for(int j=0; j<3 && idx<2; j++)
-        // {
-        //     if(fabs(n.dot(vecs[j])) > 0.5)
-        //         continue;
-                
-        //     Eigen::Vector2d vint = BTB.inverse() * B.transpose() * vecs[j];
-        //     newfs->vectorFields.segment<2>(newfs->vidx(i,idx)) = vint;
-        //     idx++;
-        // }
+        newfs->vectorFields.segment<2>(newfs->vidx(i,0)) = vint;                
     }
     if(ifs)
     {

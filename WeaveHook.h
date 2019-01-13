@@ -140,6 +140,7 @@ public:
     void deserializeVectorFieldOld();
     void deserializePaulField();
     void deserializeQixingField();
+    void deserializeVertexField();
     void augmentField();
     void computeFunc();
     void roundCovers();

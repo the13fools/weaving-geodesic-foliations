@@ -127,6 +127,8 @@ void WeaveHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
                     deserializePaulField();
                 if (ImGui::Button("Load Field (Qixing)", ImVec2(-1,0)))
                     deserializeQixingField();
+                if (ImGui::Button("Load Field (Vertex)", ImVec2(-1,0)))
+                    deserializeVertexField();
             }
             if (ImGui::CollapsingHeader("Cuts", ImGuiTreeNodeFlags_DefaultOpen))
             {
@@ -1017,6 +1019,15 @@ void WeaveHook::deserializeQixingField()
     rosyN = 0;
     updateRenderGeometry();
 }
+
+void WeaveHook::deserializeVertexField()
+{
+    std::ifstream ifs(vectorFieldName);
+    weave->deserializeVertexFile(ifs);
+    rosyN = 0;
+    updateRenderGeometry();
+}
+
 
 void WeaveHook::resetCutSelection()
 {

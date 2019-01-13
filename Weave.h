@@ -88,6 +88,7 @@ public:
     void deserializeOldRelaxFile(std::istream &is);
     void deserializePaulFile(std::ifstream &ifs);
     void deserializeQixingFile(std::ifstream &ifs);
+    void deserializeVertexFile(std::ifstream &ifs);
 
     void convertToRoSy(int rosyN);
     Weave *splitFromRosy(int rosyN);
