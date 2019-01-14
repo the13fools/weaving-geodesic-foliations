@@ -46,7 +46,8 @@ void SpectralLocalIntegration::locallyIntegrateOneComponent(const Surface &surf,
     std::vector<Eigen::Triplet<double> > inverseEdgeMetricCoeffs;
     for (int i = 0; i < nedges; i++)
     {
-        inverseEdgeMetricCoeffs.push_back(Eigen::Triplet<double>(i, i, 1.0 / edgeMetric[i]));
+        double denom = std::max(1e-6, edgeMetric[i]);        
+        inverseEdgeMetricCoeffs.push_back(Eigen::Triplet<double>(i, i, 1.0 / denom));
     }
     Eigen::SparseMatrix<double> inverseEdgeMetric(nedges, nedges);
     inverseEdgeMetric.setFromTriplets(inverseEdgeMetricCoeffs.begin(), inverseEdgeMetricCoeffs.end());
@@ -169,7 +170,7 @@ void SpectralLocalIntegration::locallyIntegrateOneComponent(const Surface &surf,
     srand(0);
     x.setRandom();
     x /= sqrt(x.transpose() * (B * x));
-    for(int i=0; i<1000; i++)
+    for(int i=0; i<100; i++)
     {
         Eigen::VectorXd newx = solveA.solve(B*x);
         Eigen::VectorXd rhs = D*newx;
