@@ -337,7 +337,7 @@ void TraceSet::exportForRendering(const char *filename)
             Eigen::Vector3d v1 = it.pts.row(i+1);
             ofs << v0[0] << ",\t" << v0[1] << ",\t" << v0[2] << ",\t" 
                 << v1[0] << ",\t" << v1[1] << ",\t" << v1[2] << ",\t" 
-                << curvatures[i] << ",\t" << curvatures[i+1] << ",\t" << it.curlbending(i) << ",\t" << counter <<  std::endl;        
+                << curvatures[i] << ",\t" << curvatures[i+1] << ",\t" << it.curlbending(i) << ",\t" << counter <<  ",\t" << it.origface[i] << std::endl;        
         }
     }
 }
