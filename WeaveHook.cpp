@@ -1236,38 +1236,42 @@ void WeaveHook::exportForRendering()
             vfs << centroid[0]-vf[0] << ", " << centroid[1]-vf[1] << ", " << centroid[2]-vf[2] << ", " << centroid[0] + vf[0] << ", " << centroid[1] + vf[1] << ", " << centroid[2] + vf[2] << std::endl;                        
         }
     }
-    for(int i=0; i<2*nfields; i++)
-    {
-        /*std::stringstream ss;
-        ss << exportPrefix << "_s_" << i << ".csv";
-        std::ofstream sfs(ss.str().c_str());
-        for(int j=0; j<nfaces; j++)
-            sfs << cover->s[i*nfaces + j] << ",\t 0,\t0" << std::endl;*/
-            
-        std::stringstream ss2;
-        ss2 << exportPrefix << "_theta_" << i << ".csv";
-        std::ofstream thetafs(ss2.str().c_str());
-        for(int j=0; j<nverts; j++)
-        {
-            thetafs << cover->theta[cover->visMeshToCoverMesh(i*nverts+j)] << ",\t 0,\t0" << std::endl;
-        }
-    }
 
-    std::string coverMeshName = exportPrefix + std::string("_covermesh.obj");
-    igl::writeOBJ(coverMeshName.c_str(), cover->splitMesh().data().V, cover->splitMesh().data().F);
-    for(int i=0; i<2*nfields; i++)
-    {       
-        std::stringstream ssfb;
-        ssfb << exportPrefix << "_facebased_" << i << ".csv";
-        std::ofstream fbfs(ssfb.str().c_str());
-        Eigen::VectorXd connection(nfaces); 
-        Eigen::VectorXd deviation(nfaces);
-        cover->fs->connectionEnergy(connection, 0., params);// make sure calculation per face not per cover...
-        cover->gradThetaDeviation(deviation);
-        for(int j=0; j<nfaces; j++)
+    if(cover)
+    {
+        for(int i=0; i<2*nfields; i++)
         {
-            int idx = i*nfaces + j;
-            fbfs << cover->scales(idx) << ",\t" << connection(idx) << ",\t" << deviation(idx) << std::endl;
+            /*std::stringstream ss;
+            ss << exportPrefix << "_s_" << i << ".csv";
+            std::ofstream sfs(ss.str().c_str());
+            for(int j=0; j<nfaces; j++)
+                sfs << cover->s[i*nfaces + j] << ",\t 0,\t0" << std::endl;*/
+                
+            std::stringstream ss2;
+            ss2 << exportPrefix << "_theta_" << i << ".csv";
+            std::ofstream thetafs(ss2.str().c_str());
+            for(int j=0; j<nverts; j++)
+            {
+                thetafs << cover->theta[cover->visMeshToCoverMesh(i*nverts+j)] << ",\t 0,\t0" << std::endl;
+            }
+        }
+
+        std::string coverMeshName = exportPrefix + std::string("_covermesh.obj");
+        igl::writeOBJ(coverMeshName.c_str(), cover->splitMesh().data().V, cover->splitMesh().data().F);
+        for(int i=0; i<2*nfields; i++)
+        {       
+            std::stringstream ssfb;
+            ssfb << exportPrefix << "_facebased_" << i << ".csv";
+            std::ofstream fbfs(ssfb.str().c_str());
+            Eigen::VectorXd connection(nfaces); 
+            Eigen::VectorXd deviation(nfaces);
+            cover->fs->connectionEnergy(connection, 0., params);// make sure calculation per face not per cover...
+            cover->gradThetaDeviation(deviation);
+            for(int j=0; j<nfaces; j++)
+            {
+                int idx = i*nfaces + j;
+                fbfs << cover->scales(idx) << ",\t" << connection(idx) << ",\t" << deviation(idx) << std::endl;
+            }
         }
     }
 
