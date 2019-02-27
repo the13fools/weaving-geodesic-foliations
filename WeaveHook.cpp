@@ -55,7 +55,7 @@ void WeaveHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
         }
         else
         {
-            if (nf == 1)
+            if (nf == 1 || true)
             {
                 ImGui::InputInt("Symmetry Degree:", &desiredRoSyN, 0, 0);
                 if (ImGui::Button("Convert to RoSy", ImVec2(-1, 0)))
@@ -127,6 +127,8 @@ void WeaveHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
                     deserializePaulField();
                 if (ImGui::Button("Load Field (Qixing)", ImVec2(-1,0)))
                     deserializeQixingField();
+                if (ImGui::Button("Load Field (Transport)", ImVec2(-1,0)))
+                    deserializeTransportField();
                 if (ImGui::Button("Load Field (Vertex)", ImVec2(-1,0)))
                     deserializeVertexField();
             }
@@ -1020,6 +1022,33 @@ void WeaveHook::deserializeQixingField()
     updateRenderGeometry();
 }
 
+void WeaveHook::deserializeTransportField()
+{
+    std::ifstream ifs(vectorFieldName);
+    weave->deserializeTransportFile(ifs);
+
+    int nfaces = weave->fs->nFaces();
+    int nfields = weave->fs->nFields();
+    int nverts = weave->fs->nVerts();
+
+    for(int i = 0; i < nfaces; i++)
+    {
+        Eigen::Matrix<double, 3, 2> B = weave->fs->data().Bs[i];
+        Eigen::Matrix2d BTB = B.transpose() * B;
+        Eigen::Vector2d v1 = weave->fs->vectorFields.segment<2>(weave->fs->vidx(i,0));
+        Eigen::Vector2d v2 = weave->fs->vectorFields.segment<2>(weave->fs->vidx(i,2));
+        if ((B*v1).dot(B*v2) <= 0 && false)
+        {
+            v2= BTB.inverse() * B.transpose() * -(B*v2);
+            weave->fs->vectorFields.segment<2>(weave->fs->vidx(i,2)) = v2;
+        }
+        Eigen::Vector2d vave = BTB.inverse() * B.transpose() * (B*v1 + B*v2);
+        weave->fs->vectorFields.segment<2>(weave->fs->vidx(i,1)) = vave;
+    }
+    rosyN = 0;
+    updateRenderGeometry();
+}
+
 void WeaveHook::deserializeVertexField()
 {
     std::ifstream ifs(vectorFieldName);
@@ -1316,10 +1345,10 @@ void WeaveHook::exportForRendering()
 
 void WeaveHook::convertToRoSy()
 {
-    if (!weave || rosyN > 0 || desiredRoSyN < 1 || weave->fs->nFields() != 1)
-        return;
+//    if (!weave || rosyN > 0 || desiredRoSyN < 1 || weave->fs->nFields() != 1)
+//        return;
 
-    weave->convertToRoSy(desiredRoSyN);
+    weave->transportToRoSy(desiredRoSyN, .5);
     ls.clearHandles();
     weave->handles = ls.handles;
     rosyN = desiredRoSyN;

@@ -61,9 +61,9 @@ public:
         cover_shading_state = CoverShading_Enum::CS_NONE;
         // meshName = "meshes/bunny_coarser.obj";
 //        meshName = "../meshes/sphere_small_regular.obj";
-        meshName = "meshes/sphere.obj";
+        meshName = "../mass/sphere.obj";
         // vectorFieldName = "bunny_coarser_nosing";
-        vectorFieldName = "sphere.rlx";
+        vectorFieldName = "../mass/sphere_threesing.transport";
         rodFilename = "example.rod";
         exportPrefix = "../final/export/example";
         params.lambdacompat = 100;
@@ -140,6 +140,7 @@ public:
     void deserializeVectorFieldOld();
     void deserializePaulField();
     void deserializeQixingField();
+    void deserializeTransportField();
     void deserializeVertexField();
     void augmentField();
     void computeFunc();

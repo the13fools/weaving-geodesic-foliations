@@ -351,7 +351,6 @@ void Weave::deserializePaulFile(std::ifstream &ifs)
     int nfaces = fs->nFaces();
     for(int i=0; i<nfaces; i++)
     {
-        double dummy;
         char comma;
         Eigen::Vector3d vecs[3];
         for(int j=0; j<3; j++)
@@ -516,7 +515,6 @@ void Weave::deserializeQixingFile(std::ifstream &ifs)
     int nfaces = fs->nFaces();
     for(int i=0; i<nfaces; i++)
     {
-        double dummy;
         char comma;
         Eigen::Vector3d vecs;
         for(int j=0; j<3; j++)
@@ -530,6 +528,41 @@ void Weave::deserializeQixingFile(std::ifstream &ifs)
         Eigen::Matrix2d BTB = B.transpose() * B;
         Eigen::Vector2d vint = BTB.inverse() * B.transpose() * vecs;
         newfs->vectorFields.segment<2>(newfs->vidx(i,0)) = vint;                
+    }
+    if(ifs)
+    {
+        delete fs;
+        fs = newfs;
+    }
+    else
+    {
+        delete newfs;
+    }
+}
+
+void Weave::deserializeTransportFile(std::ifstream &ifs)
+{
+    FieldSurface *newfs = new FieldSurface(fs->data().V, fs->data().F, 3);    
+    int nfaces = fs->nFaces();
+    for(int j = 0; j < 2; j++)
+    {
+        for(int i=0; i<nfaces; i++)
+        {
+            double dummy;
+            char comma;
+            Eigen::Vector3d vecs;
+            for(int j=0; j<3; j++)
+            {
+                ifs >> vecs[j];
+            }
+
+            Eigen::Matrix<double, 3, 2> B = fs->data().Bs[i];
+            Eigen::Vector3d n = fs->faceNormal(i);
+            
+            Eigen::Matrix2d BTB = B.transpose() * B;
+            Eigen::Vector2d vint = BTB.inverse() * B.transpose() * vecs;
+            newfs->vectorFields.segment<2>(newfs->vidx(i,j*2)) = vint;                
+        }
     }
     if(ifs)
     {
@@ -938,6 +971,40 @@ void Weave::convertToRoSy(int rosyN)
         int vidx = fs->vidx(i, 0);
         fs->vectorFields.segment<2>(vidx) = newvec;
     }
+}
+
+
+void Weave::transportToRoSy(int rosyN, double factor)
+{     
+    FieldSurface *newfs = new FieldSurface(fs->data().V, fs->data().F, 1);    
+    int nfaces = fs->nFaces();
+    for (int i = 0; i < nfaces; i++)
+    {
+        Eigen::Vector2d srcvec = fs->v(i, 0);
+        Eigen::Vector2d theta;
+        theta(0) = vectorAngle(*fs, i, srcvec);
+        srcvec = fs->v(i, 2);
+        theta(1) = vectorAngle(*fs, i, srcvec);
+        theta *= double(rosyN);
+
+        Eigen::Matrix<double, 2, 3> inps;
+        Eigen::Matrix<double, 3, 2> B = fs->data().Bs[i];
+        
+        for (int j = 0; j < 2; j++)
+        {
+            Eigen::Matrix3d rot = Eigen::AngleAxisd(theta(j), fs->faceNormal(i)).toRotationMatrix();
+            Eigen::Vector3d newvecext = rot * B.col(0);
+            newvecext.normalize();
+            inps.row(j) = newvecext;
+        }
+
+        Eigen::Vector3d interp = (1 - factor) * inps.row(0) + factor * inps.row(1);
+        Eigen::Vector2d newvec = (B.transpose()*B).inverse() * B.transpose() * interp;
+        int vidx = newfs->vidx(i, 0);
+        newfs->vectorFields.segment<2>(vidx) = newvec;
+    }
+    delete fs;
+    fs = newfs;
 }
 
 Weave *Weave::splitFromRosy(int rosyN)
