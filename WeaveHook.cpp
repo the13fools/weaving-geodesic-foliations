@@ -762,7 +762,7 @@ bool WeaveHook::simulateOneStep()
         Eigen::VectorXd primal = weave->fs->vectorFields.segment(0, 2*nfaces*nfields);
         Eigen::VectorXd dual = weave->fs->vectorFields.segment(2*nfaces*nfields, 2*nfaces*nfields);
 
-        const int numDesignIters = 10;
+        const int numDesignIters = 1;
         ls.takeSomeSteps(*weave, params, primal, dual, rosyN != 0, numDesignIters);
 
         weave->fs->vectorFields.segment(0, 2*nfaces*nfields) = primal;
@@ -1046,6 +1046,7 @@ void WeaveHook::deserializeTransportField()
         weave->fs->vectorFields.segment<2>(weave->fs->vidx(i,1)) = vave;
     }
     rosyN = 0;
+  //  simulateOneStep();
     updateRenderGeometry();
 }
 
