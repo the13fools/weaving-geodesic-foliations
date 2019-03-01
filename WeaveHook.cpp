@@ -86,7 +86,8 @@ void WeaveHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
                 }
                 else
                 {
-                    needsrender |= ImGui::Combo("Show", (int *)&vectorVisMode, "Nothing\0V\0V and delta\0V + delta\0\0");
+                    needsrender |= ImGui::Combo("Show", (int *)&vectorVisMode, "Nothing\0V\0V and delta\0V + delta\0One V\0\0");
+                    needsrender |= ImGui::InputInt("Field to show", &fieldToViz, 0, 0);
                 }
                 needsrender |= ImGui::InputDouble("Vector Scale", &vectorScale);
                 needsrender |= ImGui::Checkbox("Normalize Vectors", &normalizeVectors);
@@ -102,14 +103,14 @@ void WeaveHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
             }
             if (ImGui::CollapsingHeader("Solver Parameters", ImGuiTreeNodeFlags_DefaultOpen))
             {
-                ImGui::InputDouble("Compatilibity Lambda", &params.lambdacompat);
-                ImGui::InputDouble("Tikhonov Reg", &params.lambdareg);
-                ImGui::InputDouble("Curl Viz Face threshold", &params.curlreg);
+            //     ImGui::InputDouble("Compatilibity Lambda", &params.lambdacompat);
+            //     ImGui::InputDouble("Tikhonov Reg", &params.lambdareg);
+            //     ImGui::InputDouble("Curl Viz Face threshold", &params.curlreg);
 
-                ImGui::InputDouble("vizVectorCurl", &params.vizVectorCurl);
-                ImGui::InputDouble("vizCorrectionCurl", &params.vizCorrectionCurl);
-                ImGui::Checkbox("Normalize Viz Vecs", &params.vizNormalizeVecs);
-                ImGui::Checkbox("Show Curl Sign", &params.vizShowCurlSign);
+            //     ImGui::InputDouble("vizVectorCurl", &params.vizVectorCurl);
+            //     ImGui::InputDouble("vizCorrectionCurl", &params.vizCorrectionCurl);
+            //     ImGui::Checkbox("Normalize Viz Vecs", &params.vizNormalizeVecs);
+            //     ImGui::Checkbox("Show Curl Sign", &params.vizShowCurlSign);
 
                 if (ImGui::Button("Create Cover", ImVec2(-1, 0)))
                     augmentField();            
@@ -131,6 +132,8 @@ void WeaveHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
                     deserializeTransportField();
                 if (ImGui::Button("Load Field (Vertex)", ImVec2(-1,0)))
                     deserializeVertexField();
+                ImGui::Checkbox("Opt Step On Load", &stepOnLoad);
+                ImGui::InputDouble("Interp Amount", &interpAmount);
             }
             if (ImGui::CollapsingHeader("Cuts", ImGuiTreeNodeFlags_DefaultOpen))
             {
@@ -1031,6 +1034,27 @@ void WeaveHook::deserializeTransportField()
     int nfields = weave->fs->nFields();
     int nverts = weave->fs->nVerts();
 
+
+    rosyN = 0;
+    if (stepOnLoad)
+    {
+        Eigen::VectorXd eigenVec;
+
+        int nfaces = weave->fs->data().F.rows();
+        int m = weave->fs->nFields();
+
+        for (int field = 0; field < m; field++)
+        {
+            ls.rescaleFields(*weave, params, field, eigenVec);
+            for (int i = 0; i < nfaces; i++)
+            {
+                weave->fs->vectorFields.segment<2>(weave->fs->vidx(i, field)) *= eigenVec(i);
+            }
+        }
+
+        // simulateOneStep();
+    }
+
     for(int i = 0; i < nfaces; i++)
     {
         Eigen::Matrix<double, 3, 2> B = weave->fs->data().Bs[i];
@@ -1042,11 +1066,24 @@ void WeaveHook::deserializeTransportField()
             v2= BTB.inverse() * B.transpose() * -(B*v2);
             weave->fs->vectorFields.segment<2>(weave->fs->vidx(i,2)) = v2;
         }
-        Eigen::Vector2d vave = BTB.inverse() * B.transpose() * (B*v1 + B*v2);
+        Eigen::Vector3d interpolated = (1 - interpAmount) * B*v1 + interpAmount * B * v2;
+        Eigen::Vector2d vave = BTB.inverse() * B.transpose() * interpolated;
         weave->fs->vectorFields.segment<2>(weave->fs->vidx(i,1)) = vave;
     }
-    rosyN = 0;
-  //  simulateOneStep();
+
+    std::vector<std::pair<int, int> > topsingularities;
+    std::vector<std::pair<int, int> > geosingularities;
+
+    findSingularVertices(*weave, topsingularities, geosingularities);
+    std::cout << "now " << topsingularities.size() << " topological and " << geosingularities.size() << " geometric singularities" << std::endl;
+
+
+/*    singularVerts_geo = Eigen::MatrixXd::Zero(geosingularities.size(), 3);
+    for (int i = 0; i < geosingularities.size(); i++)
+    {
+        singularVerts_geo.row(i) = weave->fs->data().V.row(geosingularities[i]);
+    }*/
+
     updateRenderGeometry();
 }
 
@@ -1111,7 +1148,7 @@ void WeaveHook::updateRenderGeometry()
     else
     {
         weave->createVisualizationEdges(edgePtsWeave, edgeSegsWeave, edgeColorsWeave,
-            vectorVisMode, normalizeVectors, vectorScale);
+            vectorVisMode, fieldToViz, normalizeVectors, vectorScale);
     }
    
     weave->createVisualizationCuts(cutPos1Weave, cutPos2Weave);

@@ -48,6 +48,30 @@ void LinearSolver::takeSomeSteps(const Weave &weave, SolverParams params, Eigen:
     delete ds;
 }
 
+void LinearSolver::rescaleFields(const Weave &weave, SolverParams params, int field, Eigen::VectorXd &eigenVec)
+{
+    Eigen::SparseMatrix<double> D;
+    differentialScalarOperator(weave, params, D);
+
+    // Eigen::SparseMatrix<double> BTB;
+    // massMatrix(weave, BTB);
+
+    Eigen::SparseMatrix<double> Lmat = D.transpose() * D;
+    // Eigen Decompose
+    Eigen::SimplicialLDLT<Eigen::SparseMatrix<double> > solverL(Lmat);
+    eigenVec.resize(Lmat.rows());
+    srand(0);
+    eigenVec.setRandom();
+    eigenVec /= eigenVec.norm();
+    for (int i = 0; i < 100; i++)
+    {
+        eigenVec = solverL.solve(eigenVec);
+        eigenVec /= eigenVec.norm();
+    }
+    double eigenVal = eigenVec.transpose() * (Lmat * eigenVec);
+    std::cout << " smoothness eigenval: " << eigenVal << std::endl;
+}
+
 static void identityMatrix(int n, Eigen::SparseMatrix<double> &I)
 {
     std::vector<Eigen::Triplet<double> > coeffs;
@@ -532,6 +556,57 @@ void LinearSolver::differentialOperator(const Weave &weave, SolverParams params,
 
     int nfaces = weave.fs->data().F.rows();
     D.resize(4 * intedges * m, 2*nfaces*m);
+    D.setFromTriplets(coeffs.begin(), coeffs.end());
+}
+
+void LinearSolver::differentialScalarOperator(const Weave &weave, SolverParams params, Eigen::SparseMatrix<double> &D)
+{
+    std::vector<Eigen::Triplet<double> > coeffs;
+    int nedges = weave.fs->data().E.rows();
+    int intedges = weave.fs->numInteriorEdges();
+    int m = weave.fs->nFields();
+    m = 1;
+
+    int term = 0;
+
+        // compatibility constraint
+    for (int e = 0; e < nedges; e++)
+    {
+        if(weave.fs->data().E(e,0) == -1 || weave.fs->data().E(e,1) == -1)
+            continue;
+        for (int i = 0; i < m; i++)
+        {
+            for (int side = 0; side < 2; side++)
+            {
+                int f = (side == 0 ? weave.fs->data().E(e, 0) : weave.fs->data().E(e, 1));
+                int g = (side == 0 ? weave.fs->data().E(e, 1) : weave.fs->data().E(e, 0));
+
+                Eigen::Vector2d vpermut(0, 0);
+                Eigen::MatrixXi permut = weave.fs->Ps(e);
+                if (side == 1)
+                    permut.transposeInPlace();
+                for (int field = 0; field < m; field++)
+                {
+                    vpermut += permut(i, field) * weave.fs->v(g, field);
+                }
+
+                double dE = 1.;
+                coeffs.push_back(Eigen::Triplet<double>(term, f, dE));
+                
+                for (int field = 0; field < m; field++)
+                {
+                    dE = -permut(i, field) * 1.;
+                    coeffs.push_back(Eigen::Triplet<double>(term, g, dE));
+                }
+
+                term++;
+            }
+        }
+    }
+
+
+    int nfaces = weave.fs->data().F.rows();
+    D.resize(2 * intedges * m, nfaces*m);
     D.setFromTriplets(coeffs.begin(), coeffs.end());
 }
 

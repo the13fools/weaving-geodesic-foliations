@@ -83,10 +83,14 @@ public:
         traceSteps = 30;
         traceFaceId = 0;
         
-        vectorVisMode = VMM_VFANDDELTA;
+        vectorVisMode = VMM_VF;
+        fieldToViz = 0;
         rosyVisMode = RVM_ROSY;
         showSingularities = false;
         wireframe = false;
+
+        interpAmount = .5;
+        stepOnLoad = true;
 
         targetResolution = 1000;
     
@@ -210,6 +214,9 @@ private:
     Eigen::MatrixXd edgeColorsCover;    
     std::vector<Eigen::Vector3d> renderSelectedVertices; // teal selected vertex spheres
     VectorVisualizationMode vectorVisMode;
+    int fieldToViz;
+    double interpAmount;
+    bool stepOnLoad;
     RoSyVisualizationMode rosyVisMode;
     bool normalizeVectors;
     bool showCoverCuts;

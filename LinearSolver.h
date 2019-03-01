@@ -27,6 +27,8 @@ class LinearSolver
 public:
     void takeSomeSteps(const Weave &weave, SolverParams params, Eigen::VectorXd &primalVars, Eigen::VectorXd &dualVars, bool isRoSy, int numSteps);
 
+    void rescaleFields(const Weave &weave, SolverParams params, int field, Eigen::VectorXd &eigenVec);
+
     void addHandle(const Handle &h);
     void clearHandles();
     const std::vector<Handle> &getHandles() { return handles; }
@@ -41,6 +43,7 @@ private:
     void curlOperator(const Weave &weave, SolverParams params, Eigen::SparseMatrix<double> &curlOp);
     void differentialOperator(const Weave &weave, SolverParams params, Eigen::SparseMatrix<double> &D);
     void differentialOperator_rosy(const Weave &weave, SolverParams params, Eigen::SparseMatrix<double> &D);
+    void differentialScalarOperator(const Weave &weave, SolverParams params, Eigen::SparseMatrix<double> &D);
 
     void computeEnergy(const Weave &weave, SolverParams params, const Eigen::VectorXd &primalVars, const Eigen::VectorXd &dualVars, bool isRoSy );
 

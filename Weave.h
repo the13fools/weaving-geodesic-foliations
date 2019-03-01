@@ -11,7 +11,8 @@ enum VectorVisualizationMode
     VMM_NOTHING,
     VMM_VF,
     VMM_VFANDDELTA,
-    VMM_VFPLUSDELTA
+    VMM_VFPLUSDELTA,
+    VMM_ONEVF
 };
 
 enum RoSyVisualizationMode
@@ -65,6 +66,7 @@ public:
         Eigen::MatrixXi &edgeSegs, 
         Eigen::MatrixXd &colors,
         VectorVisualizationMode mode,
+        int fieldToViz, // used when in ONEVF mode
         bool normalizeVectors,
         double baseVectorLength // ignored if normalizeVectors=true
     );

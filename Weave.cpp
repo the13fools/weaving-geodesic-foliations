@@ -99,6 +99,7 @@ void Weave::createVisualizationEdges(
     Eigen::MatrixXi &edgeSegs, 
     Eigen::MatrixXd &colors,
     VectorVisualizationMode mode,
+    int fieldToViz,
     bool normalizeVectors,
     double baseVectorLength) // ignored if normalizeVectors=true
 {
@@ -106,7 +107,7 @@ void Weave::createVisualizationEdges(
     int m = fs->nFields();
     int nhandles = nHandles();
     int vecsperface = 0;
-    if (mode == VMM_VF || mode == VMM_VFPLUSDELTA)
+    if (mode == VMM_VF || mode == VMM_VFPLUSDELTA || mode == VMM_ONEVF)
         vecsperface = 1;
     else if (mode == VMM_VFANDDELTA)
         vecsperface = 2;
@@ -121,7 +122,22 @@ void Weave::createVisualizationEdges(
     
     Eigen::MatrixXd fcolors(m, 3);
     for (int i = 0; i < m; i++)
-        fcolors.row(i).setZero();//heatmap(double(i), 0.0, double(m-1));
+    {
+        switch(i)
+        {
+            case 0:
+                fcolors.row(i) = Eigen::Vector3d(1,0,0);
+                break;
+            case 1:
+                fcolors.row(i) = Eigen::Vector3d(0,0,0);
+                break;
+            case 2:
+                fcolors.row(i) = Eigen::Vector3d(0,1,0);
+                break;
+            default:
+                fcolors.row(i).setZero();//heatmap(double(i), 0.0, double(m-1));
+        }
+    }
 
     for (int i = 0; i < nfaces; i++)
     {
