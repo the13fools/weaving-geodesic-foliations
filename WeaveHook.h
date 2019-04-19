@@ -61,7 +61,8 @@ public:
         cover_shading_state = CoverShading_Enum::CS_NONE;
         // meshName = "meshes/bunny_coarser.obj";
 //        meshName = "../meshes/sphere_small_regular.obj";
-        meshName = "meshes/sphere.obj";
+		meshName = "../paul_proc_folder/meshes/rockerarm5k.off";
+		folderName = "../paul_proc_folder/";
         // vectorFieldName = "bunny_coarser_nosing";
         vectorFieldName = "sphere.rlx";
         rodFilename = "example.rod";
@@ -163,6 +164,7 @@ public:
     void splitFromRoSy();
     void wholePipeline();
     
+    void generateTracesOnFolder();
     virtual void initSimulation();
 
     virtual void updateRenderGeometry();
@@ -181,7 +183,8 @@ public:
 
 private:
     void clear();
-    std::string meshName;
+	std::string meshName;
+	std::string folderName;
     Weave *weave;
     CoverMesh *cover;
     SolverParams params;

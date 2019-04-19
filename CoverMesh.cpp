@@ -14,7 +14,7 @@
 #include "igl/massmatrix.h"
 #include "FieldIntegration.h"
 #include "igl/cotmatrix.h"
-#include "CoMISoWrapper.h"
+// #include "CoMISoWrapper.h"
 
 # define M_PI           3.14159265358979323846
 
@@ -415,7 +415,7 @@ void CoverMesh::roundAntipodalCovers(int numISOLines)
     for (int i = 0; i < nfields*ncorrs; i++)
         toRound[i] = newverts + i;
 
-    ComisoWrapper(C, A, result, rhs, toRound, 1e-6);
+  //  ComisoWrapper(C, A, result, rhs, toRound, 1e-6);
     std::cout << "Residual: " << (A*result - rhs).norm() << std::endl;
     Eigen::VectorXd ctest(newverts + nfields * ncorrs + 1);
     ctest.segment(0, newverts + nfields * ncorrs) = result;

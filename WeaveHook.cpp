@@ -17,16 +17,25 @@
 #include <random>
 #include <chrono>
 
+#include <windows.h>
+
 using namespace std;
 
 void WeaveHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
 {
-    ImGui::InputText("Mesh", meshName);
-    if(ImGui::Button("Load Mesh", ImVec2(-1,0)))
-    {
-        initSimulation();
-        updateRenderGeometry();
-    }
+	ImGui::InputText("Mesh", meshName);
+	if (ImGui::Button("Load Mesh", ImVec2(-1, 0)))
+	{
+		initSimulation();
+		updateRenderGeometry();
+	}
+	ImGui::InputText("Folder", folderName);
+	if (ImGui::Button("Add Traces to Folder", ImVec2(-1, 0)))
+	{
+		generateTracesOnFolder();
+		//    initSimulation();
+		updateRenderGeometry();
+	}
     
     if(!advancedMode)
     {
@@ -377,8 +386,98 @@ void WeaveHook::clear()
     traces.clear();
 }
 
+void WeaveHook::generateTracesOnFolder()
+{
+	/*weave->deserializePaulFile(ifs);
+	rosyN = 0;*/
+
+	std::string meshPattern(folderName);
+	std::string fieldPattern(folderName);
+	fieldPattern.append("/frames\\*");
+	meshPattern.append("/meshes\\*");
+	std::cout << fieldPattern << " " << meshPattern << std::endl;
+	WIN32_FIND_DATA data1;
+	WIN32_FIND_DATA data2;
+	HANDLE hFind;
+	HANDLE hFieldFind;
+	if ((hFind = FindFirstFile(meshPattern.c_str(), &data1)) != INVALID_HANDLE_VALUE) {
+		if ((hFieldFind = FindFirstFile(fieldPattern.c_str(), &data2)) != INVALID_HANDLE_VALUE) {
+			do {
+				std::string curName = data1.cFileName;
+				if (curName.length() > 2)
+				{
+					std::cout << "Found mesh: " << data1.cFileName << std::endl;
+					std::cout << "Found field: " << data2.cFileName << std::endl;
+
+					std::string curMesh(folderName);
+					curMesh.append("/meshes/");
+					curMesh.append(data1.cFileName);
+
+					if (weave)
+						delete weave;
+					weave = new Weave(curMesh, fieldCount);
+					rosyN = 0;
+					clear();
+
+					std::string curField(folderName);
+					curField.append("/frames/");
+					curField.append(data2.cFileName);
+					std::ifstream ifs(curField);
+					weave->deserializePaulFile(ifs);
+
+				}
+
+				int nfaces = weave->fs->nFaces();
+				int nfields = weave->fs->nFields();
+
+				std::default_random_engine generator;
+				generator.seed(std::chrono::system_clock::now().time_since_epoch().count());
+				std::uniform_int_distribution<int> facedistribution(0, nfaces - 1);
+				std::uniform_int_distribution<int> fielddistribution(0, nfields - 1);
+				std::uniform_int_distribution<int> dirdistribution(0, 1);
+
+				for (int i = 0; i < numRandomTraces; i++)
+				{
+					int face = facedistribution(generator);
+					int field = fielddistribution(generator);
+					int dir = 2 * dirdistribution(generator) - 1;
+					traces.traceCurve(*weave->fs, trace_state, field, dir, face, traceSteps);
+				}
+
+				std::string outputName(folderName);
+			    outputName.append("/traces/");
+				outputName.append(data1.cFileName);
+				outputName.pop_back(); 
+				outputName.pop_back(); 
+				outputName.pop_back(); 
+				outputName.pop_back();
+				outputName.append("_rand_traces.csv");
+
+				traces.exportTraces(outputName.c_str());
+
+				clearTraces();
+
+				if (FindNextFile(hFieldFind, &data2) == 0) {
+					break;
+				}
+			}
+			while (FindNextFile(hFind, &data1) != 0);
+			FindClose(hFieldFind);
+		}
+		FindClose(hFind);
+	}
+	
+
+	//if (weave)
+	//	delete weave;
+	//weave = new Weave(meshName, fieldCount);
+	//rosyN = 0;
+	//clear();
+}
+
 void WeaveHook::initSimulation()
 {
+
     if (weave)
         delete weave;
     weave = new Weave(meshName, fieldCount);    

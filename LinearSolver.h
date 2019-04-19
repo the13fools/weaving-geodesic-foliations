@@ -4,7 +4,9 @@
 #include <Eigen/Core>
 #include <vector>
 #include <Eigen/Sparse>
-#include <Eigen/SPQRSupport>
+// #include <Eigen/SPQRSupport>
+ #include <Eigen/SparseQR>
+#include <Eigen/OrderingMethods>
 
 class Weave;
 struct SolverParams;
@@ -19,7 +21,7 @@ public:
     void solve(const Eigen::VectorXd &rhs, Eigen::VectorXd &x);
     
 private:
-    Eigen::SPQR<Eigen::SparseMatrix<double> > solver;
+    Eigen::SparseQR<Eigen::SparseMatrix<double>, Eigen::COLAMDOrdering<int> > solver;
 };
 
 class LinearSolver

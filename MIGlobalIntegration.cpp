@@ -7,7 +7,7 @@
 #include <igl/remove_unreferenced.h>
 #include <igl/cotmatrix.h>
 #include <igl/writeOBJ.h>
-#include "CoMISoWrapper.h"
+// #include "CoMISoWrapper.h"
 
 static void findCuts(const Eigen::MatrixXd &V, const Eigen::MatrixXi &F,
     std::vector<std::vector<int> > &cuts)
@@ -812,7 +812,7 @@ void MIGlobalIntegration::globallyIntegrateOneComponent(const Surface &surf, con
     {
         toRound[i] = newverts + i;
     }
-    ComisoWrapper(C, Mat, result, rhs, toRound, 1e-6);
+ //   ComisoWrapper(C, Mat, result, rhs, toRound, 1e-6);
     std::cout << "residual: " << (Mat*result - rhs).norm() << std::endl;
 
     Eigen::SimplicialLDLT<Eigen::SparseMatrix<double> > solver(Mat);
