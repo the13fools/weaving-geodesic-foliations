@@ -146,8 +146,18 @@ void GNGlobalIntegration::globallyIntegrateOneComponent(const Surface &surf, con
         Eigen::SimplicialLDLT<Eigen::SparseMatrix<double> > solverScales(AScalesMat);
         Eigen::VectorXd curScales = solverScales.solve(bScales);
 
+        std::cout << "delta s" << scales - curScales << std::endl;
+
         for (int i = 0; i < nfaces; i++)
+        {
+            std::cout << "s ", scales(i) << "new_s " << curScales(i) << "s_diff " << scales(i) - curScales(i) << std::endl;
+            if (difVecUnscaled[i] * curScales(i) > 3.14)
+                std::cout << i << std::endl;
+
             scales(i) = curScales(i);
+        }
+    
     }    
+
 }
 

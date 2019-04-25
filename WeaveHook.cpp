@@ -489,6 +489,7 @@ void WeaveHook::setFaceColorsCover(igl::opengl::glfw::Viewer &viewer)
         {
             Eigen::VectorXd Z(faces);
             cover->fs->connectionEnergy(Z, 0., params);
+    //        std::cout << "connection: " <<  Z.norm() << std::endl;
             igl::colormap(viz_color, Z, true, faceColors);   
             break;     
         }
@@ -569,6 +570,7 @@ void WeaveHook::setFaceColorsWeave(igl::opengl::glfw::Viewer &viewer)
     if (weave_shading_state == WS_CONNECTION_ENERGY)
     {
         weave->fs->connectionEnergy(Z, params.curlreg, params); // TODO make real var
+  //      std::cout << "connection: " << Z.norm() << std::endl;
     }
 
     viewer.data().set_face_based(true);
