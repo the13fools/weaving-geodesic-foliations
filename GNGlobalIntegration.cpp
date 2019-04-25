@@ -112,12 +112,83 @@ void GNGlobalIntegration::globallyIntegrateOneComponent(const Surface &surf, con
         }
         ////
         //// Re-compute face scales
-        std::vector<double> difVecPred;
+        
+        int nterms = rowsL.size();
+        
+    
+        double reg = 1e-6;    
+        while(true)
+        {
+        
+            Eigen::VectorXd r(nterms);
+            for(int i=0; i<nterms; i++)
+            {
+                double angleterm = theta[rowsL[i]] - theta[colsL[i]] - scales[i/3]*difVecUnscaled[i];
+                r[i] = 2.0 * sin(angleterm/2.0);
+            }
+            
+            double oldenergy = r.squaredNorm();
+            
+            std::vector<Eigen::Triplet<double> > Jcoeffs;
+            for(int i=0; i<nterms; i++)
+            {
+                int sidx = i/3;
+                double angleterm = theta[rowsL[i]] - theta[colsL[i]] - scales[i/3]*difVecUnscaled[i];
+                Jcoeffs.push_back(Eigen::Triplet<double>(i, sidx, cos(angleterm/2.0) * (-difVecUnscaled[i])));            
+            }
+
+            Eigen::SparseMatrix<double> J(nterms, nterms/3);
+            J.setFromTriplets(Jcoeffs.begin(), Jcoeffs.end());
+            
+            Eigen::SparseMatrix<double> JTJ = J.transpose() * J;
+            
+            Eigen::SparseMatrix<double> regMat(nterms/3,nterms/3);
+            regMat.setIdentity();
+            JTJ += reg * regMat;
+            
+            Eigen::SimplicialLDLT<Eigen::SparseMatrix<double> > ssolver(JTJ);
+            
+            Eigen::VectorXd deltas = ssolver.solve(J.transpose() * r);
+            
+            Eigen::VectorXd news = scales - deltas;
+            for(int i=0; i<nterms; i++)
+            {
+                double angleterm = theta[rowsL[i]] - theta[colsL[i]] - news[i/3]*difVecUnscaled[i];
+                r[i] = 2.0 * sin(angleterm/2.0);
+            }
+            
+            double newenergy = r.squaredNorm();
+            std::cout << "Energy before: " << oldenergy << " energy after: " << newenergy << std::endl;
+            if(newenergy < oldenergy)
+            {
+                std::cout << "Delta s: " << deltas.norm() << std::endl;                
+                scales = news;
+                break;
+            }
+            else
+                reg *= 2.0;
+        }
+        
+
+        
+        /*std::vector<double> difVecPred;
         for (int i = 0; i < rowsL.size(); i++)
         {
             double curPred = theta[rowsL[i]] - theta[colsL[i]];
-            if (curPred > PI) curPred -= 2 * PI;
-            if (curPred < -PI) curPred += 2 * PI;
+            bool xpositive = difVecUnscaled[i] >= 0;
+            if(xpositive)
+            {
+                while(curPred >= 2.0*PI) curPred -= 2.0*PI;
+                while(curPred < 0) curPred += 2.0*PI;
+            }
+            else
+            {
+                while(curPred > 0) curPred -= 2.0*PI;
+                while(curPred <= -2.0*PI) curPred += 2.0*PI;
+            }
+                while(curPred > PI) curPred -= 2.0*PI;
+               while(curPred <= -PI) curPred += 2.0*PI;
+            
             difVecPred.push_back(curPred);
         }
         Eigen::VectorXd bScales(nfaces);
@@ -144,18 +215,26 @@ void GNGlobalIntegration::globallyIntegrateOneComponent(const Surface &surf, con
         AScalesMat.setFromTriplets(AScalesContent.begin(), AScalesContent.end());
         // Solve for scale
         Eigen::SimplicialLDLT<Eigen::SparseMatrix<double> > solverScales(AScalesMat);
-        Eigen::VectorXd curScales = solverScales.solve(bScales);
+        Eigen::VectorXd curScales = solverScales.solve(bScales);*/
 
-        std::cout << "delta s" << scales - curScales << std::endl;
+        /*std::cout << "delta s " << (scales - curScales).norm() << std::endl;
 
         for (int i = 0; i < nfaces; i++)
         {
-            std::cout << "s ", scales(i) << "new_s " << curScales(i) << "s_diff " << scales(i) - curScales(i) << std::endl;
-            if (difVecUnscaled[i] * curScales(i) > 3.14)
-                std::cout << i << std::endl;
+            if(curScales(i) < 0)
+            {
+                //std::cout << "Bad 1!!!!!!" << std::endl;
+            }
+            //if(fabs(difVecUnscaled[i]) * curScales(i) > 2.0*3.14)
+            //{
+            //    std::cout << "Bad 2!!!!!! " << curScales(i) * fabs(difVecUnscaled[i]) << " " << curScales(i) << " " << fabs(difVecUnscaled[i]) << std::endl;
+            //}
+//            std::cout << "s " << scales(i) << "new_s " << curScales(i) << "s_diff " << scales(i) - curScales(i) << std::endl;
+//            if (difVecUnscaled[i] * curScales(i) > 3.14)
+//                std::cout << i << std::endl;
 
             scales(i) = curScales(i);
-        }
+        }*/
     
     }    
 
