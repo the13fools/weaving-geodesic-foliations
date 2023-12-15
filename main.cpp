@@ -89,16 +89,20 @@ int main(int argc, char *argv[])
   hook->reset();
 
   viewer.data().set_face_based(true);
-  viewer.core.is_animating = true;
+  viewer.core().is_animating = true;
   viewer.callback_key_pressed = keyCallback;
   viewer.callback_pre_draw = drawCallback;
   viewer.callback_mouse_down = mouseDownCallback;
   viewer.callback_mouse_up = mouseUpCallback;
 
-  viewer.core.background_color = Eigen::Vector4f(.3, .3, .3, 1);
+  viewer.core().background_color = Eigen::Vector4f(.3, .3, .3, 1);
 
+
+  // Attach a menu plugin
+  igl::opengl::glfw::imgui::ImGuiPlugin plugin;
+  viewer.plugins.push_back(&plugin);
   igl::opengl::glfw::imgui::ImGuiMenu menu;
-  viewer.plugins.push_back(&menu);
+  plugin.widgets.push_back(&menu);
 
   menu.callback_draw_viewer_menu = [&]() {drawGUI(menu); };
   viewer.launch();

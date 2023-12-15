@@ -159,7 +159,8 @@ void SpectralLocalIntegration::locallyIntegrateOneComponent(const Surface &surf,
         DDTregCoeffs.push_back(Eigen::Triplet<double>(i, i, 1e-6));
     Eigen::SparseMatrix<double> DDTreg(nconstraints, nconstraints);
     DDTreg.setFromTriplets(DDTregCoeffs.begin(), DDTregCoeffs.end());
-    Eigen::SparseMatrix<double> DDT = DDTreg + D * BInv * D.transpose();
+    Eigen::SparseMatrix<double> DT = D.transpose();
+    Eigen::SparseMatrix<double> DDT = DDTreg + D * BInv * DT;
     std::cout << "Factoring DDT" << std::endl;
     Eigen::SimplicialLDLT<Eigen::SparseMatrix<double> > solveC(DDT);
     if(solveC.info() != Eigen::Success)

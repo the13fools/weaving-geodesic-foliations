@@ -391,12 +391,13 @@ double FieldSurface::edgeCurlEnergy(int f, int e, int field) const
     //     angle = 1;
 
 
-    if ( std::isnan(angle) )
-    {
-        std::cout << " v1 " << v1.transpose() << " v2 " << v2.transpose() <<  " edge " << edgeVec.transpose() << std::endl;
-//        std::cout << " v1 " << v1.transpose() << " v2 " << v2.transpose() <<  " edge " << edgeVec.transpose() << std::endl;
-
-    }
+//    if ( std::isnan(angle) )
+//    {
+//        std::cout  << " angle: " << angle << ", v1.dot(edgeVec): " << v1.dot(edgeVec) << ", v2.dot(edgeVec): " << v2.dot(edgeVec) << ", isnan(angle): " << std::isnan(angle) << "\nv1 " << v1.transpose() << " v2 " << v2.transpose() <<  " edge " << edgeVec.transpose() << std::endl;
+////        std::cout << " v1 " << v1.transpose() << " v2 " << v2.transpose() <<  " edge " << edgeVec.transpose() << std::endl;
+//
+//    }
+    return angle;
 }
 
 double FieldSurface::faceCurlEnergy(int f, int field) const

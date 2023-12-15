@@ -14,6 +14,7 @@
 #include <set>
 #include <igl/remove_unreferenced.h>
 #include <igl/writeOBJ.h>
+#include <igl/file_dialog_open.h>
 #include "Surface.h"
 #include "CoverMesh.h"
 #include "RoSyUtils.h"
@@ -27,8 +28,7 @@ Weave::Weave(const std::string &objname, int m)
     if (!igl::read_triangle_mesh(objname, Vtmp, Ftmp))
     {    
         std::cerr << "Couldn't load mesh " << objname << std::endl;
-        std::string modname = "../" + objname;
-        std::cerr << "Trying " << modname << " instead" << std::endl;
+        std::string modname = igl::file_dialog_open();
         if (!igl::read_triangle_mesh(modname, Vtmp, Ftmp))
         {
             std::cerr << "Couldn't load mesh " << modname << " either" << std::endl;

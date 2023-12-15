@@ -157,8 +157,8 @@ void WeaveHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
             menu.callback_draw_custom_window = [&]()
             {
                 // Define next window position + size
-                ImGui::SetNextWindowPos(ImVec2(180.f * menu.menu_scaling(), 10), ImGuiSetCond_FirstUseEver);
-                ImGui::SetNextWindowSize(ImVec2(200, 200), ImGuiSetCond_FirstUseEver);
+                ImGui::SetNextWindowPos(ImVec2(180.f * menu.menu_scaling(), 10), ImGuiCond_FirstUseEver);
+                ImGui::SetNextWindowSize(ImVec2(200, 200), ImGuiCond_FirstUseEver);
                 ImGui::Begin(
                     "Handles", nullptr,
                     ImGuiWindowFlags_NoSavedSettings
@@ -177,8 +177,8 @@ void WeaveHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
 
                 ImGui::End();
 
-                ImGui::SetNextWindowPos(ImVec2(180.f * menu.menu_scaling(), 210), ImGuiSetCond_FirstUseEver);
-                ImGui::SetNextWindowSize(ImVec2(200, 500), ImGuiSetCond_FirstUseEver);
+                ImGui::SetNextWindowPos(ImVec2(180.f * menu.menu_scaling(), 210), ImGuiCond_FirstUseEver);
+                ImGui::SetNextWindowSize(ImVec2(200, 500), ImGuiCond_FirstUseEver);
 
                 ImGui::Begin(
                     "Manipulate", nullptr,
@@ -301,9 +301,9 @@ bool WeaveHook::mouseClicked(igl::opengl::glfw::Viewer &viewer, int button)
     Eigen::Vector3f bc;
     // Cast a ray in the view direction starting from the mouse position
     double x = viewer.current_mouse_x;
-    double y = viewer.core.viewport(3) - viewer.current_mouse_y;
-    if (igl::unproject_onto_mesh(Eigen::Vector2f(x, y), viewer.core.view,
-        viewer.core.proj, viewer.core.viewport, this->weave->fs->data().V, this->weave->fs->data().F, fid, bc))
+    double y = viewer.core().viewport(3) - viewer.current_mouse_y;
+    if (igl::unproject_onto_mesh(Eigen::Vector2f(x, y), viewer.core().view,
+        viewer.core().proj, viewer.core().viewport, this->weave->fs->data().V, this->weave->fs->data().F, fid, bc))
     {
         std::cout << fid << " - clicked on vertex #\n"; 
         bool found = false;
